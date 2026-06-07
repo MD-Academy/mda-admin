@@ -286,7 +286,21 @@ body {
     margin-bottom: 20px;
     flex-wrap: wrap;
 }
-.toolbar-actions { display: flex; gap: 10px; }
+.toolbar-actions { display: flex; gap: 10px; align-items: center; }
+
+.filter-select {
+    height: 42px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0 36px 0 14px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    color: var(--text);
+    background: var(--card);
+    outline: none;
+    cursor: pointer;
+}
+.filter-select:focus { border-color: var(--blue-500); }
 
 .search-box {
     display: flex;

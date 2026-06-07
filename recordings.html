@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Zoom Recordings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- RECORDING CREATE / EDIT MODAL -->
+    <div class="modal-overlay" id="rec-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3 id="rec-modal-title">Add Recording</h3>
+                <button class="modal-close" onclick="closeModal('rec-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveRecording(event)">
+                <div class="modal-body">
+                    <div class="alert" id="rec-alert" style="display:none;"></div>
+                    <input type="hidden" id="rec-id">
+                    <div class="form-field">
+                        <label>Title</label>
+                        <input type="text" id="rec-title" placeholder="e.g. Cell Biology — Lecture 3" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label>Room</label>
+                            <select id="rec-room" onchange="onRoomChange()" required></select>
+                        </div>
+                        <div class="form-field">
+                            <label>Lesson <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                            <select id="rec-lesson"><option value="">— None —</option></select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label>Professor</label>
+                            <input type="text" id="rec-professor" placeholder="e.g. Dr. Levin" required>
+                        </div>
+                        <div class="form-field">
+                            <label>Recorded Date</label>
+                            <input type="date" id="rec-date" required>
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label>Video URL (AWS)</label>
+                        <input type="url" id="rec-url" placeholder="https://…amazonaws.com/…/video.mp4" required>
+                        <div class="hint">Permanent public link to the video file. It plays inside the LMS.</div>
+                    </div>
+                    <div class="form-field">
+                        <label>Duration in minutes <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <input type="number" id="rec-duration" min="0" step="1" placeholder="e.g. 90">
+                        <div class="hint">Shown to students on the recording card. Leave blank if unknown.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('rec-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="rec-save-btn">Save Recording</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/recordings.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+
+            renderLayout('recordings', 'Zoom Recordings', 'Add and manage lecture recordings', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="toolbar">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="search-input" placeholder="Search by title or professor…" oninput="applyFilters()">
+                    </div>
+                    <div class="toolbar-actions">
+                        <select id="room-filter" class="filter-select" onchange="applyFilters()">
+                            <option value="">All rooms</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="openRecModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add Recording
+                        </button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Room</th>
+                                <th>Professor</th>
+                                <th>Date</th>
+                                <th>Duration</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rec-tbody">
+                            <tr><td colspan="6" class="loader">Loading recordings…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            loadRecordings();
+        })();
+    </script>
+</body>
+</html>
