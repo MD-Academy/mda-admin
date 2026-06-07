@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png">
+    <title>MDA Admin — Rooms & Lessons</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- ROOM CREATE / EDIT MODAL -->
+    <div class="modal-overlay" id="room-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3 id="room-modal-title">Add Room</h3>
+                <button class="modal-close" onclick="closeModal('room-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveRoom(event)">
+                <div class="modal-body">
+                    <div class="alert" id="room-alert" style="display:none;"></div>
+                    <input type="hidden" id="room-id">
+                    <div class="form-field">
+                        <label>Room Name</label>
+                        <input type="text" id="room-name" placeholder="e.g. Biology" required oninput="syncSlug()">
+                    </div>
+                    <div class="form-field">
+                        <label>URL Slug</label>
+                        <input type="text" id="room-slug" placeholder="biology" required>
+                        <div class="hint">Lowercase identifier used internally. Auto-filled from the name.</div>
+                    </div>
+                    <div class="form-field">
+                        <label>Description <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <textarea id="room-desc" placeholder="Short description of this subject…"></textarea>
+                    </div>
+                    <div class="form-field">
+                        <label>Display Order</label>
+                        <input type="number" id="room-order" min="1" step="1" value="1">
+                        <div class="hint">Lower numbers appear first for students.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('room-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="room-save-btn">Save Room</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- LESSONS LIST MODAL -->
+    <div class="modal-overlay" id="lessons-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3 id="lessons-modal-title">Lessons</h3>
+                <button class="modal-close" onclick="closeModal('lessons-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+                    <div class="section-title" style="margin:0;">Lessons in this room</div>
+                    <button class="btn btn-primary btn-sm" onclick="openLessonForm()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add Lesson
+                    </button>
+                </div>
+                <div id="lessons-list"><div class="loader">Loading lessons…</div></div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('lessons-modal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LESSON CREATE / EDIT MODAL -->
+    <div class="modal-overlay" id="lesson-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3 id="lesson-modal-title">Add Lesson</h3>
+                <button class="modal-close" onclick="closeModal('lesson-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveLesson(event)">
+                <div class="modal-body">
+                    <div class="alert" id="lesson-alert" style="display:none;"></div>
+                    <input type="hidden" id="lesson-id">
+                    <div class="form-field">
+                        <label>Lesson Title</label>
+                        <input type="text" id="lesson-title" placeholder="e.g. Cell Structure & Function" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Description <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <textarea id="lesson-desc" placeholder="What this lesson covers…"></textarea>
+                    </div>
+                    <div class="form-field">
+                        <label>Cover Image URL <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <input type="text" id="lesson-image" placeholder="https://…">
+                        <div class="hint">A public image link shown on the lesson card.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('lesson-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="lesson-save-btn">Save Lesson</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/rooms.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+
+            renderLayout('rooms', 'Rooms & Lessons', 'Organise subjects and their lessons', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="toolbar">
+                    <div></div>
+                    <div class="toolbar-actions">
+                        <button class="btn btn-primary" onclick="openRoomModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add Room
+                        </button>
+                    </div>
+                </div>
+                <div id="rooms-container"><div class="loader">Loading rooms…</div></div>
+            `;
+
+            loadRooms();
+        })();
+    </script>
+</body>
+</html>
