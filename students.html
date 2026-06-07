@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MDA Admin — Students</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- CREATE SINGLE MODAL -->
+    <div class="modal-overlay" id="create-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Add Student</h3>
+                <button class="modal-close" onclick="closeModal('create-modal')">&times;</button>
+            </div>
+            <form id="single-form" onsubmit="createSingleStudent(event)">
+                <div class="modal-body">
+                    <div class="alert" id="create-alert" style="display:none;"></div>
+                    <div class="form-field">
+                        <label>Full Name</label>
+                        <input type="text" id="new-name" placeholder="e.g. Jonathan Cohen" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Email</label>
+                        <input type="email" id="new-email" placeholder="student@example.com" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Account Expiry Date <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <input type="date" id="new-expiry">
+                        <div class="hint">Leave blank for no expiry. The student is locked out after this date.</div>
+                    </div>
+                    <div class="form-field">
+                        <div class="hint">A secure password will be generated automatically and shown after creation.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('create-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="create-btn">Create Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- BULK IMPORT MODAL -->
+    <div class="modal-overlay" id="bulk-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3>Bulk Import Students</h3>
+                <button class="modal-close" onclick="closeModal('bulk-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert" id="bulk-alert" style="display:none;"></div>
+                <label class="upload-zone" for="csv-file">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <p>Click to upload a CSV file</p>
+                    <span>Format: Full Name, Email (one student per line)</span>
+                    <input type="file" id="csv-file" accept=".csv" onchange="handleCsvUpload(event)">
+                </label>
+                <div class="form-field" style="margin-top:18px;">
+                    <label>Account Expiry Date for all imported students <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                    <input type="date" id="bulk-expiry">
+                    <div class="hint">Applies one expiry date to the entire batch. Leave blank for no expiry.</div>
+                </div>
+                <div id="bulk-preview" style="margin-top:18px;"></div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('bulk-modal')">Cancel</button>
+                <button type="button" class="btn btn-primary" id="bulk-create-btn" onclick="runBulkCreate()" disabled>Create All Accounts</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDIT MODAL -->
+    <div class="modal-overlay" id="edit-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Edit Student</h3>
+                <button class="modal-close" onclick="closeModal('edit-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveEdit(event)">
+                <div class="modal-body">
+                    <div class="alert" id="edit-alert" style="display:none;"></div>
+                    <input type="hidden" id="edit-id">
+                    <div class="form-field">
+                        <label>Full Name</label>
+                        <input type="text" id="edit-name" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Status</label>
+                        <select id="edit-status">
+                            <option value="active">Active</option>
+                            <option value="suspended">Suspended</option>
+                        </select>
+                        <div class="hint">Suspended students cannot log in and are kicked out immediately.</div>
+                    </div>
+                    <div class="form-field">
+                        <label>Account Expiry Date</label>
+                        <input type="date" id="edit-expiry">
+                        <div class="hint">Leave blank for no expiry.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('edit-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="edit-save-btn">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CREDENTIALS MODAL -->
+    <div class="modal-overlay" id="creds-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3>Account Credentials</h3>
+                <button class="modal-close" onclick="closeModal('creds-modal')">&times;</button>
+            </div>
+            <div class="modal-body" id="creds-body"></div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-gold" onclick="downloadCredsCsv()">Download CSV</button>
+                <button type="button" class="btn btn-primary" onclick="closeModal('creds-modal')">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/students.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+
+            renderLayout('students', 'Students', 'Create and manage student accounts', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="toolbar">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="search-input" placeholder="Search students by name…" oninput="filterStudents()">
+                    </div>
+                    <div class="toolbar-actions">
+                        <button class="btn btn-ghost" onclick="openModal('bulk-modal')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Bulk Import
+                        </button>
+                        <button class="btn btn-primary" onclick="openModal('create-modal')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add Student
+                        </button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Expiry</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="students-tbody">
+                            <tr><td colspan="5" class="loader">Loading students…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            loadStudents();
+        })();
+    </script>
+</body>
+</html>
