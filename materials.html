@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Study Materials</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- UPLOAD MODAL -->
+    <div class="modal-overlay" id="upload-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Upload Material</h3>
+                <button class="modal-close" onclick="closeModal('upload-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveUpload(event)">
+                <div class="modal-body">
+                    <div class="alert" id="upload-alert" style="display:none;"></div>
+                    <label class="upload-zone" for="material-file" id="upload-zone-label">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <p id="upload-zone-text">Click to choose a file</p>
+                        <span>PDF, PPTX, DOCX, images — up to 50&nbsp;MB</span>
+                        <input type="file" id="material-file" accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg" onchange="onFilePicked(event)">
+                    </label>
+                    <div class="form-field" style="margin-top:18px;">
+                        <label>Title</label>
+                        <input type="text" id="material-title" placeholder="e.g. Cell Structure — Slides" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label>Room</label>
+                            <select id="material-room" onchange="onMaterialRoomChange()" required></select>
+                        </div>
+                        <div class="form-field">
+                            <label>Lesson <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                            <select id="material-lesson"><option value="">— None —</option></select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('upload-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="upload-btn">Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EDIT METADATA MODAL -->
+    <div class="modal-overlay" id="medit-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Edit Material</h3>
+                <button class="modal-close" onclick="closeModal('medit-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveMaterialEdit(event)">
+                <div class="modal-body">
+                    <div class="alert" id="medit-alert" style="display:none;"></div>
+                    <input type="hidden" id="medit-id">
+                    <div class="form-field">
+                        <label>Title</label>
+                        <input type="text" id="medit-title" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label>Room</label>
+                            <select id="medit-room" onchange="onMeditRoomChange()" required></select>
+                        </div>
+                        <div class="form-field">
+                            <label>Lesson <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                            <select id="medit-lesson"><option value="">— None —</option></select>
+                        </div>
+                    </div>
+                    <div class="hint">To replace the file itself, delete this material and upload a new one.</div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('medit-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="medit-save-btn">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/materials.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+
+            renderLayout('materials', 'Study Materials', 'Upload slides, PDFs and reading materials', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="toolbar">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="search-input" placeholder="Search materials by title…" oninput="applyMaterialFilters()">
+                    </div>
+                    <div class="toolbar-actions">
+                        <select id="room-filter" class="filter-select" onchange="applyMaterialFilters()">
+                            <option value="">All rooms</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="openUploadModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Upload Material
+                        </button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Type</th>
+                                <th>Room</th>
+                                <th>Lesson</th>
+                                <th>Uploaded</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="materials-tbody">
+                            <tr><td colspan="6" class="loader">Loading materials…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            loadMaterials();
+        })();
+    </script>
+</body>
+</html>
