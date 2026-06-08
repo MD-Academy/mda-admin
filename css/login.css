@@ -6,7 +6,8 @@ body { font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; }
 
 .left-panel {
     flex: 0 0 55%;
-    background: linear-gradient(135deg, #020d1f 0%, #0a1e3d 40%, #0d2a52 70%, #091829 100%);
+    /* Charcoal/slate — distinguishes the ADMIN portal from the navy STUDENT portal. */
+    background: linear-gradient(135deg, #15181e 0%, #20262f 40%, #2b333f 70%, #181c23 100%);
     position: relative;
     display: flex;
     align-items: center;
@@ -19,8 +20,8 @@ body { font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; }
     position: absolute;
     inset: 0;
     background:
-        radial-gradient(circle at 20% 80%, rgba(74,144,217,0.15) 0%, transparent 50%),
-        radial-gradient(circle at 80% 20%, rgba(99,102,241,0.1) 0%, transparent 50%);
+        radial-gradient(circle at 20% 80%, rgba(148,163,184,0.12) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(212,175,55,0.10) 0%, transparent 50%);
     pointer-events: none;
 }
 
@@ -98,7 +99,7 @@ body { font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; }
 .hero-sub {
     font-size: 18px;
     font-weight: 500;
-    color: #4a90d9;
+    color: #94a3b8;
     letter-spacing: 1px;
 }
 
