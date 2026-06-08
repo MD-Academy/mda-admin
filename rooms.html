@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
-    <title>MDA Admin — Rooms & Lessons</title>
+    <title>MDA Admin — Rooms & Courses</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/dashboard.css">
@@ -50,62 +50,6 @@
         </div>
     </div>
 
-    <!-- LESSONS LIST MODAL -->
-    <div class="modal-overlay" id="lessons-modal">
-        <div class="modal wide">
-            <div class="modal-head">
-                <h3 id="lessons-modal-title">Lessons</h3>
-                <button class="modal-close" onclick="closeModal('lessons-modal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
-                    <div class="section-title" style="margin:0;">Lessons in this room</div>
-                    <button class="btn btn-primary btn-sm" onclick="openLessonForm()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        Add Lesson
-                    </button>
-                </div>
-                <div id="lessons-list"><div class="loader">Loading lessons…</div></div>
-            </div>
-            <div class="modal-foot">
-                <button type="button" class="btn btn-ghost" onclick="closeModal('lessons-modal')">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- LESSON CREATE / EDIT MODAL -->
-    <div class="modal-overlay" id="lesson-modal">
-        <div class="modal">
-            <div class="modal-head">
-                <h3 id="lesson-modal-title">Add Lesson</h3>
-                <button class="modal-close" onclick="closeModal('lesson-modal')">&times;</button>
-            </div>
-            <form onsubmit="saveLesson(event)">
-                <div class="modal-body">
-                    <div class="alert" id="lesson-alert" style="display:none;"></div>
-                    <input type="hidden" id="lesson-id">
-                    <div class="form-field">
-                        <label>Lesson Title</label>
-                        <input type="text" id="lesson-title" placeholder="e.g. Cell Structure & Function" required>
-                    </div>
-                    <div class="form-field">
-                        <label>Description <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                        <textarea id="lesson-desc" placeholder="What this lesson covers…"></textarea>
-                    </div>
-                    <div class="form-field">
-                        <label>Cover Image URL <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                        <input type="text" id="lesson-image" placeholder="https://…">
-                        <div class="hint">A public image link shown on the lesson card.</div>
-                    </div>
-                </div>
-                <div class="modal-foot">
-                    <button type="button" class="btn btn-ghost" onclick="closeModal('lesson-modal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="lesson-save-btn">Save Lesson</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
@@ -116,7 +60,7 @@
             const auth = await requireAdmin();
             if (!auth) return;
 
-            renderLayout('rooms', 'Rooms & Lessons', 'Organise subjects and their lessons', auth.profile);
+            renderLayout('rooms', 'Rooms & Courses', 'Open a room to manage its lessons, recordings, materials and quizzes', auth.profile);
 
             document.getElementById('page-content').innerHTML = `
                 <div class="toolbar">

@@ -500,6 +500,45 @@ body {
 
 .section-title { font-size: 15px; font-weight: 700; color: var(--navy-800); margin: 4px 0 14px; }
 
+/* ── TABS (room hub) ── */
+.back-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 600; color: var(--text-muted);
+    text-decoration: none; margin-bottom: 16px;
+}
+.back-link:hover { color: var(--blue-500); }
+.back-link svg { width: 16px; height: 16px; }
+
+.tabs {
+    display: flex; gap: 2px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 24px;
+    overflow-x: auto;
+}
+.tab {
+    padding: 12px 20px;
+    font-size: 14px; font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer; border: none; background: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+    font-family: 'Inter', sans-serif;
+    display: inline-flex; align-items: center; gap: 8px;
+}
+.tab:hover { color: var(--navy-800); }
+.tab.active { color: var(--navy-800); border-bottom-color: var(--blue-500); }
+.tab .count-pill { min-width: 22px; height: 20px; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.subtoolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 14px; margin-bottom: 18px; flex-wrap: wrap;
+}
+.subtoolbar .st-title { font-size: 16px; font-weight: 700; color: var(--navy-800); }
+
 @media (max-width: 900px) {
     .sidebar { transform: translateX(-100%); transition: transform 0.3s; }
     .sidebar.open { transform: translateX(0); }
