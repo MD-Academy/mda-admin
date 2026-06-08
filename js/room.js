@@ -239,7 +239,13 @@ async function saveLesson(e) {
 
 async function deleteLesson(id) {
     const l = lessons.find(x => x.id === id);
-    if (!confirm(`Delete the lesson "${l ? l.title : ''}"? Any recordings, materials and quizzes attached to it will also be removed. This cannot be undone.`)) return;
+    const ok = await confirmDialog({
+        title: 'Delete lesson?',
+        message: `"${l ? l.title : ''}" will be removed, along with any recordings, materials and quizzes attached to it. This cannot be undone.`,
+        confirmText: 'Delete',
+        danger: true
+    });
+    if (!ok) return;
     const { error } = await db.from('lessons').delete().eq('id', id);
     if (error) { alert(`Failed to delete lesson: ${error.message}`); return; }
     await loadAll();
@@ -361,7 +367,13 @@ async function saveRecording(e) {
 
 async function deleteRecording(id) {
     const r = recordings.find(x => x.id === id);
-    if (!confirm(`Delete "${r ? r.title : ''}"? This cannot be undone.`)) return;
+    const ok = await confirmDialog({
+        title: 'Delete this video?',
+        message: `"${r ? r.title : ''}" will be removed. This cannot be undone.`,
+        confirmText: 'Delete',
+        danger: true
+    });
+    if (!ok) return;
     const { error } = await db.from('recordings').delete().eq('id', id);
     if (error) { alert(`Failed to delete: ${error.message}`); return; }
     await loadAll();
@@ -516,7 +528,13 @@ async function saveMaterialEdit(e) {
 async function deleteMaterial(id) {
     const m = materials.find(x => x.id === id);
     if (!m) return;
-    if (!confirm(`Delete "${m.title}"? The file will be permanently removed. This cannot be undone.`)) return;
+    const ok = await confirmDialog({
+        title: 'Delete material?',
+        message: `"${m.title}" and its file will be permanently removed. This cannot be undone.`,
+        confirmText: 'Delete',
+        danger: true
+    });
+    if (!ok) return;
     const rm = await db.storage.from(MATERIALS_BUCKET).remove([m.storage_path]);
     if (rm.error) { alert(`Failed to remove file: ${rm.error.message}`); return; }
     const del = await db.from('materials').delete().eq('id', id);

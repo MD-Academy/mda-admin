@@ -264,7 +264,12 @@ async function saveEdit(e) {
 
 // ── RESET PASSWORD ──
 async function resetPw(id, name) {
-    if (!confirm(`Generate a new password for ${name}? The old password will stop working immediately.`)) return;
+    const ok = await confirmDialog({
+        title: 'Reset password?',
+        message: `A new password will be generated for ${name}. Their current password will stop working immediately.`,
+        confirmText: 'Generate New Password'
+    });
+    if (!ok) return;
     try {
         const res = await apiRequest('POST', `/admin/reset-password/${id}`);
         showCredentials([{ full_name: name, email: '(unchanged)', password: res.new_password }]);
@@ -275,7 +280,13 @@ async function resetPw(id, name) {
 
 // ── DELETE ──
 async function deleteStudent(id, name) {
-    if (!confirm(`Permanently delete ${name}? This cannot be undone.`)) return;
+    const ok = await confirmDialog({
+        title: `Delete ${name}?`,
+        message: 'This permanently deletes the student account and all their data. This cannot be undone.',
+        confirmText: 'Delete Student',
+        danger: true
+    });
+    if (!ok) return;
     try {
         await apiRequest('DELETE', `/admin/delete-student/${id}`);
         loadStudents();

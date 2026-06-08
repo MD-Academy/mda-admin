@@ -157,9 +157,15 @@ async function saveRoom(e) {
 
 async function deleteRoom(id, name) {
     const count = lessonCounts[id] || 0;
-    let msg = `Delete the room "${name}"?`;
-    if (count > 0) msg += `\n\nThis room has ${count} lesson(s). Deleting it will also remove those lessons and any recordings, materials and quizzes attached to them. This cannot be undone.`;
-    if (!confirm(msg)) return;
+    let msg = 'This room will be removed. This cannot be undone.';
+    if (count > 0) msg = `This room has ${count} lesson(s). Deleting it will also remove those lessons and any recordings, materials and quizzes attached to them. This cannot be undone.`;
+    const ok = await confirmDialog({
+        title: `Delete "${name}"?`,
+        message: msg,
+        confirmText: 'Delete Room',
+        danger: true
+    });
+    if (!ok) return;
 
     const { error } = await db.from('rooms').delete().eq('id', id);
     if (error) { alert(`Failed to delete room: ${error.message}`); return; }
