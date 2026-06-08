@@ -449,19 +449,32 @@ async function saveUpload(e) {
     }
 }
 
-async function previewMaterial(id, btnEl) {
+function previewMaterial(id, btnEl) {
     const m = materials.find(x => x.id === id);
     if (!m) return;
+
+    // Open the tab synchronously (inside the click) so the browser does not
+    // block it as a popup. We redirect it once the signed URL is ready.
+    const win = window.open('', '_blank');
+    if (win) {
+        win.document.write('<!DOCTYPE html><title>Loading…</title><body style="font-family:sans-serif;padding:40px;color:#334">Loading material…</body>');
+    }
+
     const original = btnEl.textContent;
     btnEl.disabled = true; btnEl.textContent = 'Opening…';
-    try {
-        const res = await apiRequest('POST', '/materials/signed-url', { storage_path: m.storage_path });
-        window.open(res.signed_url, '_blank', 'noopener');
-    } catch (err) {
-        alert(`Could not open file: ${err.message}`);
-    } finally {
-        btnEl.disabled = false; btnEl.textContent = original;
-    }
+
+    apiRequest('POST', '/materials/signed-url', { storage_path: m.storage_path })
+        .then(res => {
+            if (win) win.location.href = res.signed_url;
+            else window.open(res.signed_url, '_blank', 'noopener'); // popup was blocked; try anyway
+        })
+        .catch(err => {
+            if (win) win.close();
+            alert(`Could not open file: ${err.message}`);
+        })
+        .finally(() => {
+            btnEl.disabled = false; btnEl.textContent = original;
+        });
 }
 
 function openMaterialEdit(id) {
