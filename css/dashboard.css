@@ -30,7 +30,8 @@ body {
 /* ── SIDEBAR ── */
 .sidebar {
     width: 260px;
-    background: linear-gradient(180deg, var(--navy-900) 0%, var(--navy-800) 100%);
+    /* Charcoal/slate to match the admin login — distinct from the student (navy) side. */
+    background: linear-gradient(180deg, #15181e 0%, #20262f 100%);
     display: flex;
     flex-direction: column;
     position: fixed;
