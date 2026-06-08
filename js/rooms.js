@@ -151,7 +151,7 @@ async function saveRoom(e) {
     } catch (err) {
         showModalAlert(alert, err.message, 'error');
     } finally {
-        btn.disabled = false; btn.textContent = 'Save Room';
+        btn.disabled = false; btn.textContent = 'Save Subject';
     }
 }
 
