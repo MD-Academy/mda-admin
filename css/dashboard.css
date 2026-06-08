@@ -226,7 +226,7 @@ body {
 .loader { text-align: center; padding: 48px; color: var(--text-muted); font-size: 14px; }
 
 .welcome-banner {
-    background: linear-gradient(135deg, var(--navy-900), var(--blue-500));
+    background: linear-gradient(135deg, #20262f 0%, #2b333f 45%, #b91c5c 100%);
     border-radius: 16px;
     padding: 32px;
     color: #fff;
