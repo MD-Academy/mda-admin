@@ -51,8 +51,8 @@ function renderRooms() {
         container.innerHTML = `
             <div class="empty-state">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-                <h3>No rooms yet</h3>
-                <p>Click "Add Room" to create your first subject.</p>
+                <h3>No subjects yet</h3>
+                <p>Click "Add Subject" to create your first one.</p>
             </div>`;
         return;
     }
@@ -71,7 +71,7 @@ function renderRooms() {
                     ${count} lesson${count === 1 ? '' : 's'}
                 </span>
                 <div class="ec-actions">
-                    <button class="btn btn-primary btn-sm" onclick="openRoom('${r.id}')">Open Room</button>
+                    <button class="btn btn-primary btn-sm" onclick="openRoom('${r.id}')">Open</button>
                     <button class="btn btn-ghost btn-sm" onclick="openRoomModal('${r.id}')">Edit</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteRoom('${r.id}', '${escapeHtml(r.name).replace(/'/g, "\\'")}')">Delete</button>
                 </div>
@@ -100,7 +100,7 @@ function openRoomModal(id = null) {
     if (id) {
         const r = allRooms.find(x => x.id === id);
         if (!r) return;
-        document.getElementById('room-modal-title').textContent = 'Edit Room';
+        document.getElementById('room-modal-title').textContent = 'Edit Subject';
         document.getElementById('room-id').value = r.id;
         document.getElementById('room-name').value = r.name || '';
         document.getElementById('room-slug').value = r.slug || '';
@@ -108,7 +108,7 @@ function openRoomModal(id = null) {
         document.getElementById('room-order').value = r.order_index ?? 1;
     } else {
         const nextOrder = allRooms.length ? Math.max(...allRooms.map(r => r.order_index || 0)) + 1 : 1;
-        document.getElementById('room-modal-title').textContent = 'Add Room';
+        document.getElementById('room-modal-title').textContent = 'Add Subject';
         document.getElementById('room-id').value = '';
         document.getElementById('room-name').value = '';
         document.getElementById('room-slug').value = '';
@@ -157,12 +157,12 @@ async function saveRoom(e) {
 
 async function deleteRoom(id, name) {
     const count = lessonCounts[id] || 0;
-    let msg = 'This room will be removed. This cannot be undone.';
-    if (count > 0) msg = `This room has ${count} lesson(s). Deleting it will also remove those lessons and any recordings, materials and quizzes attached to them. This cannot be undone.`;
+    let msg = 'This subject will be removed. This cannot be undone.';
+    if (count > 0) msg = `This subject has ${count} lesson(s). Deleting it will also remove those lessons and any recordings, materials, notes and quizzes attached to them. This cannot be undone.`;
     const ok = await confirmDialog({
         title: `Delete "${name}"?`,
         message: msg,
-        confirmText: 'Delete Room',
+        confirmText: 'Delete Subject',
         danger: true
     });
     if (!ok) return;
@@ -170,13 +170,13 @@ async function deleteRoom(id, name) {
     // Remove material files in this room from storage BEFORE the row cascade,
     // otherwise the files would be orphaned in the bucket.
     const { data: mats, error: matErr } = await db.from('materials').select('storage_path').eq('room_id', id);
-    if (matErr) { alert(`Could not check room files: ${matErr.message}`); return; }
+    if (matErr) { alert(`Could not check subject files: ${matErr.message}`); return; }
     if (mats && mats.length) {
         const { error: rmErr } = await db.storage.from('materials').remove(mats.map(m => m.storage_path));
-        if (rmErr) { alert(`Could not remove room files: ${rmErr.message}. Room not deleted.`); return; }
+        if (rmErr) { alert(`Could not remove subject files: ${rmErr.message}. Subject not deleted.`); return; }
     }
 
     const { error } = await db.from('rooms').delete().eq('id', id);
-    if (error) { alert(`Failed to delete room: ${error.message}`); return; }
+    if (error) { alert(`Failed to delete subject: ${error.message}`); return; }
     loadRooms();
 }

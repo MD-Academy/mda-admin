@@ -4,6 +4,21 @@
 const MATERIALS_BUCKET = 'materials';
 const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 
+// Whitelisted file extensions per category. Anything not in the list
+// (e.g. .exe, .zip, .js, .html, .bat) is rejected with a clear error.
+const ALLOWED_EXT = {
+    material: ['pdf', 'ppt', 'pptx', 'doc', 'docx', 'png', 'jpg', 'jpeg'],
+    note: ['pdf', 'txt', 'jpg', 'jpeg', 'png']
+};
+const ALLOWED_HINT = {
+    material: 'PDF, PPTX, DOCX, images — up to 50 MB',
+    note: 'PDF, TXT, JPG, PNG — up to 50 MB'
+};
+const ACCEPT_ATTR = {
+    material: '.pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg',
+    note: '.pdf,.txt,.png,.jpg,.jpeg'
+};
+
 let ROOM_ID = null;
 let currentRoom = null;
 let lessons = [];
@@ -52,25 +67,27 @@ async function initRoom(roomId, profile) {
 
     const { data, error } = await db.from('rooms').select('id, name, description').eq('id', roomId).single();
     if (error || !data) {
-        renderLayout('rooms', 'Room', '', profile);
+        renderLayout('rooms', 'Subject', '', profile);
         document.getElementById('page-content').innerHTML =
-            `<div class="empty-state"><h3>Room not found</h3><p>It may have been deleted. <a href="rooms.html">Back to all rooms</a>.</p></div>`;
+            `<div class="empty-state"><h3>Subject not found</h3><p>It may have been deleted. <a href="rooms.html">Back to all subjects</a>.</p></div>`;
         return;
     }
     currentRoom = data;
 
-    renderLayout('rooms', escapeHtml(data.name), 'Manage this room\'s content', profile);
+    renderLayout('rooms', escapeHtml(data.name), 'Manage this subject\'s content', profile);
 
     document.getElementById('page-content').innerHTML = `
         <a class="back-link" href="rooms.html">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-            All Rooms
+            All Subjects
         </a>
         <div class="tabs">
             <button class="tab active" data-tab="lessons" onclick="switchTab('lessons')">Lessons <span class="count-pill" id="count-lessons">0</span></button>
             <button class="tab" data-tab="zoom" onclick="switchTab('zoom')">Zoom Recordings <span class="count-pill" id="count-zoom">0</span></button>
             <button class="tab" data-tab="lecture" onclick="switchTab('lecture')">Video Lectures <span class="count-pill" id="count-lecture">0</span></button>
             <button class="tab" data-tab="materials" onclick="switchTab('materials')">Materials <span class="count-pill" id="count-materials">0</span></button>
+            <button class="tab" data-tab="notes" onclick="switchTab('notes')">Additional Notes <span class="count-pill" id="count-notes">0</span></button>
+            <button class="tab" data-tab="anki" onclick="switchTab('anki')">Anki Cards</button>
             <button class="tab" data-tab="quizzes" onclick="switchTab('quizzes')">Quizzes</button>
         </div>
 
@@ -115,6 +132,22 @@ async function initRoom(roomId, profile) {
             </table></div>
         </div>
 
+        <div class="tab-panel" id="panel-notes">
+            <div class="subtoolbar">
+                <div class="st-title">Additional Notes</div>
+                <button class="btn btn-primary btn-sm" onclick="openUploadModal('note')">+ Add Note</button>
+            </div>
+            <p class="hint" style="margin:-6px 0 16px;">Extra summaries, study plans or recommendations. Accepts PDF, TXT, JPG, PNG.</p>
+            <div class="panel"><table class="data-table">
+                <thead><tr><th>Title</th><th>Type</th><th>Lesson</th><th>Uploaded</th><th>Actions</th></tr></thead>
+                <tbody id="notes-tbody"></tbody>
+            </table></div>
+        </div>
+
+        <div class="tab-panel" id="panel-anki">
+            <div class="empty-state"><h3>Anki Cards — coming soon</h3><p>Anki flashcard decks will live here once the format is decided.</p></div>
+        </div>
+
         <div class="tab-panel" id="panel-quizzes">
             <div class="empty-state"><h3>Quizzes — coming soon</h3><p>The quiz builder will live here.</p></div>
         </div>
@@ -132,7 +165,7 @@ async function loadAll() {
     const [lRes, rRes, mRes] = await Promise.all([
         db.from('lessons').select('id, title, description, image_url, order_index').eq('room_id', ROOM_ID).order('order_index', { ascending: true }),
         db.from('recordings').select('id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, kind').eq('room_id', ROOM_ID).order('recorded_date', { ascending: false }),
-        db.from('materials').select('id, lesson_id, title, type, storage_path, created_at').eq('room_id', ROOM_ID).order('created_at', { ascending: false })
+        db.from('materials').select('id, lesson_id, title, type, storage_path, created_at, category').eq('room_id', ROOM_ID).order('created_at', { ascending: false })
     ]);
 
     lessons = lRes.data || [];
@@ -143,14 +176,19 @@ async function loadAll() {
     renderRecordings('zoom');
     renderRecordings('lecture');
     renderMaterials();
+    renderNotes();
     updateCounts();
 }
+
+// Treat any row without an explicit category as a 'material' (older rows).
+function matCategory(m) { return m.category === 'note' ? 'note' : 'material'; }
 
 function updateCounts() {
     document.getElementById('count-lessons').textContent = lessons.length;
     document.getElementById('count-zoom').textContent = recordings.filter(r => r.kind === 'zoom').length;
     document.getElementById('count-lecture').textContent = recordings.filter(r => r.kind === 'lecture').length;
-    document.getElementById('count-materials').textContent = materials.length;
+    document.getElementById('count-materials').textContent = materials.filter(m => matCategory(m) === 'material').length;
+    document.getElementById('count-notes').textContent = materials.filter(m => matCategory(m) === 'note').length;
 }
 
 // ── LESSON SELECT POPULATION ──
@@ -390,13 +428,8 @@ async function deleteRecording(id) {
 }
 
 // ════════════ MATERIALS ════════════
-function renderMaterials() {
-    const tbody = document.getElementById('materials-tbody');
-    if (materials.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="loader">No materials yet.</td></tr>`;
-        return;
-    }
-    tbody.innerHTML = materials.map(m => `
+function materialRowHtml(m) {
+    return `
         <tr>
             <td><strong>${escapeHtml(m.title)}</strong></td>
             <td><span class="badge badge-blue">${escapeHtml((m.type || 'file').toUpperCase())}</span></td>
@@ -407,13 +440,34 @@ function renderMaterials() {
                 <button class="btn btn-ghost btn-sm" onclick="openMaterialEdit('${m.id}')">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteMaterial('${m.id}')">Delete</button>
             </td>
-        </tr>`).join('');
+        </tr>`;
 }
 
-function openUploadModal() {
+function renderMaterials() {
+    const tbody = document.getElementById('materials-tbody');
+    const list = materials.filter(m => matCategory(m) === 'material');
+    tbody.innerHTML = list.length
+        ? list.map(materialRowHtml).join('')
+        : `<tr><td colspan="5" class="loader">No materials yet.</td></tr>`;
+}
+
+function renderNotes() {
+    const tbody = document.getElementById('notes-tbody');
+    const list = materials.filter(m => matCategory(m) === 'note');
+    tbody.innerHTML = list.length
+        ? list.map(materialRowHtml).join('')
+        : `<tr><td colspan="5" class="loader">No notes yet.</td></tr>`;
+}
+
+function openUploadModal(category = 'material') {
     pickedFile = null;
+    document.getElementById('upload-category').value = category;
+    document.getElementById('upload-modal-title').textContent = category === 'note' ? 'Add Note' : 'Upload Material';
+    document.getElementById('upload-allowed-hint').textContent = ALLOWED_HINT[category];
+    const fileInput = document.getElementById('material-file');
+    fileInput.setAttribute('accept', ACCEPT_ATTR[category]);
+    fileInput.value = '';
     document.getElementById('upload-alert').style.display = 'none';
-    document.getElementById('material-file').value = '';
     document.getElementById('upload-zone-text').textContent = 'Click to choose a file';
     document.getElementById('material-title').value = '';
     document.getElementById('material-lesson').innerHTML = lessonOptions();
@@ -435,6 +489,7 @@ async function saveUpload(e) {
     const alert = document.getElementById('upload-alert');
     alert.style.display = 'none';
 
+    const category = document.getElementById('upload-category').value || 'material';
     const title = document.getElementById('material-title').value.trim();
     const lesson_id = document.getElementById('material-lesson').value || null;
 
@@ -445,7 +500,14 @@ async function saveUpload(e) {
         return;
     }
 
+    // Reject anything outside the whitelist (e.g. .exe, .zip, .js, .html).
     const ext = fileExt(pickedFile.name);
+    const allowed = ALLOWED_EXT[category] || ALLOWED_EXT.material;
+    if (!allowed.includes(ext)) {
+        showModalAlert(alert, `Invalid file type ".${ext}". Allowed types: ${allowed.join(', ').toUpperCase()}.`, 'error');
+        return;
+    }
+
     const path = `${ROOM_ID}/${Date.now()}-${sanitizeName(pickedFile.name)}`;
 
     btn.disabled = true; btn.textContent = 'Uploading…';
@@ -456,7 +518,7 @@ async function saveUpload(e) {
         if (up.error) throw new Error(`Upload failed: ${up.error.message}`);
 
         const ins = await db.from('materials').insert({
-            room_id: ROOM_ID, lesson_id, title, type: ext, storage_path: path
+            room_id: ROOM_ID, lesson_id, title, type: ext, storage_path: path, category
         });
         if (ins.error) {
             await db.storage.from(MATERIALS_BUCKET).remove([path]);

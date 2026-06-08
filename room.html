@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
-    <title>MDA Admin — Room</title>
+    <title>MDA Admin — Subject</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/dashboard.css">
@@ -96,19 +96,20 @@
     <div class="modal-overlay" id="upload-modal">
         <div class="modal">
             <div class="modal-head">
-                <h3>Upload Material</h3>
+                <h3 id="upload-modal-title">Upload Material</h3>
                 <button class="modal-close" onclick="closeModal('upload-modal')">&times;</button>
             </div>
             <form onsubmit="saveUpload(event)">
                 <div class="modal-body">
                     <div class="alert" id="upload-alert" style="display:none;"></div>
+                    <input type="hidden" id="upload-category" value="material">
                     <label class="upload-zone" for="material-file">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                         </svg>
                         <p id="upload-zone-text">Click to choose a file</p>
-                        <span>PDF, PPTX, DOCX, images — up to 50&nbsp;MB</span>
-                        <input type="file" id="material-file" accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg" onchange="onFilePicked(event)">
+                        <span id="upload-allowed-hint">PDF, PPTX, DOCX, images — up to 50&nbsp;MB</span>
+                        <input type="file" id="material-file" onchange="onFilePicked(event)">
                     </label>
                     <div class="form-field" style="margin-top:18px;">
                         <label>Title</label>
