@@ -514,7 +514,10 @@ body {
     border-bottom: 2px solid var(--border);
     margin-bottom: 24px;
     overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none; /* Firefox: hide the scrollbar */
 }
+.tabs::-webkit-scrollbar { display: none; } /* Chrome/Safari: hide the scrollbar */
 .tab {
     padding: 12px 20px;
     font-size: 14px; font-weight: 600;
