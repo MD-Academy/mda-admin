@@ -167,6 +167,15 @@ async function deleteRoom(id, name) {
     });
     if (!ok) return;
 
+    // Remove material files in this room from storage BEFORE the row cascade,
+    // otherwise the files would be orphaned in the bucket.
+    const { data: mats, error: matErr } = await db.from('materials').select('storage_path').eq('room_id', id);
+    if (matErr) { alert(`Could not check room files: ${matErr.message}`); return; }
+    if (mats && mats.length) {
+        const { error: rmErr } = await db.storage.from('materials').remove(mats.map(m => m.storage_path));
+        if (rmErr) { alert(`Could not remove room files: ${rmErr.message}. Room not deleted.`); return; }
+    }
+
     const { error } = await db.from('rooms').delete().eq('id', id);
     if (error) { alert(`Failed to delete room: ${error.message}`); return; }
     loadRooms();

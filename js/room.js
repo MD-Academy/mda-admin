@@ -246,6 +246,16 @@ async function deleteLesson(id) {
         danger: true
     });
     if (!ok) return;
+
+    // Remove this lesson's material files from storage before the row cascade,
+    // otherwise the files would be orphaned in the bucket.
+    const { data: mats, error: matErr } = await db.from('materials').select('storage_path').eq('lesson_id', id);
+    if (matErr) { alert(`Could not check lesson files: ${matErr.message}`); return; }
+    if (mats && mats.length) {
+        const { error: rmErr } = await db.storage.from(MATERIALS_BUCKET).remove(mats.map(m => m.storage_path));
+        if (rmErr) { alert(`Could not remove lesson files: ${rmErr.message}. Lesson not deleted.`); return; }
+    }
+
     const { error } = await db.from('lessons').delete().eq('id', id);
     if (error) { alert(`Failed to delete lesson: ${error.message}`); return; }
     await loadAll();
