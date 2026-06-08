@@ -7,7 +7,7 @@ async function requireAdmin() {
 
     const { data: profile } = await db
         .from('profiles')
-        .select('role, full_name')
+        .select('role, full_name, avatar_url')
         .eq('id', session.user.id)
         .single();
 

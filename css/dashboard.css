@@ -130,10 +130,38 @@ body {
 .topbar-user .avatar {
     width: 40px; height: 40px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--navy-800), var(--blue-500));
+    background: linear-gradient(135deg, #20262f, #b91c5c);
     display: flex; align-items: center; justify-content: center;
     color: #fff; font-weight: 700; font-size: 15px;
 }
+.avatar-btn {
+    position: relative;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    overflow: visible;
+    flex-shrink: 0;
+}
+.avatar-inner {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+}
+.avatar-inner img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-edit {
+    position: absolute;
+    right: -2px; bottom: -2px;
+    width: 18px; height: 18px;
+    background: var(--crimson);
+    border: 2px solid var(--card);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.avatar-edit svg { width: 9px; height: 9px; color: #fff; }
+.avatar-btn:hover .avatar-edit { opacity: 1; }
 .topbar-user .user-info { display: flex; flex-direction: column; }
 .topbar-user .user-info strong { font-size: 14px; color: var(--text); }
 .topbar-user .user-info span { font-size: 12px; color: var(--text-muted); }
@@ -166,10 +194,11 @@ body {
     flex-shrink: 0;
 }
 .stat-icon svg { width: 24px; height: 24px; color: #fff; }
-.stat-icon.blue { background: linear-gradient(135deg, #2563eb, #4a90d9); }
-.stat-icon.green { background: linear-gradient(135deg, #16a34a, #22c55e); }
-.stat-icon.gold { background: linear-gradient(135deg, #d4af37, #f0c952); }
-.stat-icon.crimson { background: linear-gradient(135deg, #b91c5c, #e11d74); }
+/* Admin = charcoal/grey tones with the brand crimson (no rainbow colours). */
+.stat-icon.blue { background: linear-gradient(135deg, #1c2129 0%, #b91c5c 140%); }
+.stat-icon.green { background: linear-gradient(135deg, #2b333f 0%, #9d1450 150%); }
+.stat-icon.gold { background: linear-gradient(135deg, #3a4150 0%, #b91c5c 160%); }
+.stat-icon.crimson { background: linear-gradient(135deg, #20262f 0%, #c41e63 140%); }
 
 .stat-info .stat-value { font-size: 28px; font-weight: 800; color: var(--navy-800); line-height: 1; }
 .stat-info .stat-label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
