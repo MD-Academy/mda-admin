@@ -51,7 +51,7 @@ function renderLayout(activeId, pageTitle, pageSub, profile) {
                 <div class="topbar-user">
                     <div class="user-info">
                         <strong>${_layoutEsc(profile.full_name || 'Admin')}</strong>
-                        <span>Administrator</span>
+                        <span>${isSuper ? 'Super Administrator' : 'Administrator'}</span>
                     </div>
                     <button class="avatar avatar-btn" id="avatar-btn" title="Upload a photo">
                         <span class="avatar-inner" id="avatar-inner">${profile.avatar_url
