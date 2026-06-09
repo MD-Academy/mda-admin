@@ -53,19 +53,20 @@
     <script src="js/courses.js"></script>
     <script>
         (async () => {
-            const auth = await requireSuperadmin();
+            const auth = await requireAdmin();
             if (!auth) return;
 
-            renderLayout('courses', 'Courses', 'Group subjects into courses and enrol students', auth.profile);
+            IS_SUPER = auth.profile.role === 'superadmin';
+            renderLayout('courses', 'Courses', IS_SUPER ? 'Group subjects into courses and enrol students' : 'View courses and the subjects they contain', auth.profile);
 
             document.getElementById('page-content').innerHTML = `
                 <div class="toolbar">
                     <div></div>
                     <div class="toolbar-actions">
-                        <button class="btn btn-primary" onclick="openCourseModal()">
+                        ${IS_SUPER ? `<button class="btn btn-primary" onclick="openCourseModal()">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             Add Course
-                        </button>
+                        </button>` : ''}
                     </div>
                 </div>
                 <div id="courses-container"><div class="loader">Loading courses…</div></div>

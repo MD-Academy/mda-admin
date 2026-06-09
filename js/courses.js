@@ -3,6 +3,7 @@
 let allCourses = [];
 let subjectCounts = {};   // course_id -> # subjects
 let studentCounts = {};   // course_id -> # enrolled students
+let IS_SUPER = false;     // superadmin can manage; admins (teachers) view only
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -29,11 +30,13 @@ async function loadCourses() {
     const container = document.getElementById('courses-container');
     container.innerHTML = `<div class="loader">Loading courses…</div>`;
 
-    const [cRes, csRes, ceRes] = await Promise.all([
+    const queries = [
         db.from('courses').select('id, name, description, created_at, expires_at').order('created_at', { ascending: false }),
-        db.from('course_subjects').select('course_id'),
-        db.from('course_enrollments').select('course_id')
-    ]);
+        db.from('course_subjects').select('course_id')
+    ];
+    if (IS_SUPER) queries.push(db.from('course_enrollments').select('course_id'));
+    const results = await Promise.all(queries);
+    const cRes = results[0], csRes = results[1], ceRes = IS_SUPER ? results[2] : { data: [] };
 
     if (cRes.error) {
         container.innerHTML = `<div class="loader" style="color:var(--red)">Error loading courses: ${escapeHtml(cRes.error.message)}</div>`;
@@ -72,7 +75,7 @@ function renderCourses() {
                 <div class="ec-desc">${escapeHtml(c.description) || '<em style="color:var(--text-muted)">No description</em>'}</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     <span class="ec-meta">${subs} subject${subs === 1 ? '' : 's'}</span>
-                    <span class="ec-meta" style="background:#fdeef4;color:var(--crimson);">${studs} student${studs === 1 ? '' : 's'}</span>
+                    ${IS_SUPER ? `<span class="ec-meta" style="background:#fdeef4;color:var(--crimson);">${studs} student${studs === 1 ? '' : 's'}</span>` : ''}
                     ${c.expires_at
                         ? (isExpired(c.expires_at)
                             ? `<span class="badge badge-red">Expired ${formatDate(c.expires_at)}</span>`
@@ -80,9 +83,9 @@ function renderCourses() {
                         : `<span class="ec-meta" style="background:var(--bg);color:var(--text-muted);">No expiry</span>`}
                 </div>
                 <div class="ec-actions">
-                    <button class="btn btn-primary btn-sm" onclick="openCourse('${c.id}')">Open</button>
-                    <button class="btn btn-ghost btn-sm" onclick="openCourseModal('${c.id}')">Edit</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteCourse('${c.id}', '${escapeHtml(c.name).replace(/'/g, "\\'")}')">Delete</button>
+                    <button class="btn btn-primary btn-sm" onclick="openCourse('${c.id}')">${IS_SUPER ? 'Open' : 'View'}</button>
+                    ${IS_SUPER ? `<button class="btn btn-ghost btn-sm" onclick="openCourseModal('${c.id}')">Edit</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteCourse('${c.id}', '${escapeHtml(c.name).replace(/'/g, "\\'")}')">Delete</button>` : ''}
                 </div>
             </div>`;
     }).join('')}</div>`;

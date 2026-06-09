@@ -6,6 +6,7 @@ let allSubjects = [];        // rooms
 let courseSubjectIds = new Set();
 let allStudents = [];        // profiles role=student
 let enrolledIds = new Set();
+let IS_SUPER = false;        // superadmin manages; admins (teachers) view only
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -22,19 +23,10 @@ async function initCourse(courseId, profile) {
         return;
     }
     course = data;
-    renderLayout('courses', escapeHtml(data.name), 'Manage subjects & enrolled students', profile);
+    IS_SUPER = profile.role === 'superadmin';
+    renderLayout('courses', escapeHtml(data.name), IS_SUPER ? 'Manage subjects & enrolled students' : 'Subjects in this course', profile);
 
-    document.getElementById('page-content').innerHTML = `
-        <a class="back-link" href="courses.html">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-            All Courses
-        </a>
-        <div class="card-grid" style="grid-template-columns: 1fr 1fr; align-items:start;">
-            <div class="panel" style="padding:22px;">
-                <div class="section-title">Subjects in this course</div>
-                <p class="hint" style="margin:-8px 0 14px;">Toggle which subjects belong to this course. Subjects come from your existing list.</p>
-                <div id="subjects-list"><div class="loader">Loading…</div></div>
-            </div>
+    const studentsPanel = IS_SUPER ? `
             <div class="panel" style="padding:22px;">
                 <div class="section-title">Enrolled students <span class="count-pill" id="enrolled-count">0</span></div>
                 <div class="search-box" style="margin:6px 0 14px; min-width:0;">
@@ -42,7 +34,20 @@ async function initCourse(courseId, profile) {
                     <input type="text" id="student-search" placeholder="Search students by name…" oninput="renderStudents()">
                 </div>
                 <div id="students-list"><div class="loader">Loading…</div></div>
+            </div>` : '';
+
+    document.getElementById('page-content').innerHTML = `
+        <a class="back-link" href="courses.html">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            All Courses
+        </a>
+        <div class="card-grid" style="grid-template-columns: ${IS_SUPER ? '1fr 1fr' : '1fr'}; align-items:start;">
+            <div class="panel" style="padding:22px;">
+                <div class="section-title">Subjects in this course</div>
+                <p class="hint" style="margin:-8px 0 14px;">${IS_SUPER ? 'Toggle which subjects belong to this course. Subjects come from your existing list.' : 'Subjects included in this course.'}</p>
+                <div id="subjects-list"><div class="loader">Loading…</div></div>
             </div>
+            ${studentsPanel}
         </div>
     `;
 
@@ -50,25 +55,42 @@ async function initCourse(courseId, profile) {
 }
 
 async function loadData() {
-    const [subRes, csRes, stuRes, enrRes] = await Promise.all([
+    const [subRes, csRes] = await Promise.all([
         db.from('rooms').select('id, name').order('order_index', { ascending: true }),
-        db.from('course_subjects').select('room_id').eq('course_id', COURSE_ID),
-        db.from('profiles').select('id, full_name, status').eq('role', 'student').order('full_name', { ascending: true }),
-        db.from('course_enrollments').select('student_id').eq('course_id', COURSE_ID)
+        db.from('course_subjects').select('room_id').eq('course_id', COURSE_ID)
     ]);
-
     allSubjects = subRes.data || [];
     courseSubjectIds = new Set((csRes.data || []).map(r => r.room_id));
-    allStudents = stuRes.data || [];
-    enrolledIds = new Set((enrRes.data || []).map(r => r.student_id));
-
     renderSubjects();
-    renderStudents();
+
+    // Enrolment is superadmin-only.
+    if (IS_SUPER) {
+        const [stuRes, enrRes] = await Promise.all([
+            db.from('profiles').select('id, full_name, status').eq('role', 'student').order('full_name', { ascending: true }),
+            db.from('course_enrollments').select('student_id').eq('course_id', COURSE_ID)
+        ]);
+        allStudents = stuRes.data || [];
+        enrolledIds = new Set((enrRes.data || []).map(r => r.student_id));
+        renderStudents();
+    }
 }
 
 // ── SUBJECTS ──
 function renderSubjects() {
     const el = document.getElementById('subjects-list');
+
+    // Teachers (non-super): read-only list of the subjects that ARE in this course.
+    if (!IS_SUPER) {
+        const inCourse = allSubjects.filter(s => courseSubjectIds.has(s.id));
+        if (inCourse.length === 0) {
+            el.innerHTML = `<div class="empty-state" style="padding:24px;"><p>No subjects in this course yet.</p></div>`;
+            return;
+        }
+        el.innerHTML = `<div class="list-rows">${inCourse.map(s => `
+            <div class="list-row"><div class="lr-body"><div class="lr-title">${escapeHtml(s.name)}</div></div></div>`).join('')}</div>`;
+        return;
+    }
+
     if (allSubjects.length === 0) {
         el.innerHTML = `<div class="empty-state" style="padding:24px;"><p>No subjects exist yet. Create some in the Subjects section first.</p></div>`;
         return;
