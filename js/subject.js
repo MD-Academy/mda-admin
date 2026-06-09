@@ -26,6 +26,13 @@ let recordings = [];   // both kinds
 let materials = [];
 let pickedFile = null;
 
+// Quizzes
+const REQUIRED_QUESTIONS = 10;
+let quizzes = [];               // [{id, lesson_id, time_limit_minutes, cooldown_minutes}]
+let quizQuestionCounts = {};    // quiz_id -> count
+let currentQuiz = null;         // quiz open in the builder
+let currentQuizQuestions = [];  // its questions
+
 // ── HELPERS ──
 function escapeHtml(str) {
     if (!str) return '';
@@ -87,7 +94,7 @@ async function initRoom(roomId, profile) {
             <button class="tab" data-tab="materials" onclick="switchTab('materials')">Materials <span class="count-pill" id="count-materials">0</span></button>
             <button class="tab" data-tab="notes" onclick="switchTab('notes')">Additional Notes <span class="count-pill" id="count-notes">0</span></button>
             <button class="tab" data-tab="anki" onclick="switchTab('anki')">Anki Cards</button>
-            <button class="tab" data-tab="quizzes" onclick="switchTab('quizzes')">Quizzes</button>
+            <button class="tab" data-tab="quizzes" onclick="switchTab('quizzes')">Quizzes <span class="count-pill" id="count-quizzes">0</span></button>
         </div>
 
         <div class="tab-panel active" id="panel-lessons">
@@ -137,7 +144,11 @@ async function initRoom(roomId, profile) {
         </div>
 
         <div class="tab-panel" id="panel-quizzes">
-            <div class="empty-state"><h3>Quizzes — coming soon</h3><p>The quiz builder will live here.</p></div>
+            <div class="subtoolbar">
+                <div class="st-title">Quizzes</div>
+            </div>
+            <p class="hint" style="margin:-6px 0 16px;">Each lesson can have one quiz of exactly 10 questions. A student must answer all 10 correctly to pass.</p>
+            <div id="quizzes-list"><div class="loader">Loading…</div></div>
         </div>
     `;
 
@@ -160,10 +171,25 @@ async function loadAll() {
     recordings = rRes.data || [];
     materials = mRes.data || [];
 
+    // Quizzes belong to lessons; load them + their question counts.
+    quizzes = [];
+    quizQuestionCounts = {};
+    const lessonIds = lessons.map(l => l.id);
+    if (lessonIds.length) {
+        const qRes = await db.from('quizzes').select('id, lesson_id, time_limit_minutes, cooldown_minutes').in('lesson_id', lessonIds);
+        quizzes = qRes.data || [];
+        const quizIds = quizzes.map(q => q.id);
+        if (quizIds.length) {
+            const qqRes = await db.from('quiz_questions').select('id, quiz_id').in('quiz_id', quizIds);
+            (qqRes.data || []).forEach(q => { quizQuestionCounts[q.quiz_id] = (quizQuestionCounts[q.quiz_id] || 0) + 1; });
+        }
+    }
+
     renderLessons();
     renderRecordings('lecture');
     renderMaterials();
     renderNotes();
+    renderQuizzes();
     updateCounts();
 }
 
@@ -175,6 +201,7 @@ function updateCounts() {
     document.getElementById('count-lecture').textContent = recordings.filter(r => r.kind === 'lecture').length;
     document.getElementById('count-materials').textContent = materials.filter(m => matCategory(m) === 'material').length;
     document.getElementById('count-notes').textContent = materials.filter(m => matCategory(m) === 'note').length;
+    document.getElementById('count-quizzes').textContent = quizzes.length;
 }
 
 // ── LESSON SELECT POPULATION ──
@@ -598,4 +625,264 @@ async function deleteMaterial(id) {
     const del = await db.from('materials').delete().eq('id', id);
     if (del.error) { alert(`File removed but record delete failed: ${del.error.message}`); return; }
     await loadAll();
+}
+
+// ════════════ QUIZZES ════════════
+function renderQuizzes() {
+    const list = document.getElementById('quizzes-list');
+    if (!list) return;
+    if (lessons.length === 0) {
+        list.innerHTML = `<div class="empty-state" style="padding:36px 24px;"><h3>No lessons yet</h3><p>Add a lesson first — a quiz attaches to a lesson.</p></div>`;
+        return;
+    }
+    list.innerHTML = `<div class="list-rows">${lessons.map(l => {
+        const quiz = quizzes.find(q => q.lesson_id === l.id);
+        const count = quiz ? (quizQuestionCounts[quiz.id] || 0) : 0;
+        let statusHtml, actionsHtml;
+        if (!quiz) {
+            statusHtml = `<span class="quiz-status none">No quiz</span>`;
+            actionsHtml = `<button class="btn btn-primary btn-sm" onclick="createQuizForLesson('${l.id}')">Create Quiz</button>`;
+        } else {
+            const ready = count === REQUIRED_QUESTIONS;
+            statusHtml = ready
+                ? `<span class="quiz-status ready">✓ ${count}/${REQUIRED_QUESTIONS} questions — ready</span>`
+                : `<span class="quiz-status partial">${count}/${REQUIRED_QUESTIONS} questions — incomplete</span>`;
+            actionsHtml = `
+                <button class="btn btn-primary btn-sm" onclick="openQuizBuilder('${quiz.id}')">Manage Quiz</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteQuiz('${quiz.id}')">Delete</button>`;
+        }
+        return `
+            <div class="list-row">
+                <div class="lr-body">
+                    <div class="lr-title">${escapeHtml(l.title)}</div>
+                    <div class="lr-sub">${statusHtml}</div>
+                </div>
+                <div class="lr-actions">${actionsHtml}</div>
+            </div>`;
+    }).join('')}</div>`;
+}
+
+async function createQuizForLesson(lessonId) {
+    const { data, error } = await db.from('quizzes')
+        .insert({ lesson_id: lessonId })
+        .select('id, lesson_id, time_limit_minutes, cooldown_minutes')
+        .single();
+    if (error) { alert(`Could not create quiz: ${error.message}`); return; }
+    quizzes.push(data);
+    quizQuestionCounts[data.id] = 0;
+    renderQuizzes();
+    updateCounts();
+    openQuizBuilder(data.id);
+}
+
+async function openQuizBuilder(quizId) {
+    currentQuiz = quizzes.find(q => q.id === quizId);
+    if (!currentQuiz) return;
+    const lesson = lessons.find(l => l.id === currentQuiz.lesson_id);
+    document.getElementById('quiz-modal-title').textContent = `Quiz — ${lesson ? lesson.title : ''}`;
+    document.getElementById('quiz-time').value = currentQuiz.time_limit_minutes ?? 60;
+    document.getElementById('quiz-cooldown').value = currentQuiz.cooldown_minutes ?? 5;
+    document.getElementById('quiz-alert').style.display = 'none';
+    document.getElementById('quiz-questions-list').innerHTML = `<div class="loader">Loading…</div>`;
+    openModal('quiz-modal');
+    await refreshQuizQuestions();
+}
+
+async function refreshQuizQuestions() {
+    const { data, error } = await db.from('quiz_questions')
+        .select('id, question_text, options_json, correct_answer_index, order_index')
+        .eq('quiz_id', currentQuiz.id)
+        .order('order_index', { ascending: true });
+    const el = document.getElementById('quiz-questions-list');
+    if (error) {
+        el.innerHTML = `<div class="loader" style="color:var(--red)">Error: ${escapeHtml(error.message)}</div>`;
+        return;
+    }
+    currentQuizQuestions = data || [];
+    quizQuestionCounts[currentQuiz.id] = currentQuizQuestions.length;
+    renderQuizQuestions();
+    updateQuizCountLabel();
+    renderQuizzes(); // keep lesson-list status in sync
+    updateCounts();
+}
+
+function renderQuizQuestions() {
+    const el = document.getElementById('quiz-questions-list');
+    if (currentQuizQuestions.length === 0) {
+        el.innerHTML = `<div class="empty-state" style="padding:30px 20px;"><p>No questions yet. Click "Add Question".</p></div>`;
+    } else {
+        el.innerHTML = `<div class="list-rows">${currentQuizQuestions.map((q, i) => {
+            const opts = Array.isArray(q.options_json) ? q.options_json : [];
+            const correct = opts[q.correct_answer_index] || '—';
+            return `
+                <div class="list-row">
+                    <div class="lr-index">${i + 1}</div>
+                    <div class="lr-body">
+                        <div class="lr-title">${escapeHtml(q.question_text)}</div>
+                        <div class="lr-sub">Correct: ${escapeHtml(correct)}</div>
+                    </div>
+                    <div class="lr-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="moveQuestion('${q.id}', -1)" ${i === 0 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move up">↑</button>
+                        <button class="btn btn-ghost btn-sm" onclick="moveQuestion('${q.id}', 1)" ${i === currentQuizQuestions.length - 1 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move down">↓</button>
+                        <button class="btn btn-ghost btn-sm" onclick="openQuestionForm('${q.id}')">Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteQuestion('${q.id}')">Delete</button>
+                    </div>
+                </div>`;
+        }).join('')}</div>`;
+    }
+    const addBtn = document.getElementById('add-question-btn');
+    if (currentQuizQuestions.length >= REQUIRED_QUESTIONS) {
+        addBtn.disabled = true; addBtn.style.opacity = '0.5'; addBtn.style.cursor = 'default';
+        addBtn.textContent = '10 questions reached';
+    } else {
+        addBtn.disabled = false; addBtn.style.opacity = ''; addBtn.style.cursor = '';
+        addBtn.textContent = '+ Add Question';
+    }
+}
+
+function updateQuizCountLabel() {
+    const c = currentQuizQuestions.length;
+    const el = document.getElementById('quiz-qcount');
+    el.textContent = `${c} / ${REQUIRED_QUESTIONS}`;
+    el.style.color = c === REQUIRED_QUESTIONS ? 'var(--green)' : (c > REQUIRED_QUESTIONS ? 'var(--red)' : 'var(--text-muted)');
+}
+
+async function saveQuizSettings() {
+    const alert = document.getElementById('quiz-alert');
+    alert.style.display = 'none';
+    const time = parseInt(document.getElementById('quiz-time').value, 10);
+    const cd = parseInt(document.getElementById('quiz-cooldown').value, 10);
+    if (!time || time < 1) { showModalAlert(alert, 'Time limit must be at least 1 minute.', 'error'); return; }
+    const payload = { time_limit_minutes: time, cooldown_minutes: isNaN(cd) ? 0 : cd };
+    const res = await db.from('quizzes').update(payload).eq('id', currentQuiz.id);
+    if (res.error) { showModalAlert(alert, res.error.message, 'error'); return; }
+    Object.assign(currentQuiz, payload);
+    const q = quizzes.find(x => x.id === currentQuiz.id);
+    if (q) Object.assign(q, payload);
+    showModalAlert(alert, 'Settings saved.', 'success');
+}
+
+async function deleteQuiz(quizId) {
+    const quiz = quizzes.find(q => q.id === quizId);
+    const lesson = quiz ? lessons.find(l => l.id === quiz.lesson_id) : null;
+    const ok = await confirmDialog({
+        title: 'Delete quiz?',
+        message: `The quiz for "${lesson ? lesson.title : 'this lesson'}" and all its questions will be permanently removed. This cannot be undone.`,
+        confirmText: 'Delete Quiz',
+        danger: true
+    });
+    if (!ok) return;
+    const { error } = await db.from('quizzes').delete().eq('id', quizId);
+    if (error) { alert(`Failed to delete quiz: ${error.message}`); return; }
+    await loadAll();
+}
+
+// ── QUESTION EDITOR ──
+function openQuestionForm(id = null) {
+    document.getElementById('question-alert').style.display = 'none';
+    const optionsList = document.getElementById('options-list');
+    optionsList.innerHTML = '';
+
+    if (id) {
+        const q = currentQuizQuestions.find(x => x.id === id);
+        if (!q) return;
+        document.getElementById('question-modal-title').textContent = 'Edit Question';
+        document.getElementById('question-id').value = q.id;
+        document.getElementById('question-text').value = q.question_text || '';
+        const opts = Array.isArray(q.options_json) ? q.options_json : [];
+        if (opts.length) opts.forEach((opt, i) => addOptionRow(opt, i === q.correct_answer_index));
+        else { addOptionRow(); addOptionRow(); }
+    } else {
+        if (currentQuizQuestions.length >= REQUIRED_QUESTIONS) return;
+        document.getElementById('question-modal-title').textContent = 'Add Question';
+        document.getElementById('question-id').value = '';
+        document.getElementById('question-text').value = '';
+        addOptionRow(); addOptionRow(); addOptionRow(); addOptionRow(); // 4 blank options
+    }
+    openModal('question-modal');
+}
+
+function addOptionRow(value = '', checked = false) {
+    const list = document.getElementById('options-list');
+    if (list.querySelectorAll('.option-row').length >= 6) return; // max 6
+    const row = document.createElement('div');
+    row.className = 'option-row';
+    row.innerHTML = `
+        <input type="radio" name="correct-option" ${checked ? 'checked' : ''}>
+        <input type="text" placeholder="Option text" value="${escapeHtml(value)}">
+        <button type="button" class="opt-remove" onclick="removeOptionRow(this)" title="Remove">&times;</button>`;
+    list.appendChild(row);
+}
+
+function removeOptionRow(btn) {
+    const list = document.getElementById('options-list');
+    if (list.querySelectorAll('.option-row').length <= 2) return; // keep at least 2
+    btn.closest('.option-row').remove();
+}
+
+async function saveQuestion(e) {
+    e.preventDefault();
+    const btn = document.getElementById('question-save-btn');
+    const alert = document.getElementById('question-alert');
+    alert.style.display = 'none';
+
+    const id = document.getElementById('question-id').value;
+    const text = document.getElementById('question-text').value.trim();
+    const rows = Array.from(document.querySelectorAll('#options-list .option-row'));
+    const options = rows.map(r => r.querySelector('input[type="text"]').value.trim());
+    const correctIdx = rows.findIndex(r => r.querySelector('input[type="radio"]').checked);
+
+    if (!text) { showModalAlert(alert, 'Please enter the question.', 'error'); return; }
+    if (options.length < 2) { showModalAlert(alert, 'Add at least two options.', 'error'); return; }
+    if (options.some(o => !o)) { showModalAlert(alert, 'Please fill in every option, or remove the empty ones.', 'error'); return; }
+    if (correctIdx < 0) { showModalAlert(alert, 'Please mark which option is the correct answer.', 'error'); return; }
+
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+        let res;
+        if (id) {
+            res = await db.from('quiz_questions').update({
+                question_text: text, options_json: options, correct_answer_index: correctIdx
+            }).eq('id', id);
+        } else {
+            const nextOrder = currentQuizQuestions.length ? Math.max(...currentQuizQuestions.map(q => q.order_index || 0)) + 1 : 1;
+            res = await db.from('quiz_questions').insert({
+                quiz_id: currentQuiz.id, question_text: text, options_json: options,
+                correct_answer_index: correctIdx, order_index: nextOrder
+            });
+        }
+        if (res.error) throw new Error(res.error.message);
+        closeModal('question-modal');
+        await refreshQuizQuestions();
+    } catch (err) {
+        showModalAlert(alert, err.message, 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save Question';
+    }
+}
+
+async function deleteQuestion(id) {
+    const ok = await confirmDialog({
+        title: 'Delete question?',
+        message: 'This question will be removed from the quiz. This cannot be undone.',
+        confirmText: 'Delete',
+        danger: true
+    });
+    if (!ok) return;
+    const { error } = await db.from('quiz_questions').delete().eq('id', id);
+    if (error) { alert(`Failed to delete: ${error.message}`); return; }
+    await refreshQuizQuestions();
+}
+
+async function moveQuestion(id, dir) {
+    const idx = currentQuizQuestions.findIndex(q => q.id === id);
+    const t = idx + dir;
+    if (idx < 0 || t < 0 || t >= currentQuizQuestions.length) return;
+    const a = currentQuizQuestions[idx], b = currentQuizQuestions[t];
+    const [r1, r2] = await Promise.all([
+        db.from('quiz_questions').update({ order_index: b.order_index }).eq('id', a.id),
+        db.from('quiz_questions').update({ order_index: a.order_index }).eq('id', b.id)
+    ]);
+    if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
+    await refreshQuizQuestions();
 }

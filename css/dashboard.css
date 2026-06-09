@@ -574,6 +574,31 @@ body {
 }
 .subtoolbar .st-title { font-size: 16px; font-weight: 700; color: var(--navy-800); }
 
+/* ── QUIZ OPTION ROWS ── */
+.option-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.option-row input[type="radio"] {
+    width: 18px; height: 18px; flex: 0 0 auto;
+    accent-color: var(--crimson); cursor: pointer;
+}
+.option-row input[type="text"] {
+    flex: 1; height: 42px;
+    border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 0 12px; font-family: 'Inter', sans-serif; font-size: 14px; outline: none;
+}
+.option-row input[type="text"]:focus { border-color: var(--blue-500); }
+.opt-remove {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 20px; line-height: 1; cursor: pointer;
+    width: 28px; height: 28px; flex: 0 0 auto; border-radius: 8px;
+}
+.opt-remove:hover { color: var(--red); background: var(--bg); }
+
+/* ── QUIZ STATUS BADGES ── */
+.quiz-status { font-size: 12px; font-weight: 600; }
+.quiz-status.ready { color: var(--green); }
+.quiz-status.partial { color: var(--amber); }
+.quiz-status.none { color: var(--text-muted); }
+
 /* ── BRANDED CONFIRM DIALOG ── */
 .ui-confirm {
     background: var(--card);
