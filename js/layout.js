@@ -124,6 +124,13 @@ function _setupAvatarUpload() {
             if (upd.error) throw new Error(upd.error.message);
 
             inner.innerHTML = `<img src="${_layoutEsc(url)}" alt="">`;
+            // Keep the cached profile in sync so the new photo shows instantly on the next page.
+            try {
+                const k = `mda_profile_${userId}`;
+                const c = JSON.parse(sessionStorage.getItem(k) || '{}');
+                c.avatar_url = url;
+                sessionStorage.setItem(k, JSON.stringify(c));
+            } catch (e) { /* ignore */ }
         } catch (err) {
             inner.innerHTML = prev;
             alert(`Could not upload photo: ${err.message}`);

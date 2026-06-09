@@ -5,6 +5,22 @@ async function requireAdmin() {
     const { data: { session } } = await db.auth.getSession();
     if (!session) { window.location.href = 'index.html'; return null; }
 
+    const cacheKey = `mda_profile_${session.user.id}`;
+
+    // Fast path: use the cached profile so the layout renders instantly,
+    // then re-verify in the background. (Security is enforced by RLS +
+    // backend regardless of what's cached here.)
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+        try {
+            const profile = JSON.parse(cached);
+            if (profile && profile.role === 'admin') {
+                _verifyAdminInBackground(session.user.id, cacheKey);
+                return { session, profile };
+            }
+        } catch (e) { /* fall through to a fresh fetch */ }
+    }
+
     const { data: profile } = await db
         .from('profiles')
         .select('role, full_name, avatar_url')
@@ -16,7 +32,26 @@ async function requireAdmin() {
         window.location.href = 'index.html';
         return null;
     }
+    sessionStorage.setItem(cacheKey, JSON.stringify(profile));
     return { session, profile };
+}
+
+// Quietly confirm the cached admin is still valid; refresh or kick out.
+async function _verifyAdminInBackground(userId, cacheKey) {
+    try {
+        const { data: profile } = await db
+            .from('profiles')
+            .select('role, full_name, avatar_url')
+            .eq('id', userId)
+            .single();
+        if (!profile || profile.role !== 'admin') {
+            sessionStorage.removeItem(cacheKey);
+            await db.auth.signOut();
+            window.location.href = 'index.html';
+            return;
+        }
+        sessionStorage.setItem(cacheKey, JSON.stringify(profile));
+    } catch (e) { /* ignore transient network errors */ }
 }
 
 async function apiRequest(method, path, body = null) {
@@ -39,6 +74,9 @@ async function apiRequest(method, path, body = null) {
 }
 
 async function signOut() {
+    Object.keys(sessionStorage)
+        .filter(k => k.startsWith('mda_profile_'))
+        .forEach(k => sessionStorage.removeItem(k));
     await db.auth.signOut();
     window.location.href = 'index.html';
 }

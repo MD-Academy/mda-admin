@@ -18,12 +18,19 @@
     --amber: #d97706;
 }
 
+/* Paint the app background immediately (before CSS/JS finish) to avoid a white flash between pages. */
+html { background: #eef2f8; }
+
 body {
     font-family: 'Inter', sans-serif;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
 }
+
+/* Subtle fade so page content appears smoothly rather than popping in. */
+.content { animation: content-fade 0.18s ease-out; }
+@keyframes content-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 .layout { display: flex; min-height: 100vh; }
 
