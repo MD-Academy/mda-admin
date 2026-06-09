@@ -26,12 +26,28 @@ function isExpired(d) {
     return new Date(d) < today;
 }
 
+const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+function visToggleHtml(id, isVisible) {
+    return `<button class="vis-toggle ${isVisible ? 'visible' : 'hidden'}" onclick="toggleCourseVis('${id}')" title="${isVisible ? 'Visible to enrolled students — click to hide the whole course' : 'Hidden from students — click to show'}">${isVisible ? EYE : EYE_OFF}${isVisible ? 'Visible' : 'Hidden'}</button>`;
+}
+
+async function toggleCourseVis(id) {
+    const c = allCourses.find(x => x.id === id);
+    if (!c) return;
+    const { error } = await db.from('courses').update({ is_visible: !c.is_visible }).eq('id', id);
+    if (error) { alert(`Failed to update visibility: ${error.message}`); return; }
+    c.is_visible = !c.is_visible;
+    renderCourses();
+}
+
 async function loadCourses() {
     const container = document.getElementById('courses-container');
     container.innerHTML = `<div class="loader">Loading courses…</div>`;
 
     const queries = [
-        db.from('courses').select('id, name, description, created_at, expires_at').order('created_at', { ascending: false }),
+        db.from('courses').select('id, name, description, created_at, expires_at, is_visible').order('created_at', { ascending: false }),
         db.from('course_subjects').select('course_id')
     ];
     if (IS_SUPER) queries.push(db.from('course_enrollments').select('course_id'));
@@ -71,6 +87,7 @@ function renderCourses() {
             <div class="entity-card">
                 <div class="ec-head">
                     <div class="ec-title">${escapeHtml(c.name)}</div>
+                    ${visToggleHtml(c.id, c.is_visible)}
                 </div>
                 <div class="ec-desc">${escapeHtml(c.description) || '<em style="color:var(--text-muted)">No description</em>'}</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
