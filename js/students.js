@@ -1,6 +1,7 @@
 // Students management page logic.
 
 let allStudents = [];
+let selectedIds = new Set();
 
 async function loadStudents() {
     const tbody = document.getElementById('students-tbody');
@@ -25,7 +26,8 @@ function renderStudents(students) {
     const tbody = document.getElementById('students-tbody');
 
     if (students.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="loader">No students yet. Click "Add Student" or "Bulk Import" to create accounts.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="loader">No students yet. Click "Add Student" or "Bulk Import" to create accounts.</td></tr>`;
+        updateBulkBar();
         return;
     }
 
@@ -46,6 +48,7 @@ function renderStudents(students) {
 
         return `
             <tr>
+                <td><input type="checkbox" class="row-check" ${selectedIds.has(s.id) ? 'checked' : ''} onclick="toggleSelect('${s.id}', this)"></td>
                 <td><strong>${escapeHtml(s.full_name || '—')}</strong></td>
                 <td>${statusBadge}</td>
                 <td>${expiryText}</td>
@@ -58,6 +61,112 @@ function renderStudents(students) {
             </tr>
         `;
     }).join('');
+    updateBulkBar();
+}
+
+// ── BULK SELECTION ──
+function toggleSelect(id, cb) {
+    if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+    updateBulkBar();
+}
+
+function toggleSelectAll(cb) {
+    // Select/deselect everything currently shown (respects the search filter).
+    const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+    const visible = allStudents.filter(s => (s.full_name || '').toLowerCase().includes(q));
+    if (cb.checked) visible.forEach(s => selectedIds.add(s.id));
+    else visible.forEach(s => selectedIds.delete(s.id));
+    renderStudents(visible);
+}
+
+function clearSelection() {
+    selectedIds.clear();
+    const sa = document.getElementById('select-all');
+    if (sa) sa.checked = false;
+    const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+    renderStudents(allStudents.filter(s => (s.full_name || '').toLowerCase().includes(q)));
+}
+
+function updateBulkBar() {
+    const bar = document.getElementById('bulk-bar');
+    const countEl = document.getElementById('bulk-count');
+    if (!bar) return;
+    bar.style.display = selectedIds.size > 0 ? 'flex' : 'none';
+    if (countEl) countEl.textContent = selectedIds.size;
+}
+
+function selectedNames() {
+    return allStudents.filter(s => selectedIds.has(s.id)).map(s => s.full_name || '—');
+}
+
+// Run an async action over each selected student, then refresh.
+async function runBulk(actionFn, btnLabelEl) {
+    const ids = [...selectedIds];
+    let failed = 0;
+    const results = await Promise.allSettled(ids.map(id => actionFn(id)));
+    results.forEach(r => { if (r.status === 'rejected') failed++; });
+    selectedIds.clear();
+    const sa = document.getElementById('select-all'); if (sa) sa.checked = false;
+    await loadStudents();
+    if (failed) alert(`${failed} of ${ids.length} action(s) failed. Please review and try again.`);
+}
+
+async function bulkSuspend() {
+    if (selectedIds.size === 0) return;
+    const ok = await confirmDialog({
+        title: `Suspend ${selectedIds.size} student(s)?`,
+        message: `These students will be blocked from logging in immediately:\n\n${selectedNames().slice(0, 8).join(', ')}${selectedIds.size > 8 ? '…' : ''}`,
+        confirmText: 'Suspend', danger: true
+    });
+    if (!ok) return;
+    await runBulk(id => apiRequest('PATCH', `/admin/update-student/${id}`, { status: 'suspended' }));
+}
+
+async function bulkActivate() {
+    if (selectedIds.size === 0) return;
+    const ok = await confirmDialog({
+        title: `Activate ${selectedIds.size} student(s)?`,
+        message: `These students will be able to log in again:\n\n${selectedNames().slice(0, 8).join(', ')}${selectedIds.size > 8 ? '…' : ''}`,
+        confirmText: 'Activate'
+    });
+    if (!ok) return;
+    await runBulk(id => apiRequest('PATCH', `/admin/update-student/${id}`, { status: 'active' }));
+}
+
+async function bulkDelete() {
+    if (selectedIds.size === 0) return;
+    const ok = await confirmDialog({
+        title: `Delete ${selectedIds.size} student(s)?`,
+        message: `This permanently deletes these accounts and all their data. This cannot be undone.\n\n${selectedNames().slice(0, 8).join(', ')}${selectedIds.size > 8 ? '…' : ''}`,
+        confirmText: 'Delete', danger: true
+    });
+    if (!ok) return;
+    await runBulk(id => apiRequest('DELETE', `/admin/delete-student/${id}`));
+}
+
+function openBulkExpiry() {
+    if (selectedIds.size === 0) return;
+    document.getElementById('bulk-expiry-alert').style.display = 'none';
+    document.getElementById('bulk-expiry-date').value = '';
+    openModal('bulk-expiry-modal');
+}
+
+async function applyBulkExpiry() {
+    const btn = document.getElementById('bulk-expiry-btn');
+    const expiry_date = document.getElementById('bulk-expiry-date').value || '';
+    const count = selectedIds.size;
+    const ok = await confirmDialog({
+        title: `Set expiry for ${count} student(s)?`,
+        message: expiry_date
+            ? `All ${count} selected students will expire on ${formatDate(expiry_date)}.`
+            : `Expiry will be REMOVED for all ${count} selected students (no expiry).`,
+        confirmText: 'Apply'
+    });
+    if (!ok) return;
+    btn.disabled = true; btn.textContent = 'Applying…';
+    await runBulk(id => apiRequest('PATCH', `/admin/update-student/${id}`, { expiry_date }));
+    btn.disabled = false; btn.textContent = 'Apply to Selected';
+    closeModal('bulk-expiry-modal');
 }
 
 function escapeHtml(str) {

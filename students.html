@@ -130,6 +130,28 @@
         </div>
     </div>
 
+    <!-- BULK EXPIRY MODAL -->
+    <div class="modal-overlay" id="bulk-expiry-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Set Expiry for Selected</h3>
+                <button class="modal-close" onclick="closeModal('bulk-expiry-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert" id="bulk-expiry-alert" style="display:none;"></div>
+                <div class="form-field">
+                    <label>Account Expiry Date</label>
+                    <input type="date" id="bulk-expiry-date">
+                    <div class="hint">Applies to all selected students. Leave blank to remove expiry (no expiry).</div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('bulk-expiry-modal')">Cancel</button>
+                <button type="button" class="btn btn-primary" id="bulk-expiry-btn" onclick="applyBulkExpiry()">Apply to Selected</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
@@ -160,10 +182,21 @@
                         </button>
                     </div>
                 </div>
+                <div class="bulk-bar" id="bulk-bar" style="display:none;">
+                    <div class="bulk-count"><strong id="bulk-count">0</strong> selected</div>
+                    <div class="bulk-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="openBulkExpiry()">Set Expiry</button>
+                        <button class="btn btn-ghost btn-sm" onclick="bulkSuspend()">Suspend</button>
+                        <button class="btn btn-ghost btn-sm" onclick="bulkActivate()">Activate</button>
+                        <button class="btn btn-danger btn-sm" onclick="bulkDelete()">Delete</button>
+                        <button class="btn btn-ghost btn-sm" onclick="clearSelection()">Clear</button>
+                    </div>
+                </div>
                 <div class="panel">
                     <table class="data-table">
                         <thead>
                             <tr>
+                                <th style="width:36px;"><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)" title="Select all"></th>
                                 <th>Name</th>
                                 <th>Status</th>
                                 <th>Expiry</th>
@@ -172,7 +205,7 @@
                             </tr>
                         </thead>
                         <tbody id="students-tbody">
-                            <tr><td colspan="5" class="loader">Loading students…</td></tr>
+                            <tr><td colspan="6" class="loader">Loading students…</td></tr>
                         </tbody>
                     </table>
                 </div>
