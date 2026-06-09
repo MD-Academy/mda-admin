@@ -79,7 +79,7 @@ async function loadData() {
 function renderSubjects() {
     const el = document.getElementById('subjects-list');
 
-    // Teachers (non-super): read-only list of the subjects that ARE in this course.
+    // Teachers (non-super): the subjects that ARE in this course — each opens full content.
     if (!IS_SUPER) {
         const inCourse = allSubjects.filter(s => courseSubjectIds.has(s.id));
         if (inCourse.length === 0) {
@@ -87,7 +87,10 @@ function renderSubjects() {
             return;
         }
         el.innerHTML = `<div class="list-rows">${inCourse.map(s => `
-            <div class="list-row"><div class="lr-body"><div class="lr-title">${escapeHtml(s.name)}</div></div></div>`).join('')}</div>`;
+            <div class="list-row">
+                <div class="lr-body"><div class="lr-title">${escapeHtml(s.name)}</div></div>
+                <div class="lr-actions"><button class="btn btn-primary btn-sm" onclick="openSubject('${s.id}')">Open</button></div>
+            </div>`).join('')}</div>`;
         return;
     }
 
@@ -101,12 +104,17 @@ function renderSubjects() {
             <div class="list-row">
                 <div class="lr-body"><div class="lr-title">${escapeHtml(s.name)}</div></div>
                 <div class="lr-actions">
+                    ${inCourse ? `<button class="btn btn-ghost btn-sm" onclick="openSubject('${s.id}')">Open</button>` : ''}
                     <button class="btn btn-sm ${inCourse ? 'btn-danger' : 'btn-primary'}" onclick="toggleSubject('${s.id}')">
                         ${inCourse ? 'Remove' : 'Add'}
                     </button>
                 </div>
             </div>`;
     }).join('')}</div>`;
+}
+
+function openSubject(id) {
+    window.location.href = `subject.html?id=${encodeURIComponent(id)}`;
 }
 
 async function toggleSubject(roomId) {
