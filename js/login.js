@@ -57,7 +57,7 @@ loginForm.addEventListener('submit', async (e) => {
             .eq('id', data.user.id)
             .single();
 
-        if (!profile || profile.role !== 'admin') {
+        if (!profile || (profile.role !== 'admin' && profile.role !== 'superadmin')) {
             showAlert('Access denied. This portal is for administrators only.');
             await db.auth.signOut();
             setLoading(false);
@@ -77,6 +77,6 @@ loginForm.addEventListener('submit', async (e) => {
     if (session) {
         const { data: profile } = await db
             .from('profiles').select('role').eq('id', session.user.id).single();
-        if (profile?.role === 'admin') window.location.href = 'dashboard.html';
+        if (profile && (profile.role === 'admin' || profile.role === 'superadmin')) window.location.href = 'dashboard.html';
     }
 })();
