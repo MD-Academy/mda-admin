@@ -15,13 +15,22 @@ function showModalAlert(el, msg, type) {
     el.textContent = msg;
     el.style.display = 'block';
 }
+function formatDate(d) {
+    if (!d) return '';
+    return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function isExpired(d) {
+    if (!d) return false;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return new Date(d) < today;
+}
 
 async function loadCourses() {
     const container = document.getElementById('courses-container');
     container.innerHTML = `<div class="loader">Loading courses…</div>`;
 
     const [cRes, csRes, ceRes] = await Promise.all([
-        db.from('courses').select('id, name, description, created_at').order('created_at', { ascending: false }),
+        db.from('courses').select('id, name, description, created_at, expires_at').order('created_at', { ascending: false }),
         db.from('course_subjects').select('course_id'),
         db.from('course_enrollments').select('course_id')
     ]);
@@ -64,6 +73,11 @@ function renderCourses() {
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     <span class="ec-meta">${subs} subject${subs === 1 ? '' : 's'}</span>
                     <span class="ec-meta" style="background:#fdeef4;color:var(--crimson);">${studs} student${studs === 1 ? '' : 's'}</span>
+                    ${c.expires_at
+                        ? (isExpired(c.expires_at)
+                            ? `<span class="badge badge-red">Expired ${formatDate(c.expires_at)}</span>`
+                            : `<span class="badge badge-green">Until ${formatDate(c.expires_at)}</span>`)
+                        : `<span class="ec-meta" style="background:var(--bg);color:var(--text-muted);">No expiry</span>`}
                 </div>
                 <div class="ec-actions">
                     <button class="btn btn-primary btn-sm" onclick="openCourse('${c.id}')">Open</button>
@@ -88,11 +102,13 @@ function openCourseModal(id = null) {
         document.getElementById('course-id').value = c.id;
         document.getElementById('course-name').value = c.name || '';
         document.getElementById('course-desc').value = c.description || '';
+        document.getElementById('course-expiry').value = c.expires_at || '';
     } else {
         document.getElementById('course-modal-title').textContent = 'Add Course';
         document.getElementById('course-id').value = '';
         document.getElementById('course-name').value = '';
         document.getElementById('course-desc').value = '';
+        document.getElementById('course-expiry').value = '';
     }
     openModal('course-modal');
 }
@@ -106,7 +122,8 @@ async function saveCourse(e) {
     const id = document.getElementById('course-id').value;
     const payload = {
         name: document.getElementById('course-name').value.trim(),
-        description: document.getElementById('course-desc').value.trim() || null
+        description: document.getElementById('course-desc').value.trim() || null,
+        expires_at: document.getElementById('course-expiry').value || null
     };
     if (!payload.name) { showModalAlert(alert, 'Course name is required.', 'error'); return; }
     if (!ensureSafe(alert, [['Course Name', payload.name], ['Description', payload.description]])) return;

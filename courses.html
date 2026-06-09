@@ -31,6 +31,11 @@
                         <label>Description <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
                         <textarea id="course-desc" placeholder="Short description of this course/cohort…"></textarea>
                     </div>
+                    <div class="form-field">
+                        <label>Access expires on <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <input type="date" id="course-expiry">
+                        <div class="hint">After this date the course (and its subjects) disappears for enrolled students until you extend it. Leave blank for no expiry.</div>
+                    </div>
                 </div>
                 <div class="modal-foot">
                     <button type="button" class="btn btn-ghost" onclick="closeModal('course-modal')">Cancel</button>
