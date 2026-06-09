@@ -53,12 +53,19 @@ loginForm.addEventListener('submit', async (e) => {
 
         const { data: profile } = await db
             .from('profiles')
-            .select('role')
+            .select('role, status')
             .eq('id', data.user.id)
             .single();
 
         if (!profile || (profile.role !== 'admin' && profile.role !== 'superadmin')) {
             showAlert('Access denied. This portal is for administrators only.');
+            await db.auth.signOut();
+            setLoading(false);
+            return;
+        }
+
+        if (profile.status === 'suspended') {
+            showAlert('Your account has been suspended. Please contact a superadmin.');
             await db.auth.signOut();
             setLoading(false);
             return;

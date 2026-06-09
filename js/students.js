@@ -55,6 +55,7 @@ function renderStudents(students) {
                 <td>${formatDate(s.created_at)}</td>
                 <td class="row-actions">
                     <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
+                    <button class="btn btn-ghost btn-sm" onclick="toggleStatus('${s.id}')">${s.status === 'suspended' ? 'Activate' : 'Block'}</button>
                     <button class="btn btn-ghost btn-sm" onclick="resetPw('${s.id}', '${escapeHtml(s.full_name)}')">Reset PW</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}', '${escapeHtml(s.full_name)}')">Delete</button>
                 </td>
@@ -377,6 +378,28 @@ async function saveEdit(e) {
         showModalAlert(alert, err.message, 'error');
     } finally {
         btn.disabled = false; btn.textContent = 'Save Changes';
+    }
+}
+
+// ── BLOCK / ACTIVATE (suspend without deleting) ──
+async function toggleStatus(id) {
+    const s = allStudents.find(x => x.id === id);
+    if (!s) return;
+    const suspend = s.status !== 'suspended';
+    const ok = await confirmDialog({
+        title: suspend ? `Block ${s.full_name || 'this student'}?` : `Activate ${s.full_name || 'this student'}?`,
+        message: suspend
+            ? 'They will be blocked from logging in immediately. Their account and all data are kept — reactivate anytime (e.g. when payment resumes).'
+            : 'They will be able to log in again right away.',
+        confirmText: suspend ? 'Block' : 'Activate',
+        danger: suspend
+    });
+    if (!ok) return;
+    try {
+        await apiRequest('PATCH', `/admin/update-student/${id}`, { status: suspend ? 'suspended' : 'active' });
+        loadStudents();
+    } catch (err) {
+        alert(`Failed to update status: ${err.message}`);
     }
 }
 

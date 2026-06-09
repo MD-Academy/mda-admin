@@ -16,7 +16,7 @@ async function requireAdmin() {
     if (cached) {
         try {
             const profile = JSON.parse(cached);
-            if (profile && _isAdminRole(profile.role)) {
+            if (profile && _isAdminRole(profile.role) && profile.status !== 'suspended') {
                 _verifyAdminInBackground(session.user.id, cacheKey);
                 return { session, profile };
             }
@@ -25,11 +25,11 @@ async function requireAdmin() {
 
     const { data: profile } = await db
         .from('profiles')
-        .select('role, full_name, avatar_url')
+        .select('role, full_name, avatar_url, status')
         .eq('id', session.user.id)
         .single();
 
-    if (!profile || !_isAdminRole(profile.role)) {
+    if (!profile || !_isAdminRole(profile.role) || profile.status === 'suspended') {
         await db.auth.signOut();
         window.location.href = 'index.html';
         return null;
@@ -54,10 +54,10 @@ async function _verifyAdminInBackground(userId, cacheKey) {
     try {
         const { data: profile } = await db
             .from('profiles')
-            .select('role, full_name, avatar_url')
+            .select('role, full_name, avatar_url, status')
             .eq('id', userId)
             .single();
-        if (!profile || !_isAdminRole(profile.role)) {
+        if (!profile || !_isAdminRole(profile.role) || profile.status === 'suspended') {
             sessionStorage.removeItem(cacheKey);
             await db.auth.signOut();
             window.location.href = 'index.html';

@@ -57,6 +57,9 @@ function renderAdmins() {
                 <td class="row-actions">
                     <button class="btn btn-ghost btn-sm" onclick="resetAdminPw('${a.id}', '${escapeHtml(a.full_name).replace(/'/g, "\\'")}')">Reset PW</button>
                     ${isSelf
+                        ? '<button class="btn btn-ghost btn-sm" disabled style="opacity:.4;cursor:default;" title="You cannot block your own account">Block</button>'
+                        : `<button class="btn btn-ghost btn-sm" onclick="toggleAdminStatus('${a.id}')">${a.status === 'suspended' ? 'Activate' : 'Block'}</button>`}
+                    ${isSelf
                         ? '<button class="btn btn-ghost btn-sm" disabled style="opacity:.4;cursor:default;" title="You cannot delete your own account">Delete</button>'
                         : `<button class="btn btn-danger btn-sm" onclick="deleteAdmin('${a.id}', '${escapeHtml(a.full_name).replace(/'/g, "\\'")}')">Delete</button>`}
                 </td>
@@ -128,6 +131,28 @@ async function resetAdminPw(id, name) {
         showCredentials({ full_name: name, email: '(unchanged)', password: res.new_password, role: 'admin' });
     } catch (err) {
         alert(`Failed to reset password: ${err.message}`);
+    }
+}
+
+async function toggleAdminStatus(id) {
+    if (id === CURRENT_UID) return;
+    const a = allAdmins.find(x => x.id === id);
+    if (!a) return;
+    const suspend = a.status !== 'suspended';
+    const ok = await confirmDialog({
+        title: suspend ? `Block ${a.full_name || 'this admin'}?` : `Activate ${a.full_name || 'this admin'}?`,
+        message: suspend
+            ? 'They will be blocked from logging in immediately. Their account is kept — reactivate anytime.'
+            : 'They will be able to log in again right away.',
+        confirmText: suspend ? 'Block' : 'Activate',
+        danger: suspend
+    });
+    if (!ok) return;
+    try {
+        await apiRequest('PATCH', `/admin/update-student/${id}`, { status: suspend ? 'suspended' : 'active' });
+        loadAdmins();
+    } catch (err) {
+        alert(`Failed to update status: ${err.message}`);
     }
 }
 
