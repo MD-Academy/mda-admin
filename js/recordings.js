@@ -34,13 +34,29 @@ function roomName(id) {
     return r ? escapeHtml(r.name) : '<span style="color:var(--text-muted)">— Untagged —</span>';
 }
 
+const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+function visToggleHtml(id, isVisible) {
+    return `<button class="vis-toggle ${isVisible ? 'visible' : 'hidden'}" onclick="toggleVisibility('${id}')" title="${isVisible ? 'Visible to students — click to hide' : 'Hidden from students — click to show'}">${isVisible ? EYE : EYE_OFF}${isVisible ? 'Visible' : 'Hidden'}</button>`;
+}
+
+async function toggleVisibility(id) {
+    const r = allRecordings.find(x => x.id === id);
+    if (!r) return;
+    const { error } = await db.from('recordings').update({ is_visible: !r.is_visible }).eq('id', id);
+    if (error) { alert(`Failed to update visibility: ${error.message}`); return; }
+    r.is_visible = !r.is_visible;
+    applyFilters();
+}
+
 // ── LOAD ──
 async function loadRecordings() {
     const tbody = document.getElementById('rec-tbody');
     tbody.innerHTML = `<tr><td colspan="6" class="loader">Loading recordings…</td></tr>`;
 
     const [recRes, roomsRes, lessonsRes] = await Promise.all([
-        db.from('recordings').select('id, room_id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds')
+        db.from('recordings').select('id, room_id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, is_visible')
             .eq('kind', 'zoom').order('recorded_date', { ascending: false }),
         db.from('rooms').select('id, name').order('order_index', { ascending: true }),
         db.from('lessons').select('id, room_id, title').order('order_index', { ascending: true })
@@ -84,7 +100,7 @@ function applyFilters() {
 function renderRecordings(list) {
     const tbody = document.getElementById('rec-tbody');
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="loader">No recordings found. Click "Add Recording" to create one.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="loader">No recordings found. Click "Add Recording" to create one.</td></tr>`;
         return;
     }
     tbody.innerHTML = list.map(r => `
@@ -94,6 +110,7 @@ function renderRecordings(list) {
             <td>${roomName(r.room_id)}</td>
             <td>${escapeHtml(r.professor)}</td>
             <td>${formatDuration(r.duration_seconds)}</td>
+            <td>${visToggleHtml(r.id, r.is_visible)}</td>
             <td class="row-actions">
                 <a class="btn btn-ghost btn-sm" href="${escapeHtml(r.aws_url)}" target="_blank" rel="noopener">Preview</a>
                 <button class="btn btn-ghost btn-sm" onclick="openRecModal('${r.id}')">Edit</button>

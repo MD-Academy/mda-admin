@@ -68,6 +68,24 @@ function fileExt(name) {
 }
 function sanitizeName(name) { return name.replace(/[^a-zA-Z0-9._-]/g, '_'); }
 
+// ── VISIBILITY TOGGLE ──
+const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+function visToggleHtml(fnName, id, isVisible) {
+    return `<button class="vis-toggle ${isVisible ? 'visible' : 'hidden'}" onclick="${fnName}('${id}')" title="${isVisible ? 'Visible to students — click to hide' : 'Hidden from students — click to show'}">${isVisible ? EYE : EYE_OFF}${isVisible ? 'Visible' : 'Hidden'}</button>`;
+}
+
+async function _setVisible(table, id, current) {
+    const { error } = await db.from(table).update({ is_visible: !current }).eq('id', id);
+    if (error) { alert(`Failed to update visibility: ${error.message}`); return; }
+    await loadAll();
+}
+function toggleLessonVis(id)   { const x = lessons.find(l => l.id === id);     if (x) _setVisible('lessons', id, x.is_visible); }
+function toggleRecVis(id)      { const x = recordings.find(r => r.id === id);  if (x) _setVisible('recordings', id, x.is_visible); }
+function toggleMaterialVis(id) { const x = materials.find(m => m.id === id);   if (x) _setVisible('materials', id, x.is_visible); }
+function toggleQuizVis(id)     { const x = quizzes.find(q => q.id === id);     if (x) _setVisible('quizzes', id, x.is_visible); }
+
 // ── INIT ──
 async function initRoom(roomId, profile) {
     ROOM_ID = roomId;
@@ -111,7 +129,7 @@ async function initRoom(roomId, profile) {
                 <button class="btn btn-primary btn-sm" onclick="openRecModal('lecture')">+ Add Video Lecture</button>
             </div>
             <div class="panel"><table class="data-table">
-                <thead><tr><th>Title</th><th>Lesson</th><th>Lecturer</th><th>Date</th><th>Duration</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Title</th><th>Lesson</th><th>Lecturer</th><th>Date</th><th>Duration</th><th>Visible</th><th>Actions</th></tr></thead>
                 <tbody id="lecture-tbody"></tbody>
             </table></div>
         </div>
@@ -122,7 +140,7 @@ async function initRoom(roomId, profile) {
                 <button class="btn btn-primary btn-sm" onclick="openUploadModal()">+ Upload Material</button>
             </div>
             <div class="panel"><table class="data-table">
-                <thead><tr><th>Title</th><th>Type</th><th>Lesson</th><th>Uploaded</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Title</th><th>Type</th><th>Lesson</th><th>Uploaded</th><th>Visible</th><th>Actions</th></tr></thead>
                 <tbody id="materials-tbody"></tbody>
             </table></div>
         </div>
@@ -134,7 +152,7 @@ async function initRoom(roomId, profile) {
             </div>
             <p class="hint" style="margin:-6px 0 16px;">Extra summaries, study plans or recommendations. Accepts PDF, TXT, JPG, PNG.</p>
             <div class="panel"><table class="data-table">
-                <thead><tr><th>Title</th><th>Type</th><th>Lesson</th><th>Uploaded</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Title</th><th>Type</th><th>Lesson</th><th>Uploaded</th><th>Visible</th><th>Actions</th></tr></thead>
                 <tbody id="notes-tbody"></tbody>
             </table></div>
         </div>
@@ -162,9 +180,9 @@ function switchTab(name) {
 
 async function loadAll() {
     const [lRes, rRes, mRes] = await Promise.all([
-        db.from('lessons').select('id, title, description, image_url, order_index').eq('room_id', ROOM_ID).order('order_index', { ascending: true }),
-        db.from('recordings').select('id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, kind').eq('room_id', ROOM_ID).eq('kind', 'lecture').order('recorded_date', { ascending: false }),
-        db.from('materials').select('id, lesson_id, title, type, storage_path, created_at, category').eq('room_id', ROOM_ID).order('created_at', { ascending: false })
+        db.from('lessons').select('id, title, description, image_url, order_index, is_visible').eq('room_id', ROOM_ID).order('order_index', { ascending: true }),
+        db.from('recordings').select('id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, kind, is_visible').eq('room_id', ROOM_ID).eq('kind', 'lecture').order('recorded_date', { ascending: false }),
+        db.from('materials').select('id, lesson_id, title, type, storage_path, created_at, category, is_visible').eq('room_id', ROOM_ID).order('created_at', { ascending: false })
     ]);
 
     lessons = lRes.data || [];
@@ -176,7 +194,7 @@ async function loadAll() {
     quizQuestionCounts = {};
     const lessonIds = lessons.map(l => l.id);
     if (lessonIds.length) {
-        const qRes = await db.from('quizzes').select('id, lesson_id, time_limit_minutes, cooldown_minutes').in('lesson_id', lessonIds);
+        const qRes = await db.from('quizzes').select('id, lesson_id, time_limit_minutes, cooldown_minutes, is_visible').in('lesson_id', lessonIds);
         quizzes = qRes.data || [];
         const quizIds = quizzes.map(q => q.id);
         if (quizIds.length) {
@@ -225,6 +243,7 @@ function renderLessons() {
                 ${l.description ? `<div class="lr-sub">${escapeHtml(l.description)}</div>` : ''}
             </div>
             <div class="lr-actions">
+                ${visToggleHtml('toggleLessonVis', l.id, l.is_visible)}
                 <button class="btn btn-ghost btn-sm" onclick="moveLesson('${l.id}', -1)" ${i === 0 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move up">↑</button>
                 <button class="btn btn-ghost btn-sm" onclick="moveLesson('${l.id}', 1)" ${i === lessons.length - 1 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move down">↓</button>
                 <button class="btn btn-ghost btn-sm" onclick="openLessonForm('${l.id}')">Edit</button>
@@ -330,7 +349,7 @@ async function moveLesson(id, direction) {
 function renderRecordings(kind) {
     const tbody = document.getElementById(`${kind}-tbody`);
     const list = recordings.filter(r => r.kind === kind);
-    const colspan = 6;
+    const colspan = 7;
     if (list.length === 0) {
         const label = kind === 'zoom' ? 'recordings' : 'video lectures';
         tbody.innerHTML = `<tr><td colspan="${colspan}" class="loader">No ${label} yet.</td></tr>`;
@@ -343,6 +362,7 @@ function renderRecordings(kind) {
             <td>${escapeHtml(r.professor)}</td>
             <td>${formatDate(r.recorded_date)}</td>
             <td>${formatDuration(r.duration_seconds)}</td>
+            <td>${visToggleHtml('toggleRecVis', r.id, r.is_visible)}</td>
             <td class="row-actions">
                 <a class="btn btn-ghost btn-sm" href="${escapeHtml(r.aws_url)}" target="_blank" rel="noopener">Preview</a>
                 <button class="btn btn-ghost btn-sm" onclick="openRecModal('${kind}', '${r.id}')">Edit</button>
@@ -450,6 +470,7 @@ function materialRowHtml(m) {
             <td><span class="badge badge-blue">${escapeHtml((m.type || 'file').toUpperCase())}</span></td>
             <td>${escapeHtml(lessonTitle(m.lesson_id))}</td>
             <td>${formatDate(m.created_at)}</td>
+            <td>${visToggleHtml('toggleMaterialVis', m.id, m.is_visible)}</td>
             <td class="row-actions">
                 <button class="btn btn-ghost btn-sm" onclick="previewMaterial('${m.id}', this)">Preview</button>
                 <button class="btn btn-ghost btn-sm" onclick="openMaterialEdit('${m.id}')">Edit</button>
@@ -463,7 +484,7 @@ function renderMaterials() {
     const list = materials.filter(m => matCategory(m) === 'material');
     tbody.innerHTML = list.length
         ? list.map(materialRowHtml).join('')
-        : `<tr><td colspan="5" class="loader">No materials yet.</td></tr>`;
+        : `<tr><td colspan="6" class="loader">No materials yet.</td></tr>`;
 }
 
 function renderNotes() {
@@ -471,7 +492,7 @@ function renderNotes() {
     const list = materials.filter(m => matCategory(m) === 'note');
     tbody.innerHTML = list.length
         ? list.map(materialRowHtml).join('')
-        : `<tr><td colspan="5" class="loader">No notes yet.</td></tr>`;
+        : `<tr><td colspan="6" class="loader">No notes yet.</td></tr>`;
 }
 
 function openUploadModal(category = 'material') {
@@ -652,6 +673,7 @@ function renderQuizzes() {
                 ? `<span class="quiz-status ready">✓ ${count}/${REQUIRED_QUESTIONS} questions — ready</span>`
                 : `<span class="quiz-status partial">${count}/${REQUIRED_QUESTIONS} questions — incomplete</span>`;
             actionsHtml = `
+                ${visToggleHtml('toggleQuizVis', quiz.id, quiz.is_visible)}
                 <button class="btn btn-primary btn-sm" onclick="openQuizBuilder('${quiz.id}')">Manage Quiz</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteQuiz('${quiz.id}')">Delete</button>`;
         }
