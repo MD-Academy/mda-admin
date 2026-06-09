@@ -243,12 +243,12 @@ body {
 .btn-primary:hover { opacity: 0.9; }
 .btn-gold { background: linear-gradient(135deg, #d4af37, #c9a227); color: #1f2937; }
 .btn-gold:hover { opacity: 0.9; }
-.btn-danger { background: #fef2f2; color: var(--red); border: 1px solid #fecaca; }
-.btn-danger:hover { background: #fee2e2; }
+.btn-danger { background: #fdeef4; color: var(--crimson); border: 1px solid #f5c6da; }
+.btn-danger:hover { background: #fbdce8; }
 .btn-ghost { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
 .btn-ghost:hover { background: #e2e8f0; }
-.btn-danger-solid { background: var(--red); color: #fff; }
-.btn-danger-solid:hover { background: #b91c1c; }
+.btn-danger-solid { background: linear-gradient(135deg, #20262f 0%, #b91c5c 135%); color: #fff; }
+.btn-danger-solid:hover { opacity: 0.92; }
 .btn-sm { padding: 6px 12px; font-size: 13px; }
 
 /* ── LOADING ── */
@@ -593,7 +593,7 @@ body {
     display: flex; align-items: center; justify-content: center;
 }
 .ui-confirm-icon svg { width: 28px; height: 28px; }
-.ui-confirm-icon.danger { background: #fef2f2; color: var(--red); }
+.ui-confirm-icon.danger { background: #fdeef4; color: var(--crimson); }
 .ui-confirm-icon.info { background: #eff5ff; color: var(--blue-500); }
 .ui-confirm h3 { font-size: 19px; font-weight: 800; color: var(--navy-800); margin-bottom: 8px; }
 .ui-confirm p { font-size: 14px; color: var(--text-muted); line-height: 1.55; margin-bottom: 24px; white-space: pre-line; }

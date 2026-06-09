@@ -162,7 +162,7 @@
     <script src="js/auth.js"></script>
     <script src="js/layout.js"></script>
     <script src="js/ui.js"></script>
-    <script src="js/room.js"></script>
+    <script src="js/subject.js"></script>
     <script>
         (async () => {
             const auth = await requireAdmin();
@@ -170,7 +170,7 @@
 
             const params = new URLSearchParams(window.location.search);
             const roomId = params.get('id');
-            if (!roomId) { window.location.href = 'rooms.html'; return; }
+            if (!roomId) { window.location.href = 'subjects.html'; return; }
 
             await initRoom(roomId, auth.profile);
         })();

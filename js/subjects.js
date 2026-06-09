@@ -80,7 +80,7 @@ function renderRooms() {
 }
 
 function openRoom(id) {
-    window.location.href = `room.html?id=${encodeURIComponent(id)}`;
+    window.location.href = `subject.html?id=${encodeURIComponent(id)}`;
 }
 
 // ── ROOM CREATE / EDIT ──

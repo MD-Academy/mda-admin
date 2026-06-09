@@ -67,17 +67,17 @@ async function initRoom(roomId, profile) {
 
     const { data, error } = await db.from('rooms').select('id, name, description').eq('id', roomId).single();
     if (error || !data) {
-        renderLayout('rooms', 'Subject', '', profile);
+        renderLayout('subjects', 'Subject', '', profile);
         document.getElementById('page-content').innerHTML =
-            `<div class="empty-state"><h3>Subject not found</h3><p>It may have been deleted. <a href="rooms.html">Back to all subjects</a>.</p></div>`;
+            `<div class="empty-state"><h3>Subject not found</h3><p>It may have been deleted. <a href="subjects.html">Back to all subjects</a>.</p></div>`;
         return;
     }
     currentRoom = data;
 
-    renderLayout('rooms', escapeHtml(data.name), 'Manage this subject\'s content', profile);
+    renderLayout('subjects', escapeHtml(data.name), 'Manage this subject\'s content', profile);
 
     document.getElementById('page-content').innerHTML = `
-        <a class="back-link" href="rooms.html">
+        <a class="back-link" href="subjects.html">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
             All Subjects
         </a>

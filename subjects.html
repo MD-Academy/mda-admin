@@ -55,13 +55,13 @@
     <script src="js/auth.js"></script>
     <script src="js/layout.js"></script>
     <script src="js/ui.js"></script>
-    <script src="js/rooms.js"></script>
+    <script src="js/subjects.js"></script>
     <script>
         (async () => {
             const auth = await requireAdmin();
             if (!auth) return;
 
-            renderLayout('rooms', 'Subjects', 'Open a subject to manage its lessons, recordings, materials and quizzes', auth.profile);
+            renderLayout('subjects', 'Subjects', 'Open a subject to manage its lessons, recordings, materials and quizzes', auth.profile);
 
             document.getElementById('page-content').innerHTML = `
                 <div class="toolbar">
