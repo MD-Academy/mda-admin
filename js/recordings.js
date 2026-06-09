@@ -1,8 +1,8 @@
-// Global Zoom Recordings — date-organised, optional subject tag.
+// Global Zoom Recordings — date-organised, assigned to one or more COURSES.
 
 let allRecordings = [];
-let recRooms = [];     // [{id, name}]
-let recLessons = [];   // [{id, room_id, title}]
+let recCourses = [];          // [{id, name}]
+let recCourseLinks = {};      // recording_id -> [course_id, ...]
 
 // ── HELPERS ──
 function escapeHtml(str) {
@@ -24,14 +24,17 @@ function formatDuration(seconds) {
     if (!seconds) return '—';
     const m = Math.round(seconds / 60);
     if (m < 60) return `${m} min`;
-    const h = Math.floor(m / 60);
-    const rem = m % 60;
+    const h = Math.floor(m / 60); const rem = m % 60;
     return rem ? `${h}h ${rem}m` : `${h}h`;
 }
-function roomName(id) {
-    if (!id) return '<span style="color:var(--text-muted)">— Untagged —</span>';
-    const r = recRooms.find(x => x.id === id);
-    return r ? escapeHtml(r.name) : '<span style="color:var(--text-muted)">— Untagged —</span>';
+function courseName(id) {
+    const c = recCourses.find(x => x.id === id);
+    return c ? c.name : '—';
+}
+function courseNamesFor(recId) {
+    const ids = recCourseLinks[recId] || [];
+    if (ids.length === 0) return '<span style="color:var(--text-muted)">— Unassigned —</span>';
+    return ids.map(id => `<span class="badge badge-blue" style="margin:1px 2px;">${escapeHtml(courseName(id))}</span>`).join('');
 }
 
 const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -41,42 +44,35 @@ function visToggleHtml(id, isVisible) {
     return `<button class="vis-toggle ${isVisible ? 'visible' : 'hidden'}" onclick="toggleVisibility('${id}')" title="${isVisible ? 'Visible to students — click to hide' : 'Hidden from students — click to show'}">${isVisible ? EYE : EYE_OFF}${isVisible ? 'Visible' : 'Hidden'}</button>`;
 }
 
-async function toggleVisibility(id) {
-    const r = allRecordings.find(x => x.id === id);
-    if (!r) return;
-    const { error } = await db.from('recordings').update({ is_visible: !r.is_visible }).eq('id', id);
-    if (error) { alert(`Failed to update visibility: ${error.message}`); return; }
-    r.is_visible = !r.is_visible;
-    applyFilters();
-}
-
 // ── LOAD ──
 async function loadRecordings() {
     const tbody = document.getElementById('rec-tbody');
-    tbody.innerHTML = `<tr><td colspan="6" class="loader">Loading recordings…</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="loader">Loading recordings…</td></tr>`;
 
-    const [recRes, roomsRes, lessonsRes] = await Promise.all([
-        db.from('recordings').select('id, room_id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, is_visible')
+    const [recRes, courseRes, linkRes] = await Promise.all([
+        db.from('recordings').select('id, title, professor, recorded_date, aws_url, duration_seconds, is_visible')
             .eq('kind', 'zoom').order('recorded_date', { ascending: false }),
-        db.from('rooms').select('id, name').order('order_index', { ascending: true }),
-        db.from('lessons').select('id, room_id, title').order('order_index', { ascending: true })
+        db.from('courses').select('id, name').order('created_at', { ascending: false }),
+        db.from('recording_courses').select('recording_id, course_id')
     ]);
 
     if (recRes.error) {
-        tbody.innerHTML = `<tr><td colspan="6" class="loader" style="color:var(--red)">Error loading recordings: ${escapeHtml(recRes.error.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="loader" style="color:var(--red)">Error loading recordings: ${escapeHtml(recRes.error.message)}</td></tr>`;
         return;
     }
 
     allRecordings = recRes.data || [];
-    recRooms = roomsRes.data || [];
-    recLessons = lessonsRes.data || [];
+    recCourses = courseRes.data || [];
+    recCourseLinks = {};
+    (linkRes.data || []).forEach(l => {
+        (recCourseLinks[l.recording_id] = recCourseLinks[l.recording_id] || []).push(l.course_id);
+    });
 
-    // Populate the subject filter (once), keeping the All/Untagged options.
-    const filter = document.getElementById('room-filter');
+    const filter = document.getElementById('course-filter');
     if (filter && filter.options.length <= 2) {
-        recRooms.forEach(r => {
+        recCourses.forEach(c => {
             const opt = document.createElement('option');
-            opt.value = r.id; opt.textContent = r.name;
+            opt.value = c.id; opt.textContent = c.name;
             filter.appendChild(opt);
         });
     }
@@ -86,10 +82,10 @@ async function loadRecordings() {
 
 function applyFilters() {
     const q = (document.getElementById('search-input')?.value || '').toLowerCase();
-    const roomId = document.getElementById('room-filter')?.value || '';
+    const courseId = document.getElementById('course-filter')?.value || '';
     let list = allRecordings;
-    if (roomId === '__none__') list = list.filter(r => !r.room_id);
-    else if (roomId) list = list.filter(r => r.room_id === roomId);
+    if (courseId === '__none__') list = list.filter(r => (recCourseLinks[r.id] || []).length === 0);
+    else if (courseId) list = list.filter(r => (recCourseLinks[r.id] || []).includes(courseId));
     if (q) list = list.filter(r =>
         (r.title || '').toLowerCase().includes(q) ||
         (r.professor || '').toLowerCase().includes(q)
@@ -107,7 +103,7 @@ function renderRecordings(list) {
         <tr>
             <td>${formatDate(r.recorded_date)}</td>
             <td><strong>${escapeHtml(r.title)}</strong></td>
-            <td>${roomName(r.room_id)}</td>
+            <td>${courseNamesFor(r.id)}</td>
             <td>${escapeHtml(r.professor)}</td>
             <td>${formatDuration(r.duration_seconds)}</td>
             <td>${visToggleHtml(r.id, r.is_visible)}</td>
@@ -120,22 +116,32 @@ function renderRecordings(list) {
     `).join('');
 }
 
-// ── ROOM/LESSON SELECTS ──
-function fillRoomSelect(selectedRoomId = '') {
-    const sel = document.getElementById('rec-room');
-    sel.innerHTML = `<option value="">— None —</option>` +
-        recRooms.map(r => `<option value="${r.id}" ${r.id === selectedRoomId ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join('');
+// ── VISIBILITY ──
+async function toggleVisibility(id) {
+    const r = allRecordings.find(x => x.id === id);
+    if (!r) return;
+    const { error } = await db.from('recordings').update({ is_visible: !r.is_visible }).eq('id', id);
+    if (error) { alert(`Failed to update visibility: ${error.message}`); return; }
+    r.is_visible = !r.is_visible;
+    applyFilters();
 }
 
-function fillLessonSelect(roomId, selectedLessonId = '') {
-    const sel = document.getElementById('rec-lesson');
-    const lessons = roomId ? recLessons.filter(l => l.room_id === roomId) : [];
-    sel.innerHTML = `<option value="">— None —</option>` +
-        lessons.map(l => `<option value="${l.id}" ${l.id === selectedLessonId ? 'selected' : ''}>${escapeHtml(l.title)}</option>`).join('');
+// ── COURSE CHECKLIST ──
+function renderCourseChecklist(selectedIds = []) {
+    const el = document.getElementById('rec-course-list');
+    if (recCourses.length === 0) {
+        el.innerHTML = `<div class="empty">No courses exist yet. Create one in the Courses section first.</div>`;
+        return;
+    }
+    const sel = new Set(selectedIds);
+    el.innerHTML = recCourses.map(c => `
+        <label class="check-row">
+            <input type="checkbox" value="${c.id}" ${sel.has(c.id) ? 'checked' : ''}>
+            ${escapeHtml(c.name)}
+        </label>`).join('');
 }
-
-function onRoomChange() {
-    fillLessonSelect(document.getElementById('rec-room').value);
+function checkedCourseIds() {
+    return Array.from(document.querySelectorAll('#rec-course-list input[type="checkbox"]:checked')).map(cb => cb.value);
 }
 
 // ── CREATE / EDIT ──
@@ -149,22 +155,20 @@ function openRecModal(id = null) {
         document.getElementById('rec-modal-title').textContent = 'Edit Recording';
         document.getElementById('rec-id').value = r.id;
         document.getElementById('rec-title').value = r.title || '';
-        fillRoomSelect(r.room_id || '');
-        fillLessonSelect(r.room_id || '', r.lesson_id || '');
         document.getElementById('rec-professor').value = r.professor || '';
         document.getElementById('rec-date').value = r.recorded_date || '';
         document.getElementById('rec-url').value = r.aws_url || '';
         document.getElementById('rec-duration').value = r.duration_seconds ? Math.round(r.duration_seconds / 60) : '';
+        renderCourseChecklist(recCourseLinks[r.id] || []);
     } else {
         document.getElementById('rec-modal-title').textContent = 'Add Recording';
         document.getElementById('rec-id').value = '';
         document.getElementById('rec-title').value = '';
-        fillRoomSelect('');
-        fillLessonSelect('');
         document.getElementById('rec-professor').value = '';
         document.getElementById('rec-date').value = '';
         document.getElementById('rec-url').value = '';
         document.getElementById('rec-duration').value = '';
+        renderCourseChecklist([]);
     }
     openModal('rec-modal');
 }
@@ -177,11 +181,10 @@ async function saveRecording(e) {
 
     const id = document.getElementById('rec-id').value;
     const durationMin = document.getElementById('rec-duration').value;
+    const courseIds = checkedCourseIds();
 
     const payload = {
         kind: 'zoom',
-        room_id: document.getElementById('rec-room').value || null,
-        lesson_id: document.getElementById('rec-lesson').value || null,
         title: document.getElementById('rec-title').value.trim(),
         professor: document.getElementById('rec-professor').value.trim(),
         recorded_date: document.getElementById('rec-date').value,
@@ -193,17 +196,29 @@ async function saveRecording(e) {
         showModalAlert(alert, 'Please fill in all required fields.', 'error');
         return;
     }
+    if (courseIds.length === 0) {
+        showModalAlert(alert, 'Please assign the recording to at least one course.', 'error');
+        return;
+    }
     if (!ensureSafe(alert, [['Title', payload.title], ['Professor', payload.professor], ['Video URL', payload.aws_url]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
-        let res;
+        let recId = id;
         if (id) {
-            res = await db.from('recordings').update(payload).eq('id', id);
+            const res = await db.from('recordings').update(payload).eq('id', id);
+            if (res.error) throw new Error(res.error.message);
+            // Reset course links to match the new selection.
+            await db.from('recording_courses').delete().eq('recording_id', id);
         } else {
-            res = await db.from('recordings').insert(payload);
+            const res = await db.from('recordings').insert(payload).select('id').single();
+            if (res.error) throw new Error(res.error.message);
+            recId = res.data.id;
         }
-        if (res.error) throw new Error(res.error.message);
+        const links = courseIds.map(cid => ({ recording_id: recId, course_id: cid }));
+        const linkRes = await db.from('recording_courses').insert(links);
+        if (linkRes.error) throw new Error(linkRes.error.message);
+
         closeModal('rec-modal');
         loadRecordings();
     } catch (err) {

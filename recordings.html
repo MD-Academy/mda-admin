@@ -37,15 +37,10 @@
                             <input type="date" id="rec-date" required>
                         </div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-field">
-                            <label>Subject <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                            <select id="rec-room" onchange="onRoomChange()"><option value="">— None —</option></select>
-                        </div>
-                        <div class="form-field">
-                            <label>Lesson <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                            <select id="rec-lesson"><option value="">— None —</option></select>
-                        </div>
+                    <div class="form-field">
+                        <label>Courses</label>
+                        <div id="rec-course-list" class="check-list"></div>
+                        <div class="hint">Select one or more courses. Enrolled students of those courses will see this recording.</div>
                     </div>
                     <div class="form-field">
                         <label>Video URL (AWS)</label>
@@ -85,9 +80,9 @@
                         <input type="text" id="search-input" placeholder="Search by title or professor…" oninput="applyFilters()">
                     </div>
                     <div class="toolbar-actions">
-                        <select id="room-filter" class="filter-select" onchange="applyFilters()">
-                            <option value="">All subjects</option>
-                            <option value="__none__">Untagged</option>
+                        <select id="course-filter" class="filter-select" onchange="applyFilters()">
+                            <option value="">All courses</option>
+                            <option value="__none__">Unassigned</option>
                         </select>
                         <button class="btn btn-primary" onclick="openRecModal()">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -101,7 +96,7 @@
                             <tr>
                                 <th>Date</th>
                                 <th>Title</th>
-                                <th>Subject</th>
+                                <th>Courses</th>
                                 <th>Professor</th>
                                 <th>Duration</th>
                                 <th>Visible</th>
