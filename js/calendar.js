@@ -20,8 +20,9 @@ function formatDate(d) {
     return new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 }
 function roomName(id) {
+    if (!id) return '<span class="badge badge-blue">General</span>';
     const r = calRooms.find(x => x.id === id);
-    return r ? r.name : '—';
+    return r ? escapeHtml(r.name) : '<span class="badge badge-blue">General</span>';
 }
 function todayISO() {
     const d = new Date(); d.setHours(0, 0, 0, 0);
@@ -47,7 +48,7 @@ async function loadEntries() {
     calRooms = roomsRes.data || [];
 
     const filter = document.getElementById('room-filter');
-    if (filter && filter.options.length <= 1) {
+    if (filter && filter.options.length <= 2) {
         calRooms.forEach(r => {
             const opt = document.createElement('option');
             opt.value = r.id; opt.textContent = r.name;
@@ -65,7 +66,8 @@ function applyFilters() {
     const today = todayISO();
 
     let list = allEntries;
-    if (roomId) list = list.filter(e => e.room_id === roomId);
+    if (roomId === '__none__') list = list.filter(e => !e.room_id);
+    else if (roomId) list = list.filter(e => e.room_id === roomId);
     if (when === 'upcoming') list = list.filter(e => e.entry_date >= today);
     else if (when === 'past') list = list.filter(e => e.entry_date < today);
     if (q) list = list.filter(e => (e.topic || '').toLowerCase().includes(q));
@@ -82,7 +84,7 @@ function renderEntries(list) {
     tbody.innerHTML = list.map(e => `
         <tr>
             <td><strong>${formatDate(e.entry_date)}</strong></td>
-            <td>${escapeHtml(roomName(e.room_id))}</td>
+            <td>${roomName(e.room_id)}</td>
             <td>${escapeHtml(e.topic)}</td>
             <td>${e.details ? escapeHtml(e.details) : '<span style="color:var(--text-muted)">—</span>'}</td>
             <td class="row-actions">
@@ -96,7 +98,7 @@ function renderEntries(list) {
 // ── ROOM SELECT ──
 function fillRoomSelect(selectedRoomId = '') {
     const sel = document.getElementById('entry-room');
-    sel.innerHTML = `<option value="" disabled ${selectedRoomId ? '' : 'selected'}>Select a subject…</option>` +
+    sel.innerHTML = `<option value="" ${selectedRoomId ? '' : 'selected'}>— General (all students) —</option>` +
         calRooms.map(r => `<option value="${r.id}" ${r.id === selectedRoomId ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join('');
 }
 
@@ -132,15 +134,13 @@ async function saveEntry(e) {
     alert.style.display = 'none';
 
     const id = document.getElementById('entry-id').value;
-    const room_id = document.getElementById('entry-room').value;
     const payload = {
-        room_id,
+        room_id: document.getElementById('entry-room').value || null,
         entry_date: document.getElementById('entry-date').value,
         topic: document.getElementById('entry-topic').value.trim(),
         details: document.getElementById('entry-details').value.trim() || null
     };
 
-    if (!room_id) { showModalAlert(alert, 'Please select a subject.', 'error'); return; }
     if (!payload.entry_date || !payload.topic) { showModalAlert(alert, 'Date and topic are required.', 'error'); return; }
 
     btn.disabled = true; btn.textContent = 'Saving…';

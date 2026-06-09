@@ -25,8 +25,8 @@
                     <input type="hidden" id="entry-id">
                     <div class="form-row">
                         <div class="form-field">
-                            <label>Subject</label>
-                            <select id="entry-room" required></select>
+                            <label>Subject <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                            <select id="entry-room"></select>
                         </div>
                         <div class="form-field">
                             <label>Date</label>
@@ -72,6 +72,7 @@
                     <div class="toolbar-actions">
                         <select id="room-filter" class="filter-select" onchange="applyFilters()">
                             <option value="">All subjects</option>
+                            <option value="__none__">General (no subject)</option>
                         </select>
                         <select id="when-filter" class="filter-select" onchange="applyFilters()">
                             <option value="upcoming">Upcoming</option>
