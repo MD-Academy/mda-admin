@@ -70,6 +70,27 @@ function renderLayout(activeId, pageTitle, pageSub, profile) {
 
     document.getElementById('logout-btn').addEventListener('click', signOut);
     _setupAvatarUpload();
+    _startAccountWatch();
+}
+
+// Poll every 60s: if this admin gets suspended or loses admin rights while
+// logged in, sign them out immediately (they'll see the clear message on re-login).
+let _accountWatchTimer = null;
+function _startAccountWatch() {
+    if (_accountWatchTimer) clearInterval(_accountWatchTimer);
+    _accountWatchTimer = setInterval(async () => {
+        try {
+            const { data: { session } } = await db.auth.getSession();
+            if (!session) { window.location.href = 'index.html'; return; }
+            const { data: p } = await db.from('profiles').select('role, status').eq('id', session.user.id).single();
+            const ok = p && (p.role === 'admin' || p.role === 'superadmin') && p.status !== 'suspended';
+            if (!ok) {
+                Object.keys(sessionStorage).filter(k => k.startsWith('mda_profile_')).forEach(k => sessionStorage.removeItem(k));
+                await db.auth.signOut();
+                window.location.href = 'index.html';
+            }
+        } catch (e) { /* ignore transient network errors */ }
+    }, 60000);
 }
 
 function _layoutEsc(str) {
