@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Calendar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- SCHEDULE ENTRY MODAL -->
+    <div class="modal-overlay" id="entry-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3 id="entry-modal-title">Add Schedule Entry</h3>
+                <button class="modal-close" onclick="closeModal('entry-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveEntry(event)">
+                <div class="modal-body">
+                    <div class="alert" id="entry-alert" style="display:none;"></div>
+                    <input type="hidden" id="entry-id">
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label>Subject</label>
+                            <select id="entry-room" required></select>
+                        </div>
+                        <div class="form-field">
+                            <label>Date</label>
+                            <input type="date" id="entry-date" required>
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label>Topic</label>
+                        <input type="text" id="entry-topic" placeholder="e.g. Cell Division & Mitosis" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Details <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <textarea id="entry-details" placeholder="Any extra information for students…"></textarea>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('entry-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="entry-save-btn">Save Entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/calendar.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+
+            renderLayout('calendar', 'Calendar', 'Plan the class schedule across all subjects', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="toolbar">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="search-input" placeholder="Search by topic…" oninput="applyFilters()">
+                    </div>
+                    <div class="toolbar-actions">
+                        <select id="room-filter" class="filter-select" onchange="applyFilters()">
+                            <option value="">All subjects</option>
+                        </select>
+                        <select id="when-filter" class="filter-select" onchange="applyFilters()">
+                            <option value="upcoming">Upcoming</option>
+                            <option value="past">Past</option>
+                            <option value="all">All dates</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="openEntryModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add Entry
+                        </button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Subject</th>
+                                <th>Topic</th>
+                                <th>Details</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="entry-tbody">
+                            <tr><td colspan="5" class="loader">Loading schedule…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            loadEntries();
+        })();
+    </script>
+</body>
+</html>
