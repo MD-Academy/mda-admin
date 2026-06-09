@@ -53,7 +53,7 @@
     <script src="js/courses.js"></script>
     <script>
         (async () => {
-            const auth = await requireAdmin();
+            const auth = await requireSuperadmin();
             if (!auth) return;
 
             renderLayout('courses', 'Courses', 'Group subjects into courses and enrol students', auth.profile);

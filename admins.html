@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Admins</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- CREATE ADMIN MODAL -->
+    <div class="modal-overlay" id="admin-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Add Admin</h3>
+                <button class="modal-close" onclick="closeModal('admin-modal')">&times;</button>
+            </div>
+            <form onsubmit="createAdmin(event)">
+                <div class="modal-body">
+                    <div class="alert" id="admin-alert" style="display:none;"></div>
+                    <div class="form-field">
+                        <label>Full Name</label>
+                        <input type="text" id="admin-name" placeholder="e.g. Sarah Levin" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Email</label>
+                        <input type="email" id="admin-email" placeholder="person@medicaldoctor-studies.com" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Role</label>
+                        <select id="admin-role">
+                            <option value="admin">Admin (teacher) — content only</option>
+                            <option value="superadmin">Superadmin — full access incl. managing admins</option>
+                        </select>
+                        <div class="hint">Admins manage content (subjects, recordings, materials, quizzes, booklets, calendar, announcements). Superadmins can also manage students, courses and other admins.</div>
+                    </div>
+                    <div class="form-field">
+                        <div class="hint">A secure password is generated automatically and shown once after creation.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('admin-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="admin-create-btn">Create Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CREDENTIALS MODAL -->
+    <div class="modal-overlay" id="creds-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3>Account Credentials</h3>
+                <button class="modal-close" onclick="closeModal('creds-modal')">&times;</button>
+            </div>
+            <div class="modal-body" id="creds-body"></div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-primary" onclick="closeModal('creds-modal')">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/admins.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireSuperadmin();
+            if (!auth) return;
+
+            CURRENT_UID = auth.session.user.id;
+            renderLayout('admins', 'Admins', 'Create and manage staff accounts', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="toolbar">
+                    <div></div>
+                    <div class="toolbar-actions">
+                        <button class="btn btn-primary" onclick="openAdminModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add Admin
+                        </button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admins-tbody">
+                            <tr><td colspan="5" class="loader">Loading admins…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            loadAdmins();
+        })();
+    </script>
+</body>
+</html>

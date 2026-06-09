@@ -20,7 +20,7 @@
     <script src="js/course.js"></script>
     <script>
         (async () => {
-            const auth = await requireAdmin();
+            const auth = await requireSuperadmin();
             if (!auth) return;
             const params = new URLSearchParams(window.location.search);
             const courseId = params.get('id');

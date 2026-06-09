@@ -160,7 +160,7 @@
     <script src="js/students.js"></script>
     <script>
         (async () => {
-            const auth = await requireAdmin();
+            const auth = await requireSuperadmin();
             if (!auth) return;
 
             renderLayout('students', 'Students', 'Create and manage student accounts', auth.profile);

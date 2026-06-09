@@ -1,6 +1,8 @@
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+function _isAdminRole(r) { return r === 'admin' || r === 'superadmin'; }
+
 async function requireAdmin() {
     const { data: { session } } = await db.auth.getSession();
     if (!session) { window.location.href = 'index.html'; return null; }
@@ -14,7 +16,7 @@ async function requireAdmin() {
     if (cached) {
         try {
             const profile = JSON.parse(cached);
-            if (profile && profile.role === 'admin') {
+            if (profile && _isAdminRole(profile.role)) {
                 _verifyAdminInBackground(session.user.id, cacheKey);
                 return { session, profile };
             }
@@ -27,13 +29,24 @@ async function requireAdmin() {
         .eq('id', session.user.id)
         .single();
 
-    if (!profile || profile.role !== 'admin') {
+    if (!profile || !_isAdminRole(profile.role)) {
         await db.auth.signOut();
         window.location.href = 'index.html';
         return null;
     }
     sessionStorage.setItem(cacheKey, JSON.stringify(profile));
     return { session, profile };
+}
+
+// Require superadmin specifically; sends regular admins back to the dashboard.
+async function requireSuperadmin() {
+    const auth = await requireAdmin();
+    if (!auth) return null;
+    if (auth.profile.role !== 'superadmin') {
+        window.location.href = 'dashboard.html';
+        return null;
+    }
+    return auth;
 }
 
 // Quietly confirm the cached admin is still valid; refresh or kick out.
@@ -44,7 +57,7 @@ async function _verifyAdminInBackground(userId, cacheKey) {
             .select('role, full_name, avatar_url')
             .eq('id', userId)
             .single();
-        if (!profile || profile.role !== 'admin') {
+        if (!profile || !_isAdminRole(profile.role)) {
             sessionStorage.removeItem(cacheKey);
             await db.auth.signOut();
             window.location.href = 'index.html';
