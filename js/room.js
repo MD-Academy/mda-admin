@@ -83,7 +83,6 @@ async function initRoom(roomId, profile) {
         </a>
         <div class="tabs">
             <button class="tab active" data-tab="lessons" onclick="switchTab('lessons')">Lessons <span class="count-pill" id="count-lessons">0</span></button>
-            <button class="tab" data-tab="zoom" onclick="switchTab('zoom')">Zoom Recordings <span class="count-pill" id="count-zoom">0</span></button>
             <button class="tab" data-tab="lecture" onclick="switchTab('lecture')">Video Lectures <span class="count-pill" id="count-lecture">0</span></button>
             <button class="tab" data-tab="materials" onclick="switchTab('materials')">Materials <span class="count-pill" id="count-materials">0</span></button>
             <button class="tab" data-tab="notes" onclick="switchTab('notes')">Additional Notes <span class="count-pill" id="count-notes">0</span></button>
@@ -97,17 +96,6 @@ async function initRoom(roomId, profile) {
                 <button class="btn btn-primary btn-sm" onclick="openLessonForm()">+ Add Lesson</button>
             </div>
             <div id="lessons-list"><div class="loader">Loading…</div></div>
-        </div>
-
-        <div class="tab-panel" id="panel-zoom">
-            <div class="subtoolbar">
-                <div class="st-title">Zoom Recordings</div>
-                <button class="btn btn-primary btn-sm" onclick="openRecModal('zoom')">+ Add Recording</button>
-            </div>
-            <div class="panel"><table class="data-table">
-                <thead><tr><th>Title</th><th>Lesson</th><th>Professor</th><th>Date</th><th>Duration</th><th>Actions</th></tr></thead>
-                <tbody id="zoom-tbody"></tbody>
-            </table></div>
         </div>
 
         <div class="tab-panel" id="panel-lecture">
@@ -164,7 +152,7 @@ function switchTab(name) {
 async function loadAll() {
     const [lRes, rRes, mRes] = await Promise.all([
         db.from('lessons').select('id, title, description, image_url, order_index').eq('room_id', ROOM_ID).order('order_index', { ascending: true }),
-        db.from('recordings').select('id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, kind').eq('room_id', ROOM_ID).order('recorded_date', { ascending: false }),
+        db.from('recordings').select('id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, kind').eq('room_id', ROOM_ID).eq('kind', 'lecture').order('recorded_date', { ascending: false }),
         db.from('materials').select('id, lesson_id, title, type, storage_path, created_at, category').eq('room_id', ROOM_ID).order('created_at', { ascending: false })
     ]);
 
@@ -173,7 +161,6 @@ async function loadAll() {
     materials = mRes.data || [];
 
     renderLessons();
-    renderRecordings('zoom');
     renderRecordings('lecture');
     renderMaterials();
     renderNotes();
@@ -185,7 +172,6 @@ function matCategory(m) { return m.category === 'note' ? 'note' : 'material'; }
 
 function updateCounts() {
     document.getElementById('count-lessons').textContent = lessons.length;
-    document.getElementById('count-zoom').textContent = recordings.filter(r => r.kind === 'zoom').length;
     document.getElementById('count-lecture').textContent = recordings.filter(r => r.kind === 'lecture').length;
     document.getElementById('count-materials').textContent = materials.filter(m => matCategory(m) === 'material').length;
     document.getElementById('count-notes').textContent = materials.filter(m => matCategory(m) === 'note').length;

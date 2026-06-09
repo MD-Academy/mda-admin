@@ -176,6 +176,10 @@ async function deleteRoom(id, name) {
         if (rmErr) { alert(`Could not remove subject files: ${rmErr.message}. Subject not deleted.`); return; }
     }
 
+    // Remove this subject's video lectures (course content). Global Zoom
+    // recordings are kept — deleting the subject just clears their tag.
+    await db.from('recordings').delete().eq('room_id', id).eq('kind', 'lecture');
+
     const { error } = await db.from('rooms').delete().eq('id', id);
     if (error) { alert(`Failed to delete subject: ${error.message}`); return; }
     loadRooms();
