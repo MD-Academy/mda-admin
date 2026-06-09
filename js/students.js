@@ -95,6 +95,7 @@ async function createSingleStudent(e) {
         showModalAlert(alert, 'Please enter both name and email.', 'error');
         return;
     }
+    if (!ensureSafe(alert, [['Full Name', full_name], ['Email', email]])) return;
 
     btn.disabled = true; btn.textContent = 'Creating…';
 
@@ -165,6 +166,12 @@ async function runBulkCreate() {
     alert.style.display = 'none';
 
     if (bulkParsed.length === 0) return;
+
+    const badRow = bulkParsed.find(s => isUnsafeText(s.full_name) || isUnsafeText(s.email));
+    if (badRow) {
+        showModalAlert(alert, `Invalid format in row "${badRow.full_name || badRow.email}". Scripts or code are not allowed.`, 'error');
+        return;
+    }
 
     const expiry_date = document.getElementById('bulk-expiry').value || null;
 
@@ -248,6 +255,8 @@ async function saveEdit(e) {
     const full_name = document.getElementById('edit-name').value.trim();
     const status = document.getElementById('edit-status').value;
     const expiry_date = document.getElementById('edit-expiry').value || '';
+
+    if (!ensureSafe(alert, [['Full Name', full_name]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
 

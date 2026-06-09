@@ -176,6 +176,7 @@ async function saveRecording(e) {
         showModalAlert(alert, 'Please fill in all required fields.', 'error');
         return;
     }
+    if (!ensureSafe(alert, [['Title', payload.title], ['Professor', payload.professor], ['Video URL', payload.aws_url]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {

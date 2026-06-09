@@ -136,6 +136,7 @@ async function saveRoom(e) {
         showModalAlert(alert, 'Name and slug are required.', 'error');
         return;
     }
+    if (!ensureSafe(alert, [['Name', payload.name], ['Description', payload.description]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {

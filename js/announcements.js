@@ -104,6 +104,7 @@ async function saveAnnouncement(e) {
     const body = document.getElementById('ann-body').value.trim();
 
     if (!title || !body) { showModalAlert(alert, 'Title and message are required.', 'error'); return; }
+    if (!ensureSafe(alert, [['Title', title], ['Message', body]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {

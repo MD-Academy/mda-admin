@@ -1,3 +1,42 @@
+// Shared UI helpers — branded confirm dialog + input safety guard.
+
+// ── INPUT SAFETY GUARD ──
+// NOTE: the real XSS protection is output escaping (escapeHtml on every render).
+// This is a friendly extra layer that rejects obviously malicious input with a
+// clear "invalid format" message. Patterns are narrow to avoid false positives
+// on legitimate medical text (e.g. "a < b" is fine; "<script>" is not).
+const _UNSAFE_PATTERNS = [
+    /<\s*script/i,
+    /<\s*\/\s*script/i,
+    /<\s*iframe/i,
+    /<\s*object/i,
+    /<\s*embed/i,
+    /javascript\s*:/i,
+    /\bon(?:error|load|click|mouseover|mouseenter|focus|submit|change|input|keydown|keyup)\s*=/i
+];
+
+function isUnsafeText(value) {
+    if (value == null) return false;
+    return _UNSAFE_PATTERNS.some(re => re.test(String(value)));
+}
+
+// Checks each [label, value] pair. If any contains unsafe content, shows the
+// error in alertEl and returns false; otherwise returns true.
+function ensureSafe(alertEl, fields) {
+    for (const [label, value] of fields) {
+        if (isUnsafeText(value)) {
+            if (alertEl) {
+                alertEl.className = 'alert error';
+                alertEl.textContent = `Invalid format in "${label}". Scripts or code are not allowed.`;
+                alertEl.style.display = 'block';
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+
 // Shared UI helpers — branded confirm dialog (replaces the native confirm()).
 
 function _ensureConfirmModal() {

@@ -142,6 +142,7 @@ async function saveEntry(e) {
     };
 
     if (!payload.entry_date || !payload.topic) { showModalAlert(alert, 'Date and topic are required.', 'error'); return; }
+    if (!ensureSafe(alert, [['Topic', payload.topic], ['Details', payload.details]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {

@@ -268,6 +268,7 @@ async function saveLesson(e) {
         description: document.getElementById('lesson-desc').value.trim() || null,
         image_url: document.getElementById('lesson-image').value.trim() || null
     };
+    if (!ensureSafe(alert, [['Lesson Title', payload.title], ['Description', payload.description], ['Image URL', payload.image_url]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
@@ -407,6 +408,7 @@ async function saveRecording(e) {
         showModalAlert(alert, 'Please fill in all required fields.', 'error');
         return;
     }
+    if (!ensureSafe(alert, [['Title', payload.title], ['Lecturer', payload.professor], ['Video URL', payload.aws_url]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
@@ -520,6 +522,7 @@ async function saveUpload(e) {
         showModalAlert(alert, `Invalid file type ".${ext}". Allowed types: ${allowed.join(', ').toUpperCase()}.`, 'error');
         return;
     }
+    if (!ensureSafe(alert, [['Title', title]])) return;
 
     const path = `${ROOM_ID}/${Date.now()}-${sanitizeName(pickedFile.name)}`;
 
@@ -596,6 +599,7 @@ async function saveMaterialEdit(e) {
         lesson_id: document.getElementById('medit-lesson').value || null
     };
     if (!payload.title) { showModalAlert(alert, 'Title is required.', 'error'); return; }
+    if (!ensureSafe(alert, [['Title', payload.title]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
@@ -836,6 +840,7 @@ async function saveQuestion(e) {
     if (options.length < 2) { showModalAlert(alert, 'Add at least two options.', 'error'); return; }
     if (options.some(o => !o)) { showModalAlert(alert, 'Please fill in every option, or remove the empty ones.', 'error'); return; }
     if (correctIdx < 0) { showModalAlert(alert, 'Please mark which option is the correct answer.', 'error'); return; }
+    if (!ensureSafe(alert, [['Question', text], ...options.map((o, i) => [`Option ${i + 1}`, o])])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
