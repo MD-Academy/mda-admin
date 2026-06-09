@@ -615,6 +615,21 @@ body {
 .quiz-status.partial { color: var(--amber); }
 .quiz-status.none { color: var(--text-muted); }
 
+/* ── VISIBILITY TOGGLE (eye) ── */
+.vis-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 8px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; border: 1px solid transparent;
+    font-family: 'Inter', sans-serif;
+}
+.vis-toggle svg { width: 15px; height: 15px; }
+.vis-toggle.visible { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+.vis-toggle.hidden { background: var(--bg); color: var(--text-muted); border-color: var(--border); }
+.vis-toggle:hover { filter: brightness(0.97); }
+/* Faded look (used on student side later for hidden items) */
+.is-hidden-row { opacity: 0.55; }
+
 /* ── BRANDED CONFIRM DIALOG ── */
 .ui-confirm {
     background: var(--card);
