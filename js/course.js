@@ -79,21 +79,6 @@ async function loadData() {
 function renderSubjects() {
     const el = document.getElementById('subjects-list');
 
-    // Teachers (non-super): the subjects that ARE in this course — each opens full content.
-    if (!IS_SUPER) {
-        const inCourse = allSubjects.filter(s => courseSubjectIds.has(s.id));
-        if (inCourse.length === 0) {
-            el.innerHTML = `<div class="empty-state" style="padding:24px;"><p>No subjects in this course yet.</p></div>`;
-            return;
-        }
-        el.innerHTML = `<div class="list-rows">${inCourse.map(s => `
-            <div class="list-row">
-                <div class="lr-body"><div class="lr-title">${escapeHtml(s.name)}</div></div>
-                <div class="lr-actions"><button class="btn btn-primary btn-sm" onclick="openSubject('${s.id}')">Open</button></div>
-            </div>`).join('')}</div>`;
-        return;
-    }
-
     if (allSubjects.length === 0) {
         el.innerHTML = `<div class="empty-state" style="padding:24px;"><p>No subjects exist yet. Create some in the Subjects section first.</p></div>`;
         return;

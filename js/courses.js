@@ -83,9 +83,9 @@ function renderCourses() {
                         : `<span class="ec-meta" style="background:var(--bg);color:var(--text-muted);">No expiry</span>`}
                 </div>
                 <div class="ec-actions">
-                    <button class="btn btn-primary btn-sm" onclick="openCourse('${c.id}')">${IS_SUPER ? 'Open' : 'View'}</button>
-                    ${IS_SUPER ? `<button class="btn btn-ghost btn-sm" onclick="openCourseModal('${c.id}')">Edit</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteCourse('${c.id}', '${escapeHtml(c.name).replace(/'/g, "\\'")}')">Delete</button>` : ''}
+                    <button class="btn btn-primary btn-sm" onclick="openCourse('${c.id}')">Open</button>
+                    <button class="btn btn-ghost btn-sm" onclick="openCourseModal('${c.id}')">Edit</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteCourse('${c.id}', '${escapeHtml(c.name).replace(/'/g, "\\'")}')">Delete</button>
                 </div>
             </div>`;
     }).join('')}</div>`;
@@ -148,10 +148,10 @@ async function saveCourse(e) {
 
 async function deleteCourse(id, name) {
     const subs = subjectCounts[id] || 0;
-    const studs = studentCounts[id] || 0;
+    const enrolMsg = IS_SUPER ? `${studentCounts[id] || 0} student enrolment(s) and ` : 'Any student enrolments and ';
     const ok = await confirmDialog({
         title: `Delete "${name}"?`,
-        message: `This course will be removed. ${studs} student enrolment(s) and ${subs} subject link(s) will be detached. The subjects and students themselves are NOT deleted. This cannot be undone.`,
+        message: `This course will be removed. ${enrolMsg}${subs} subject link(s) will be detached. The subjects and students themselves are NOT deleted. This cannot be undone.`,
         confirmText: 'Delete Course',
         danger: true
     });
