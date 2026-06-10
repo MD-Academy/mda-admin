@@ -54,6 +54,7 @@ function renderStudents(students) {
                 <td>${expiryText}</td>
                 <td>${formatDate(s.created_at)}</td>
                 <td class="row-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="openActivity('${s.id}')">Activity</button>
                     <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
                     <button class="btn btn-ghost btn-sm" onclick="toggleStatus('${s.id}')">${s.status === 'suspended' ? 'Activate' : 'Block'}</button>
                     <button class="btn btn-ghost btn-sm" onclick="resetPw('${s.id}', '${escapeHtml(s.full_name)}')">Reset PW</button>
@@ -379,6 +380,11 @@ async function saveEdit(e) {
     } finally {
         btn.disabled = false; btn.textContent = 'Save Changes';
     }
+}
+
+// ── LOGIN ACTIVITY REPORT ──
+function openActivity(id) {
+    window.location.href = `activity.html?id=${encodeURIComponent(id)}`;
 }
 
 // ── BLOCK / ACTIVATE (suspend without deleting) ──
