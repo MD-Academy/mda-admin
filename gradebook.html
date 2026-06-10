@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Gradebook</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- SCORE ENTRY MODAL (PDF exams) -->
+    <div class="modal-overlay" id="score-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Enter Score</h3>
+                <button class="modal-close" onclick="closeModal('score-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveScore(event)">
+                <div class="modal-body">
+                    <div class="alert" id="score-alert" style="display:none;"></div>
+                    <input type="hidden" id="score-student">
+                    <input type="hidden" id="score-exam">
+                    <p id="score-context" style="font-size:14px;color:var(--text-muted);margin-bottom:14px;"></p>
+                    <div class="form-field">
+                        <label>Score (%)</label>
+                        <input type="number" id="score-value" min="0" max="100" step="1" required>
+                        <div class="hint" id="score-pass-hint"></div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('score-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="score-save-btn">Save Score</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/gradebook.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+            CURRENT_UID = auth.session.user.id;
+            renderLayout('gradebook', 'Gradebook', 'Exam & quiz scores by course', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="toolbar">
+                    <div class="toolbar-actions">
+                        <select id="course-select" class="filter-select" onchange="onCourseChange()">
+                            <option value="">Select a course…</option>
+                        </select>
+                    </div>
+                    <div></div>
+                </div>
+                <div id="gradebook-container"><div class="loader">Choose a course to see its score card.</div></div>
+            `;
+            loadCourses();
+        })();
+    </script>
+</body>
+</html>

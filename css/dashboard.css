@@ -554,6 +554,14 @@ body {
 
 .section-title { font-size: 15px; font-weight: 700; color: var(--navy-800); margin: 4px 0 14px; }
 
+/* ── GRADEBOOK ── */
+.gb-cell { font-weight: 700; }
+.gb-cell.pass { color: var(--green); }
+.gb-cell.fail { color: var(--red); }
+.gb-cell.pending { color: var(--text-muted); font-weight: 500; }
+.gb-enter { font-size: 12px; }
+.gb-gpa { font-weight: 800; color: var(--navy-800); }
+
 /* ── ANNOUNCEMENT CARDS ── */
 .ann-card {
     background: var(--card);
