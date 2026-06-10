@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Exams</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- EXAM CREATE / EDIT MODAL -->
+    <div class="modal-overlay" id="exam-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3 id="exam-modal-title">Add Exam</h3>
+                <button class="modal-close" onclick="closeModal('exam-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveExam(event)">
+                <div class="modal-body">
+                    <div class="alert" id="exam-alert" style="display:none;"></div>
+                    <input type="hidden" id="exam-id">
+                    <div class="form-field">
+                        <label>Title</label>
+                        <input type="text" id="exam-title" placeholder="e.g. Mock MMI — Final Simulation" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Description <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <textarea id="exam-desc" placeholder="Short description / instructions for students…"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label>Type</label>
+                            <select id="exam-type" onchange="onTypeChange()">
+                                <option value="manual">Multiple-choice (auto-scored)</option>
+                                <option value="pdf">PDF paper (teacher enters scores)</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label>Pass mark (%)</label>
+                            <input type="number" id="exam-threshold" min="1" max="100" step="1" value="70">
+                        </div>
+                    </div>
+                    <div class="form-field" id="timelimit-field">
+                        <label>Time limit in minutes <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <input type="number" id="exam-timelimit" min="1" step="1" placeholder="e.g. 60">
+                    </div>
+                    <div class="form-field" id="pdf-field" style="display:none;">
+                        <label>Exam PDF</label>
+                        <label class="upload-zone" for="exam-file" style="padding:20px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            <p id="exam-file-text">Click to choose a PDF</p>
+                            <span>PDF only — up to 50&nbsp;MB</span>
+                            <input type="file" id="exam-file" accept=".pdf" onchange="onExamFilePicked(event)">
+                        </label>
+                        <div class="hint" id="exam-file-current"></div>
+                    </div>
+                    <div class="form-field">
+                        <label>Assign to courses</label>
+                        <div id="exam-course-list" class="check-list"></div>
+                        <div class="hint">Students enrolled in the selected course(s) will see this exam. You can change this anytime.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('exam-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="exam-save-btn">Save Exam</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- QUESTIONS MODAL (manual exams) -->
+    <div class="modal-overlay" id="questions-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3 id="questions-modal-title">Questions</h3>
+                <button class="modal-close" onclick="closeModal('questions-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                    <div class="section-title" style="margin:0;">Questions <span id="eq-count" class="count-pill">0</span></div>
+                    <button class="btn btn-primary btn-sm" onclick="openQuestionForm()">+ Add Question</button>
+                </div>
+                <div id="eq-list"><div class="loader">Loading…</div></div>
+                <div class="alert" id="eq-note" style="display:block;background:#eff5ff;color:#1d4ed8;border:1px solid #bfdbfe;margin-top:16px;">Add as many questions as you like. The score is the % answered correctly; the pass mark is set on the exam.</div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-primary" onclick="closeModal('questions-modal')">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QUESTION EDIT MODAL -->
+    <div class="modal-overlay" id="question-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3 id="question-modal-title">Add Question</h3>
+                <button class="modal-close" onclick="closeModal('question-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveQuestion(event)">
+                <div class="modal-body">
+                    <div class="alert" id="question-alert" style="display:none;"></div>
+                    <input type="hidden" id="question-id">
+                    <div class="form-field">
+                        <label>Question</label>
+                        <textarea id="question-text" placeholder="Enter the question…" required></textarea>
+                    </div>
+                    <div class="form-field">
+                        <label>Answer options <span style="color:var(--text-muted);font-weight:400;">(click the circle to mark the correct one)</span></label>
+                        <div id="options-list"></div>
+                        <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="addOptionRow()">+ Add Option</button>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('question-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="question-save-btn">Save Question</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/exams.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+            renderLayout('exams', 'Exams', 'Create practice exams & quizzes and assign them to courses', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="toolbar">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="search-input" placeholder="Search exams by title…" oninput="applyFilters()">
+                    </div>
+                    <div class="toolbar-actions">
+                        <button class="btn btn-primary" onclick="openExamModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add Exam
+                        </button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Type</th>
+                                <th>Pass</th>
+                                <th>Courses</th>
+                                <th>Visible</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="exams-tbody">
+                            <tr><td colspan="6" class="loader">Loading exams…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            loadExams();
+        })();
+    </script>
+</body>
+</html>
