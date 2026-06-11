@@ -39,6 +39,20 @@ async function initCourse(courseId, profile) {
             </div>` : '';
 
     document.getElementById('page-content').innerHTML = `
+        <style>
+            .pill-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 7px; }
+            .pill-zone { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; min-height: 46px; padding: 11px; border: 1.5px dashed var(--border); border-radius: 12px; }
+            .pill-zone-assigned { background: #fbfcfe; border-style: solid; }
+            .pill { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none; transition: transform .06s, background .12s; }
+            .pill:active { transform: scale(.96); }
+            .pill-assigned { background: #fdecf3; color: #b91c5c; border: 1.5px solid #f3c6d9; }
+            .pill-assigned:hover { background: #fbdbe8; }
+            .pill-available { background: #f1f5f9; color: var(--text); border: 1.5px solid var(--border); }
+            .pill-available:hover { background: #eaf1fb; border-color: #9cc0f0; }
+            .pill .x { font-weight: 800; opacity: .55; }
+            .pill .plus { font-weight: 800; opacity: .5; font-size: 15px; line-height: 1; }
+            .pill-empty { font-size: 13px; color: var(--text-muted); padding: 5px 2px; }
+        </style>
         <a class="back-link" href="courses.html">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
             All Courses
@@ -103,29 +117,31 @@ async function fetchStudents() {
     return res.data || [];
 }
 
-// ── EXAMS IN THIS COURSE ──
+// ── EXAMS IN THIS COURSE (two-zone pill picker, click to move) ──
 function renderCourseExams() {
     const el = document.getElementById('course-exams-list');
     if (!el) return;
     if (allExams.length === 0) {
-        el.innerHTML = `<div class="empty-state" style="padding:24px;"><p>No exams exist yet. Create some in the Exams section first.</p></div>`;
+        el.innerHTML = `<div class="empty-state" style="padding:18px;"><p>No exams exist yet. Create some in the Exams section first.</p></div>`;
         return;
     }
     const q = (document.getElementById('exam-search')?.value || '').toLowerCase();
-    let list = allExams.filter(e => (e.title || '').toLowerCase().includes(q));
-    // Assigned first.
-    list.sort((a, b) => (courseExamIds.has(b.id) ? 1 : 0) - (courseExamIds.has(a.id) ? 1 : 0));
-    if (list.length === 0) { el.innerHTML = `<div class="loader">No exams match your search.</div>`; return; }
-    el.innerHTML = `<div class="list-rows">${list.map(e => {
-        const assigned = courseExamIds.has(e.id);
-        return `
-            <div class="list-row">
-                <div class="lr-body"><div class="lr-title">${escapeHtml(e.title)}</div><div class="lr-sub">${e.type === 'pdf' ? 'PDF paper' : 'Multiple-choice'}</div></div>
-                <div class="lr-actions">
-                    <button class="btn btn-sm ${assigned ? 'btn-danger' : 'btn-primary'}" onclick="toggleExam('${e.id}')">${assigned ? 'Remove' : 'Add'}</button>
-                </div>
-            </div>`;
-    }).join('')}</div>`;
+    const assigned = allExams.filter(e => courseExamIds.has(e.id));
+    const available = allExams.filter(e => !courseExamIds.has(e.id) && (e.title || '').toLowerCase().includes(q));
+
+    const assignedHtml = assigned.length
+        ? assigned.map(e => `<span class="pill pill-assigned" onclick="toggleExam('${e.id}')" title="Click to remove from this course">${escapeHtml(e.title)} <span class="x">✕</span></span>`).join('')
+        : `<span class="pill-empty">No exams assigned yet — click one below to add it.</span>`;
+
+    const availHtml = available.length
+        ? available.map(e => `<span class="pill pill-available" onclick="toggleExam('${e.id}')" title="Click to add to this course">${escapeHtml(e.title)} <span class="plus">+</span></span>`).join('')
+        : `<span class="pill-empty">${q ? 'No exams match your search.' : 'All exams are already assigned.'}</span>`;
+
+    el.innerHTML = `
+        <div class="pill-label">In this course</div>
+        <div class="pill-zone pill-zone-assigned">${assignedHtml}</div>
+        <div class="pill-label" style="margin-top:14px;">Available — click to add</div>
+        <div class="pill-zone">${availHtml}</div>`;
 }
 
 async function toggleExam(examId) {
