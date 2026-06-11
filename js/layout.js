@@ -85,7 +85,8 @@ function _startAccountWatch() {
         try {
             const { data: { session } } = await db.auth.getSession();
             if (!session) { window.location.href = 'index.html'; return; }
-            const { data: p } = await db.from('profiles').select('role, status').eq('id', session.user.id).single();
+            const { data: p, error: pErr } = await db.from('profiles').select('role, status').eq('id', session.user.id).single();
+            if (pErr) { console.error('[layout] account watch check failed (will retry):', pErr); return; }  // transient — don't kick on a blip
             const ok = p && (p.role === 'admin' || p.role === 'superadmin') && p.status !== 'suspended';
             if (!ok) {
                 Object.keys(sessionStorage).filter(k => k.startsWith('mda_profile_')).forEach(k => sessionStorage.removeItem(k));

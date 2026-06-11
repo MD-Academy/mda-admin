@@ -23,11 +23,23 @@ async function requireAdmin() {
         } catch (e) { /* fall through to a fresh fetch */ }
     }
 
-    const { data: profile } = await db
+    const { data: profile, error: profErr } = await db
         .from('profiles')
         .select('role, full_name, avatar_url, status')
         .eq('id', session.user.id)
         .single();
+
+    // A failed lookup is NOT proof of suspension — never sign out on a transient error.
+    if (profErr) {
+        console.error('[auth] could not verify account:', profErr);
+        const el = document.getElementById('app-layout') || document.body;
+        el.innerHTML = `<div style="max-width:440px;margin:120px auto;text-align:center;font-family:'Inter',sans-serif;color:#1e293b;padding:0 20px;">
+            <h2 style="margin-bottom:10px;">Connection problem</h2>
+            <p style="color:#64748b;">We couldn't verify your account right now. Please refresh — if it keeps happening, contact your administrator.</p>
+            <button onclick="location.reload()" style="margin-top:18px;padding:10px 20px;border:none;border-radius:8px;background:#b91c5c;color:#fff;font-weight:600;cursor:pointer;">Refresh</button>
+        </div>`;
+        return null;
+    }
 
     if (!profile || !_isAdminRole(profile.role) || profile.status === 'suspended') {
         await db.auth.signOut();
@@ -57,11 +69,12 @@ async function requireSuperadmin() {
 // Quietly confirm the cached admin is still valid; refresh or kick out.
 async function _verifyAdminInBackground(userId, cacheKey) {
     try {
-        const { data: profile } = await db
+        const { data: profile, error } = await db
             .from('profiles')
             .select('role, full_name, avatar_url, status')
             .eq('id', userId)
             .single();
+        if (error) { console.error('[auth] background re-verify failed (keeping session):', error); return; }  // transient — don't kick
         if (!profile || !_isAdminRole(profile.role) || profile.status === 'suspended') {
             sessionStorage.removeItem(cacheKey);
             await db.auth.signOut();
