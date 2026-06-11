@@ -41,6 +41,16 @@
                         <input type="number" id="room-order" min="1" step="1" value="1">
                         <div class="hint">Lower numbers appear first for students.</div>
                     </div>
+                    <div class="form-field">
+                        <label>Cover Image <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <label class="upload-zone" for="room-image-file" style="padding:18px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                            <p id="room-image-text">Click to choose an image</p>
+                            <span>PNG, JPG, WEBP, GIF — up to 500&nbsp;KB</span>
+                            <input type="file" id="room-image-file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="onRoomImagePicked(event)">
+                        </label>
+                        <div class="hint" id="room-image-current"></div>
+                    </div>
                 </div>
                 <div class="modal-foot">
                     <button type="button" class="btn btn-ghost" onclick="closeModal('room-modal')">Cancel</button>

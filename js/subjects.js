@@ -38,13 +38,35 @@ async function toggleSubjectVis(id) {
     renderRooms();
 }
 
+// ── COVER IMAGE UPLOAD (public lesson-images bucket; images only, <=500KB) ──
+const CARD_BUCKET = 'lesson-images';
+const ALLOWED_IMG = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+const IMG_MAX = 500 * 1024;
+let pickedRoomImage = null;
+function onRoomImagePicked(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    pickedRoomImage = f;
+    document.getElementById('room-image-text').textContent = f.name;
+}
+async function uploadCardImage(file, prefix) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (!file.type.startsWith('image/') || !ALLOWED_IMG.includes(ext)) return { error: 'Please choose an image (PNG, JPG, WEBP or GIF).' };
+    if (file.size > IMG_MAX) return { error: `Image too large (${(file.size / 1024).toFixed(0)} KB). Max 500 KB.` };
+    const path = `${prefix}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const up = await db.storage.from(CARD_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+    if (up.error) return { error: up.error.message };
+    const { data } = db.storage.from(CARD_BUCKET).getPublicUrl(path);
+    return { url: data.publicUrl };
+}
+
 // ── LOAD ──
 async function loadRooms() {
     const container = document.getElementById('rooms-container');
     container.innerHTML = `<div class="loader">Loading rooms…</div>`;
 
     const [roomsRes, lessonsRes] = await Promise.all([
-        db.from('rooms').select('id, name, slug, description, order_index, is_visible').order('order_index', { ascending: true }),
+        db.from('rooms').select('id, name, slug, description, order_index, is_visible, image_url').order('order_index', { ascending: true }),
         db.from('lessons').select('id, room_id')
     ]);
 
@@ -77,6 +99,7 @@ function renderRooms() {
         const count = lessonCounts[r.id] || 0;
         return `
             <div class="entity-card">
+                ${r.image_url ? `<div style="height:88px;margin:-22px -22px 14px;border-radius:16px 16px 0 0;background:url('${escapeHtml(r.image_url)}') center/cover;"></div>` : ''}
                 <div class="ec-head">
                     <div class="ec-title">${escapeHtml(r.name)}</div>
                     ${visToggleHtml(r.id, r.is_visible)}
@@ -109,6 +132,10 @@ function syncSlug() {
 function openRoomModal(id = null) {
     const alert = document.getElementById('room-alert');
     alert.style.display = 'none';
+    pickedRoomImage = null;
+    document.getElementById('room-image-file').value = '';
+    document.getElementById('room-image-text').textContent = 'Click to choose an image';
+    document.getElementById('room-image-current').textContent = '';
     const slugField = document.getElementById('room-slug');
     slugField.dataset.touched = id ? 'true' : 'false';
     slugField.oninput = () => { slugField.dataset.touched = 'true'; };
@@ -122,6 +149,7 @@ function openRoomModal(id = null) {
         document.getElementById('room-slug').value = r.slug || '';
         document.getElementById('room-desc').value = r.description || '';
         document.getElementById('room-order').value = r.order_index ?? 1;
+        if (r.image_url) document.getElementById('room-image-current').textContent = 'A cover image is set — choose a file to replace it.';
     } else {
         const nextOrder = allRooms.length ? Math.max(...allRooms.map(r => r.order_index || 0)) + 1 : 1;
         document.getElementById('room-modal-title').textContent = 'Add Subject';
@@ -156,6 +184,11 @@ async function saveRoom(e) {
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
+        if (pickedRoomImage) {
+            const up = await uploadCardImage(pickedRoomImage, 'subjects');
+            if (up.error) throw new Error(up.error);
+            payload.image_url = up.url;
+        }
         let res;
         if (id) {
             res = await db.from('rooms').update(payload).eq('id', id);

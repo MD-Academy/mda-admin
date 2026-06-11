@@ -42,12 +42,34 @@ async function toggleCourseVis(id) {
     renderCourses();
 }
 
+// ── COVER IMAGE UPLOAD (public lesson-images bucket; images only, <=500KB) ──
+const CARD_BUCKET = 'lesson-images';
+const ALLOWED_IMG = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+const IMG_MAX = 500 * 1024;
+let pickedCourseImage = null;
+function onCourseImagePicked(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    pickedCourseImage = f;
+    document.getElementById('course-image-text').textContent = f.name;
+}
+async function uploadCardImage(file, prefix) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (!file.type.startsWith('image/') || !ALLOWED_IMG.includes(ext)) return { error: 'Please choose an image (PNG, JPG, WEBP or GIF).' };
+    if (file.size > IMG_MAX) return { error: `Image too large (${(file.size / 1024).toFixed(0)} KB). Max 500 KB.` };
+    const path = `${prefix}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const up = await db.storage.from(CARD_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+    if (up.error) return { error: up.error.message };
+    const { data } = db.storage.from(CARD_BUCKET).getPublicUrl(path);
+    return { url: data.publicUrl };
+}
+
 async function loadCourses() {
     const container = document.getElementById('courses-container');
     container.innerHTML = `<div class="loader">Loading courses…</div>`;
 
     const queries = [
-        db.from('courses').select('id, name, description, created_at, expires_at, is_visible').order('created_at', { ascending: false }),
+        db.from('courses').select('id, name, description, created_at, expires_at, is_visible, image_url').order('created_at', { ascending: false }),
         db.from('course_subjects').select('course_id')
     ];
     if (IS_SUPER) queries.push(db.from('course_enrollments').select('course_id'));
@@ -85,6 +107,7 @@ function renderCourses() {
         const studs = studentCounts[c.id] || 0;
         return `
             <div class="entity-card">
+                ${c.image_url ? `<div style="height:88px;margin:-22px -22px 14px;border-radius:16px 16px 0 0;background:url('${escapeHtml(c.image_url)}') center/cover;"></div>` : ''}
                 <div class="ec-head">
                     <div class="ec-title">${escapeHtml(c.name)}</div>
                     ${visToggleHtml(c.id, c.is_visible)}
@@ -115,6 +138,10 @@ function openCourse(id) {
 function openCourseModal(id = null) {
     const alert = document.getElementById('course-alert');
     alert.style.display = 'none';
+    pickedCourseImage = null;
+    document.getElementById('course-image-file').value = '';
+    document.getElementById('course-image-text').textContent = 'Click to choose an image';
+    document.getElementById('course-image-current').textContent = '';
     if (id) {
         const c = allCourses.find(x => x.id === id);
         if (!c) return;
@@ -123,6 +150,7 @@ function openCourseModal(id = null) {
         document.getElementById('course-name').value = c.name || '';
         document.getElementById('course-desc').value = c.description || '';
         document.getElementById('course-expiry').value = c.expires_at || '';
+        if (c.image_url) document.getElementById('course-image-current').textContent = 'A cover image is set — choose a file to replace it.';
     } else {
         document.getElementById('course-modal-title').textContent = 'Add Course';
         document.getElementById('course-id').value = '';
@@ -150,6 +178,11 @@ async function saveCourse(e) {
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
+        if (pickedCourseImage) {
+            const up = await uploadCardImage(pickedCourseImage, 'courses');
+            if (up.error) throw new Error(up.error);
+            payload.image_url = up.url;
+        }
         let res;
         if (id) res = await db.from('courses').update(payload).eq('id', id);
         else res = await db.from('courses').insert(payload);
