@@ -22,14 +22,28 @@
             <form onsubmit="saveUpload(event)">
                 <div class="modal-body">
                     <div class="alert" id="upload-alert" style="display:none;"></div>
-                    <label class="upload-zone" for="booklet-file">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        <p id="upload-zone-text">Click to choose a file</p>
-                        <span>PDF, PPTX, DOCX, images — up to 50&nbsp;MB</span>
-                        <input type="file" id="booklet-file" accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg" onchange="onFilePicked(event)">
-                    </label>
+                    <input type="hidden" id="upload-source" value="file">
+                    <div class="seg-toggle" style="display:flex;gap:8px;margin-bottom:16px;">
+                        <button type="button" class="btn btn-primary btn-sm" id="src-btn-file" onclick="setUploadSource('file')" style="flex:1;">⬆ Upload file</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="src-btn-link" onclick="setUploadSource('link')" style="flex:1;">🔗 External link</button>
+                    </div>
+                    <div id="src-file">
+                        <label class="upload-zone" for="booklet-file">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            <p id="upload-zone-text">Click to choose a file</p>
+                            <span>PDF, PPTX, DOCX, images — up to 50&nbsp;MB</span>
+                            <input type="file" id="booklet-file" accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg" onchange="onFilePicked(event)">
+                        </label>
+                    </div>
+                    <div id="src-link" style="display:none;">
+                        <div class="form-field">
+                            <label>External link (URL)</label>
+                            <input type="url" id="booklet-url" placeholder="https://…  link to a file hosted on any platform">
+                            <span style="display:block;margin-top:6px;color:var(--text-muted);font-size:12px;">Paste a direct https link to a file hosted anywhere (AWS, Google Drive, etc.). It opens in a new tab for students.</span>
+                        </div>
+                    </div>
                     <div class="form-field" style="margin-top:18px;">
                         <label>Title</label>
                         <input type="text" id="booklet-title" placeholder="e.g. Final Exam Simulation — Booklet 1" required>

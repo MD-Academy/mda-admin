@@ -466,7 +466,7 @@ async function deleteRecording(id) {
 function materialRowHtml(m) {
     return `
         <tr>
-            <td><strong>${escapeHtml(m.title)}</strong>${m.external_url ? ' <span title="External AWS link">🔗</span>' : ''}</td>
+            <td><strong>${escapeHtml(m.title)}</strong>${m.external_url ? ' <span title="External link">🔗</span>' : ''}</td>
             <td><span class="badge badge-blue">${escapeHtml((m.type || 'file').toUpperCase())}</span></td>
             <td>${escapeHtml(lessonTitle(m.lesson_id))}</td>
             <td>${formatDate(m.created_at)}</td>
@@ -687,7 +687,7 @@ async function deleteMaterial(id) {
     const ok = await confirmDialog({
         title: 'Delete material?',
         message: m.external_url
-            ? `"${m.title}" (AWS link) will be permanently removed. The file in AWS is not affected. This cannot be undone.`
+            ? `"${m.title}" (external link) will be permanently removed. The original file is not affected. This cannot be undone.`
             : `"${m.title}" and its file will be permanently removed. This cannot be undone.`,
         confirmText: 'Delete',
         danger: true

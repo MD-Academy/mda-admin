@@ -106,7 +106,7 @@
                     <input type="hidden" id="upload-source" value="file">
                     <div class="seg-toggle" style="display:flex;gap:8px;margin-bottom:16px;">
                         <button type="button" class="btn btn-primary btn-sm" id="src-btn-file" onclick="setUploadSource('file')" style="flex:1;">⬆ Upload file</button>
-                        <button type="button" class="btn btn-ghost btn-sm" id="src-btn-link" onclick="setUploadSource('link')" style="flex:1;">🔗 AWS link</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="src-btn-link" onclick="setUploadSource('link')" style="flex:1;">🔗 External link</button>
                     </div>
                     <div id="src-file">
                         <label class="upload-zone" for="material-file">
@@ -120,9 +120,9 @@
                     </div>
                     <div id="src-link" style="display:none;">
                         <div class="form-field">
-                            <label>AWS link (URL)</label>
-                            <input type="url" id="material-url" placeholder="https://…  link to your slides or PDF in AWS">
-                            <span style="display:block;margin-top:6px;color:var(--text-muted);font-size:12px;">Paste a direct https link to a file already hosted in AWS. It opens in a new tab for students.</span>
+                            <label>External link (URL)</label>
+                            <input type="url" id="material-url" placeholder="https://…  link to a file hosted on any platform">
+                            <span style="display:block;margin-top:6px;color:var(--text-muted);font-size:12px;">Paste a direct https link to a file hosted anywhere (AWS, Google Drive, etc.). It opens in a new tab for students.</span>
                         </div>
                     </div>
                     <div class="form-field" style="margin-top:18px;">

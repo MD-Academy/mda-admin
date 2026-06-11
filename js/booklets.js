@@ -38,7 +38,7 @@ async function loadBooklets() {
     tbody.innerHTML = `<tr><td colspan="5" class="loader">Loading booklets…</td></tr>`;
 
     const { data, error } = await db.from('booklets')
-        .select('id, title, type, storage_path, is_visible, created_at')
+        .select('id, title, type, storage_path, external_url, is_visible, created_at')
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -64,7 +64,7 @@ function renderBooklets(list) {
     }
     tbody.innerHTML = list.map(b => `
         <tr>
-            <td><strong>${escapeHtml(b.title)}</strong></td>
+            <td><strong>${escapeHtml(b.title)}</strong>${b.external_url ? ' <span title="External link">🔗</span>' : ''}</td>
             <td><span class="badge badge-blue">${escapeHtml((b.type || 'file').toUpperCase())}</span></td>
             <td>
                 <button class="vis-toggle ${b.is_visible ? 'visible' : 'hidden'}" onclick="toggleVisibility('${b.id}')">
@@ -98,7 +98,25 @@ function openUploadModal() {
     document.getElementById('booklet-file').value = '';
     document.getElementById('upload-zone-text').textContent = 'Click to choose a file';
     document.getElementById('booklet-title').value = '';
+    document.getElementById('booklet-url').value = '';
+    setUploadSource('file');
     openModal('upload-modal');
+}
+
+// Toggle the modal between a file upload and an external link.
+function setUploadSource(src) {
+    const isLink = src === 'link';
+    document.getElementById('upload-source').value = isLink ? 'link' : 'file';
+    document.getElementById('src-file').style.display = isLink ? 'none' : '';
+    document.getElementById('src-link').style.display = isLink ? '' : 'none';
+    document.getElementById('src-btn-file').className = `btn btn-sm ${isLink ? 'btn-ghost' : 'btn-primary'}`;
+    document.getElementById('src-btn-link').className = `btn btn-sm ${isLink ? 'btn-primary' : 'btn-ghost'}`;
+    document.getElementById('upload-btn').textContent = isLink ? 'Save Link' : 'Upload';
+}
+
+function isHttpUrl(u) {
+    try { const x = new URL(u); return x.protocol === 'http:' || x.protocol === 'https:'; }
+    catch (e) { return false; }
 }
 
 function onFilePicked(e) {
@@ -117,6 +135,30 @@ async function saveUpload(e) {
     alert.style.display = 'none';
 
     const title = document.getElementById('booklet-title').value.trim();
+    const source = document.getElementById('upload-source').value || 'file';
+
+    // ── External link path (no file upload) ──
+    if (source === 'link') {
+        const url = document.getElementById('booklet-url').value.trim();
+        if (!title) { showModalAlert(alert, 'Please enter a title.', 'error'); return; }
+        if (!isHttpUrl(url)) { showModalAlert(alert, 'Please paste a valid link starting with https://', 'error'); return; }
+        if (!ensureSafe(alert, [['Title', title], ['Link', url]])) return;
+        const extMatch = url.split(/[?#]/)[0].match(/\.([a-z0-9]{2,5})$/i);
+        const linkType = extMatch ? extMatch[1].toLowerCase() : 'link';
+        btn.disabled = true; btn.textContent = 'Saving…';
+        try {
+            const ins = await db.from('booklets').insert({ title, type: linkType, storage_path: null, external_url: url });
+            if (ins.error) throw new Error(`Saving record failed: ${ins.error.message}`);
+            closeModal('upload-modal');
+            loadBooklets();
+        } catch (err) {
+            showModalAlert(alert, err.message, 'error');
+        } finally {
+            btn.disabled = false; btn.textContent = 'Save Link';
+        }
+        return;
+    }
+
     if (!pickedFile) { showModalAlert(alert, 'Please choose a file to upload.', 'error'); return; }
     if (!title) { showModalAlert(alert, 'Please enter a title.', 'error'); return; }
     if (pickedFile.size > MAX_FILE_BYTES) {
@@ -156,6 +198,7 @@ async function saveUpload(e) {
 function previewBooklet(id, btnEl) {
     const b = allBooklets.find(x => x.id === id);
     if (!b) return;
+    if (b.external_url) { window.open(b.external_url, '_blank', 'noopener'); return; }
     const win = window.open('', '_blank');
     if (win) win.document.write('<!DOCTYPE html><title>Loading…</title><body style="font-family:sans-serif;padding:40px;color:#334">Loading booklet…</body>');
     const original = btnEl.textContent;
@@ -172,13 +215,18 @@ async function deleteBooklet(id) {
     if (!b) return;
     const ok = await confirmDialog({
         title: 'Delete booklet?',
-        message: `"${b.title}" and its file will be permanently removed. This cannot be undone.`,
+        message: b.external_url
+            ? `"${b.title}" (external link) will be permanently removed. The original file is not affected. This cannot be undone.`
+            : `"${b.title}" and its file will be permanently removed. This cannot be undone.`,
         confirmText: 'Delete',
         danger: true
     });
     if (!ok) return;
-    const rm = await db.storage.from(MATERIALS_BUCKET).remove([b.storage_path]);
-    if (rm.error) { alert(`Failed to remove file: ${rm.error.message}`); return; }
+    // Link-only booklets have no stored file to remove.
+    if (b.storage_path) {
+        const rm = await db.storage.from(MATERIALS_BUCKET).remove([b.storage_path]);
+        if (rm.error) { alert(`Failed to remove file: ${rm.error.message}`); return; }
+    }
     const del = await db.from('booklets').delete().eq('id', id);
     if (del.error) { alert(`File removed but record delete failed: ${del.error.message}`); return; }
     loadBooklets();
