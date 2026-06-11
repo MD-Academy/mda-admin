@@ -112,7 +112,7 @@ function renderRooms() {
                 <div class="ec-actions">
                     <button class="btn btn-primary btn-sm" onclick="openRoom('${r.id}')">Open</button>
                     <button class="btn btn-ghost btn-sm" onclick="openRoomModal('${r.id}')">Edit</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteRoom('${r.id}', '${escapeHtml(r.name).replace(/'/g, "\\'")}')">Delete</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteRoom('${r.id}')">Delete</button>
                 </div>
             </div>`;
     }).join('')}</div>`;
@@ -205,7 +205,9 @@ async function saveRoom(e) {
     }
 }
 
-async function deleteRoom(id, name) {
+async function deleteRoom(id) {
+    const r = allRooms.find(x => x.id === id);
+    const name = r ? (r.name || 'this subject') : 'this subject';
     const count = lessonCounts[id] || 0;
     let msg = 'This subject will be removed. This cannot be undone.';
     if (count > 0) msg = `This subject has ${count} lesson(s). Deleting it will also remove those lessons and any recordings, materials, notes and quizzes attached to them. This cannot be undone.`;

@@ -57,9 +57,9 @@ function renderStudents(students) {
                     <button class="btn btn-ghost btn-sm" onclick="openActivity('${s.id}')">Activity</button>
                     <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
                     <button class="btn btn-ghost btn-sm" onclick="toggleStatus('${s.id}')">${s.status === 'suspended' ? 'Activate' : 'Block'}</button>
-                    <button class="btn btn-ghost btn-sm" onclick="resetPw('${s.id}', '${escapeHtml(s.full_name)}')">Reset PW</button>
+                    <button class="btn btn-ghost btn-sm" onclick="resetPw('${s.id}')">Reset PW</button>
                     <button class="btn btn-ghost btn-sm" onclick="resetMfa('${s.id}')">Reset 2FA</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}', '${escapeHtml(s.full_name)}')">Delete</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button>
                 </td>
             </tr>
         `;
@@ -438,7 +438,9 @@ async function toggleStatus(id) {
 }
 
 // ── RESET PASSWORD ──
-async function resetPw(id, name) {
+async function resetPw(id) {
+    const s = allStudents.find(x => x.id === id);
+    const name = s ? (s.full_name || 'this student') : 'this student';
     const ok = await confirmDialog({
         title: 'Reset password?',
         message: `A new password will be generated for ${name}. Their current password will stop working immediately.`,
@@ -454,7 +456,9 @@ async function resetPw(id, name) {
 }
 
 // ── DELETE ──
-async function deleteStudent(id, name) {
+async function deleteStudent(id) {
+    const s = allStudents.find(x => x.id === id);
+    const name = s ? (s.full_name || 'this student') : 'this student';
     const ok = await confirmDialog({
         title: `Delete ${name}?`,
         message: 'This permanently deletes the student account and all their data. This cannot be undone.',

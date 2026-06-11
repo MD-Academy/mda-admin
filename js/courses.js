@@ -125,7 +125,7 @@ function renderCourses() {
                 <div class="ec-actions">
                     <button class="btn btn-primary btn-sm" onclick="openCourse('${c.id}')">Open</button>
                     <button class="btn btn-ghost btn-sm" onclick="openCourseModal('${c.id}')">Edit</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteCourse('${c.id}', '${escapeHtml(c.name).replace(/'/g, "\\'")}')">Delete</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteCourse('${c.id}')">Delete</button>
                 </div>
             </div>`;
     }).join('')}</div>`;
@@ -196,7 +196,9 @@ async function saveCourse(e) {
     }
 }
 
-async function deleteCourse(id, name) {
+async function deleteCourse(id) {
+    const c = allCourses.find(x => x.id === id);
+    const name = c ? (c.name || 'this course') : 'this course';
     const subs = subjectCounts[id] || 0;
     const enrolMsg = IS_SUPER ? `${studentCounts[id] || 0} student enrolment(s) and ` : 'Any student enrolments and ';
     const ok = await confirmDialog({

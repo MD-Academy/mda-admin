@@ -55,14 +55,14 @@ function renderAdmins() {
                 <td>${a.status === 'suspended' ? '<span class="badge badge-red">Suspended</span>' : '<span class="badge badge-green">Active</span>'}</td>
                 <td>${formatDate(a.created_at)}</td>
                 <td class="row-actions">
-                    <button class="btn btn-ghost btn-sm" onclick="resetAdminPw('${a.id}', '${escapeHtml(a.full_name).replace(/'/g, "\\'")}')">Reset PW</button>
+                    <button class="btn btn-ghost btn-sm" onclick="resetAdminPw('${a.id}')">Reset PW</button>
                     <button class="btn btn-ghost btn-sm" onclick="resetAdminMfa('${a.id}')">Reset 2FA</button>
                     ${isSelf
                         ? '<button class="btn btn-ghost btn-sm" disabled style="opacity:.4;cursor:default;" title="You cannot block your own account">Block</button>'
                         : `<button class="btn btn-ghost btn-sm" onclick="toggleAdminStatus('${a.id}')">${a.status === 'suspended' ? 'Activate' : 'Block'}</button>`}
                     ${isSelf
                         ? '<button class="btn btn-ghost btn-sm" disabled style="opacity:.4;cursor:default;" title="You cannot delete your own account">Delete</button>'
-                        : `<button class="btn btn-danger btn-sm" onclick="deleteAdmin('${a.id}', '${escapeHtml(a.full_name).replace(/'/g, "\\'")}')">Delete</button>`}
+                        : `<button class="btn btn-danger btn-sm" onclick="deleteAdmin('${a.id}')">Delete</button>`}
                 </td>
             </tr>`;
     }).join('');
@@ -120,7 +120,9 @@ function showCredentials(res) {
     openModal('creds-modal');
 }
 
-async function resetAdminPw(id, name) {
+async function resetAdminPw(id) {
+    const a = allAdmins.find(x => x.id === id);
+    const name = a ? (a.full_name || 'this admin') : 'this admin';
     const ok = await confirmDialog({
         title: 'Reset password?',
         message: `A new password will be generated for ${name}. Their current password stops working immediately.`,
@@ -172,8 +174,10 @@ async function resetAdminMfa(id) {
     } catch (err) { alert(`Failed to reset 2FA: ${err.message}`); }
 }
 
-async function deleteAdmin(id, name) {
+async function deleteAdmin(id) {
     if (id === CURRENT_UID) return;
+    const a = allAdmins.find(x => x.id === id);
+    const name = a ? (a.full_name || 'this admin') : 'this admin';
     const ok = await confirmDialog({
         title: `Delete ${name}?`,
         message: 'This permanently deletes the staff account. This cannot be undone.',
