@@ -28,46 +28,118 @@ async function loadCourses() {
     });
 }
 
+// ── PAGINATION STATE ──
+let gbStudentIds = [];   // all enrolled student ids for the course
+let gbExamIds = [];      // exam ids assigned to the course
+let gbPage = 1, gbPageSize = 50, gbTotal = 0, gbSearch = '', gbSearchTimer = null;
+
 async function onCourseChange() {
     currentCourseId = document.getElementById('course-select').value;
     const container = document.getElementById('gradebook-container');
+    document.getElementById('pager').style.display = 'none';
     if (!currentCourseId) { container.innerHTML = `<div class="loader">Choose a course to see its score card.</div>`; return; }
     container.innerHTML = `<div class="loader">Loading score card…</div>`;
+    gbPage = 1; gbSearch = '';
+    const sb = document.getElementById('gb-search'); if (sb) sb.value = '';
 
-    // Enrolled students, exams assigned to this course, and any attempts.
+    // Enrolled students (ids), exams assigned to this course (cols).
     const [enrRes, ecRes] = await Promise.all([
         db.from('course_enrollments').select('student_id').eq('course_id', currentCourseId),
         db.from('exam_courses').select('exam_id').eq('course_id', currentCourseId)
     ]);
+    gbStudentIds = [...new Set((enrRes.data || []).map(r => r.student_id))];
+    gbExamIds = [...new Set((ecRes.data || []).map(r => r.exam_id))];
 
-    const studentIds = (enrRes.data || []).map(r => r.student_id);
-    const examIds = (ecRes.data || []).map(r => r.exam_id);
-
-    const [stuRes, exRes] = await Promise.all([
-        studentIds.length ? db.from('profiles').select('id, full_name').in('id', studentIds).order('full_name', { ascending: true }) : Promise.resolve({ data: [] }),
-        examIds.length ? db.from('exams').select('id, title, type, pass_threshold').in('id', examIds).order('created_at', { ascending: true }) : Promise.resolve({ data: [] })
-    ]);
-
-    gbStudents = stuRes.data || [];
+    const exRes = gbExamIds.length
+        ? await db.from('exams').select('id, title, type, pass_threshold').in('id', gbExamIds).order('created_at', { ascending: true })
+        : { data: [] };
     gbExams = exRes.data || [];
 
+    loadGbPage();
+}
+
+function onGbSearch() {
+    clearTimeout(gbSearchTimer);
+    gbSearchTimer = setTimeout(() => {
+        gbSearch = (document.getElementById('gb-search').value || '').trim();
+        gbPage = 1; loadGbPage();
+    }, 300);
+}
+function onGbPageSize() {
+    gbPageSize = parseInt(document.getElementById('page-size').value, 10) || 50;
+    gbPage = 1; loadGbPage();
+}
+function changeGbPage(delta) {
+    const totalPages = Math.max(1, Math.ceil(gbTotal / gbPageSize));
+    const n = gbPage + delta;
+    if (n < 1 || n > totalPages) return;
+    gbPage = n; loadGbPage(); window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Load one page of student rows + their attempts for this course's exams.
+async function loadGbPage() {
+    const container = document.getElementById('gradebook-container');
+    if (gbStudentIds.length === 0 || gbExams.length === 0) {
+        gbStudents = []; gbTotal = 0;
+        renderGradebook();
+        document.getElementById('pager').style.display = 'none';
+        return;
+    }
+    container.innerHTML = `<div class="loader">Loading score card…</div>`;
+
+    const from = (gbPage - 1) * gbPageSize, to = from + gbPageSize - 1;
+    let q = db.from('profiles').select('id, full_name', { count: 'exact' }).in('id', gbStudentIds);
+    const term = gbSearch.replace(/[%,()]/g, ' ').trim();
+    if (term) q = q.ilike('full_name', `%${term}%`);
+    q = q.order('full_name', { ascending: true }).range(from, to);
+
+    const { data, count, error } = await q;
+    if (error) { container.innerHTML = `<div class="empty-state"><h3 style="color:var(--red)">Couldn't load the score card</h3><p>${escapeHtml(error.message)}</p></div>`; return; }
+    gbStudents = data || [];
+    gbTotal = count || 0;
+
     gbAttempts = {};
-    if (examIds.length && studentIds.length) {
-        const atRes = await db.from('exam_attempts').select('id, exam_id, student_id, score, passed').in('exam_id', examIds);
+    const pageIds = gbStudents.map(s => s.id);
+    if (pageIds.length) {
+        const atRes = await db.from('exam_attempts').select('id, exam_id, student_id, score, passed')
+            .in('exam_id', gbExamIds).in('student_id', pageIds);
         (atRes.data || []).forEach(a => { gbAttempts[`${a.student_id}_${a.exam_id}`] = a; });
     }
 
     renderGradebook();
+    renderGbPager();
+}
+
+function renderGbPager() {
+    const pager = document.getElementById('pager');
+    if (gbStudents.length === 0 && !gbSearch) { pager.style.display = 'none'; return; }
+    pager.style.display = 'flex';
+    const totalPages = Math.max(1, Math.ceil(gbTotal / gbPageSize));
+    if (gbPage > totalPages) gbPage = totalPages;
+    const info = document.getElementById('pager-info');
+    if (gbTotal === 0) info.textContent = 'No students match.';
+    else {
+        const start = (gbPage - 1) * gbPageSize + 1, end = Math.min(gbPage * gbPageSize, gbTotal);
+        info.textContent = `Showing ${start}–${end} of ${gbTotal} student${gbTotal === 1 ? '' : 's'}`;
+    }
+    document.getElementById('page-label').textContent = `Page ${gbPage} of ${totalPages}`;
+    const prev = document.getElementById('prev-btn'), next = document.getElementById('next-btn');
+    prev.disabled = gbPage <= 1; next.disabled = gbPage >= totalPages;
+    prev.style.opacity = prev.disabled ? '.4' : '1'; next.style.opacity = next.disabled ? '.4' : '1';
 }
 
 function renderGradebook() {
     const container = document.getElementById('gradebook-container');
-    if (gbStudents.length === 0) {
+    if (gbStudentIds.length === 0) {
         container.innerHTML = `<div class="empty-state"><h3>No students enrolled</h3><p>Enrol students in this course (Courses → open the course) to see them here.</p></div>`;
         return;
     }
     if (gbExams.length === 0) {
         container.innerHTML = `<div class="empty-state"><h3>No exams assigned</h3><p>Assign exams to this course in the Exams section to build the score card.</p></div>`;
+        return;
+    }
+    if (gbStudents.length === 0) {
+        container.innerHTML = `<div class="empty-state"><h3>No students match</h3><p>No enrolled student matches "${escapeHtml(gbSearch)}".</p></div>`;
         return;
     }
 
