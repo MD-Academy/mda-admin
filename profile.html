@@ -12,6 +12,12 @@
         .avatar-big { width: 84px; height: 84px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
             background: linear-gradient(135deg, #20262f, #b91c5c); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 28px; }
         .avatar-big img { width: 100%; height: 100%; object-fit: cover; }
+        .prof-wrap { max-width: 640px; }
+        .prof-wrap .panel { padding: 30px 34px; }
+        .prof-wrap .form-field { margin-bottom: 22px; }
+        .prof-wrap .form-field input, .prof-wrap .form-field select { max-width: 360px; }
+        .prof-wrap .form-field input[disabled] { max-width: 460px; }
+        .prof-wrap .form-row { gap: 18px; }
     </style>
 </head>
 <body>
@@ -43,7 +49,7 @@
             const initials = (p.full_name || 'A').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
 
             document.getElementById('page-content').innerHTML = `
-                <div style="max-width:580px;">
+                <div class="prof-wrap">
                     <div class="panel" style="margin-bottom:22px; display:flex; align-items:center; gap:18px;">
                         <div class="avatar-big" id="avatar-big">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : initials}</div>
                         <div>
