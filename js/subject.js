@@ -182,7 +182,7 @@ async function loadAll() {
     const [lRes, rRes, mRes] = await Promise.all([
         db.from('lessons').select('id, title, description, image_url, order_index, is_visible').eq('room_id', ROOM_ID).order('order_index', { ascending: true }),
         db.from('recordings').select('id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, kind, is_visible').eq('room_id', ROOM_ID).eq('kind', 'lecture').order('recorded_date', { ascending: false }),
-        db.from('materials').select('id, lesson_id, title, type, storage_path, created_at, category, is_visible').eq('room_id', ROOM_ID).order('created_at', { ascending: false })
+        db.from('materials').select('id, lesson_id, title, type, storage_path, external_url, created_at, category, is_visible').eq('room_id', ROOM_ID).order('created_at', { ascending: false })
     ]);
 
     lessons = lRes.data || [];
@@ -466,7 +466,7 @@ async function deleteRecording(id) {
 function materialRowHtml(m) {
     return `
         <tr>
-            <td><strong>${escapeHtml(m.title)}</strong></td>
+            <td><strong>${escapeHtml(m.title)}</strong>${m.external_url ? ' <span title="External AWS link">🔗</span>' : ''}</td>
             <td><span class="badge badge-blue">${escapeHtml((m.type || 'file').toUpperCase())}</span></td>
             <td>${escapeHtml(lessonTitle(m.lesson_id))}</td>
             <td>${formatDate(m.created_at)}</td>
@@ -506,8 +506,26 @@ function openUploadModal(category = 'material') {
     document.getElementById('upload-alert').style.display = 'none';
     document.getElementById('upload-zone-text').textContent = 'Click to choose a file';
     document.getElementById('material-title').value = '';
+    document.getElementById('material-url').value = '';
     document.getElementById('material-lesson').innerHTML = lessonOptions();
+    setUploadSource('file');
     openModal('upload-modal');
+}
+
+// Toggle the Upload Material modal between a file upload and an external AWS link.
+function setUploadSource(src) {
+    const isLink = src === 'link';
+    document.getElementById('upload-source').value = isLink ? 'link' : 'file';
+    document.getElementById('src-file').style.display = isLink ? 'none' : '';
+    document.getElementById('src-link').style.display = isLink ? '' : 'none';
+    document.getElementById('src-btn-file').className = `btn btn-sm ${isLink ? 'btn-ghost' : 'btn-primary'}`;
+    document.getElementById('src-btn-link').className = `btn btn-sm ${isLink ? 'btn-primary' : 'btn-ghost'}`;
+    document.getElementById('upload-btn').textContent = isLink ? 'Save Link' : 'Upload';
+}
+
+function isHttpUrl(u) {
+    try { const x = new URL(u); return x.protocol === 'http:' || x.protocol === 'https:'; }
+    catch (e) { return false; }
 }
 
 function onFilePicked(e) {
@@ -528,6 +546,31 @@ async function saveUpload(e) {
     const category = document.getElementById('upload-category').value || 'material';
     const title = document.getElementById('material-title').value.trim();
     const lesson_id = document.getElementById('material-lesson').value || null;
+    const source = document.getElementById('upload-source').value || 'file';
+
+    // ── AWS link path (no file upload) ──
+    if (source === 'link') {
+        const url = document.getElementById('material-url').value.trim();
+        if (!title) { showModalAlert(alert, 'Please enter a title.', 'error'); return; }
+        if (!isHttpUrl(url)) { showModalAlert(alert, 'Please paste a valid link starting with https://', 'error'); return; }
+        if (!ensureSafe(alert, [['Title', title], ['Link', url]])) return;
+        const extMatch = url.split(/[?#]/)[0].match(/\.([a-z0-9]{2,5})$/i);
+        const linkType = extMatch ? extMatch[1].toLowerCase() : 'link';
+        btn.disabled = true; btn.textContent = 'Saving…';
+        try {
+            const ins = await db.from('materials').insert({
+                room_id: ROOM_ID, lesson_id, title, type: linkType, storage_path: null, external_url: url, category
+            });
+            if (ins.error) throw new Error(`Saving record failed: ${ins.error.message}`);
+            closeModal('upload-modal');
+            await loadAll();
+        } catch (err) {
+            showModalAlert(alert, err.message, 'error');
+        } finally {
+            btn.disabled = false; btn.textContent = 'Save Link';
+        }
+        return;
+    }
 
     if (!pickedFile) { showModalAlert(alert, 'Please choose a file to upload.', 'error'); return; }
     if (!title) { showModalAlert(alert, 'Please enter a title.', 'error'); return; }
@@ -573,6 +616,9 @@ async function saveUpload(e) {
 function previewMaterial(id, btnEl) {
     const m = materials.find(x => x.id === id);
     if (!m) return;
+
+    // External AWS links open directly — no signed URL needed.
+    if (m.external_url) { window.open(m.external_url, '_blank', 'noopener'); return; }
 
     // Open the tab synchronously (inside the click) so the browser does not
     // block it as a popup. We redirect it once the signed URL is ready.
@@ -640,13 +686,18 @@ async function deleteMaterial(id) {
     if (!m) return;
     const ok = await confirmDialog({
         title: 'Delete material?',
-        message: `"${m.title}" and its file will be permanently removed. This cannot be undone.`,
+        message: m.external_url
+            ? `"${m.title}" (AWS link) will be permanently removed. The file in AWS is not affected. This cannot be undone.`
+            : `"${m.title}" and its file will be permanently removed. This cannot be undone.`,
         confirmText: 'Delete',
         danger: true
     });
     if (!ok) return;
-    const rm = await db.storage.from(MATERIALS_BUCKET).remove([m.storage_path]);
-    if (rm.error) { alert(`Failed to remove file: ${rm.error.message}`); return; }
+    // Link-only materials have no stored file to remove.
+    if (m.storage_path) {
+        const rm = await db.storage.from(MATERIALS_BUCKET).remove([m.storage_path]);
+        if (rm.error) { alert(`Failed to remove file: ${rm.error.message}`); return; }
+    }
     const del = await db.from('materials').delete().eq('id', id);
     if (del.error) { alert(`File removed but record delete failed: ${del.error.message}`); return; }
     await loadAll();
