@@ -29,56 +29,96 @@ function todayISO() {
     return d.toISOString().slice(0, 10);
 }
 
-// ── LOAD ──
+// ── FILTER / PAGINATION STATE ──
+let currentPage = 1, pageSize = 25, totalCount = 0;
+let searchQuery = '', roomFilter = '', whenFilter = 'upcoming', dateFrom = '', dateTo = '', searchTimer = null;
+
+async function loadRoomOptions() {
+    const { data, error } = await db.from('rooms').select('id, name').order('order_index', { ascending: true });
+    if (error) { console.error('[calendar] could not load subjects:', error); return; }
+    calRooms = data || [];
+    const filter = document.getElementById('room-filter');
+    calRooms.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id; opt.textContent = r.name;
+        filter.appendChild(opt);
+    });
+}
+
+function onSearchInput() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        searchQuery = (document.getElementById('search-input').value || '').trim();
+        currentPage = 1; loadEntries();
+    }, 300);
+}
+function onFilterChange() {
+    roomFilter = document.getElementById('room-filter').value || '';
+    whenFilter = document.getElementById('when-filter').value || 'upcoming';
+    dateFrom = document.getElementById('date-from').value || '';
+    dateTo = document.getElementById('date-to').value || '';
+    pageSize = parseInt(document.getElementById('page-size').value, 10) || 25;
+    currentPage = 1; loadEntries();
+}
+function changePage(delta) {
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const n = currentPage + delta;
+    if (n < 1 || n > totalPages) return;
+    currentPage = n; loadEntries(); window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── LOAD (server-side: subject + when + date range + search + pagination) ──
 async function loadEntries() {
     const tbody = document.getElementById('entry-tbody');
     tbody.innerHTML = `<tr><td colspan="5" class="loader">Loading schedule…</td></tr>`;
 
-    const [eRes, roomsRes] = await Promise.all([
-        db.from('schedule_entries').select('id, room_id, entry_date, topic, details').order('entry_date', { ascending: true }),
-        db.from('rooms').select('id, name').order('order_index', { ascending: true })
-    ]);
+    const today = todayISO();
+    const upcoming = whenFilter === 'upcoming';
+    const from = (currentPage - 1) * pageSize, to = from + pageSize - 1;
 
-    if (eRes.error) {
-        tbody.innerHTML = `<tr><td colspan="5" class="loader" style="color:var(--red)">Error loading schedule: ${escapeHtml(eRes.error.message)}</td></tr>`;
+    let q = db.from('schedule_entries').select('id, room_id, entry_date, topic, details', { count: 'exact' });
+    if (roomFilter === '__none__') q = q.is('room_id', null);
+    else if (roomFilter) q = q.eq('room_id', roomFilter);
+    if (whenFilter === 'upcoming') q = q.gte('entry_date', today);
+    else if (whenFilter === 'past') q = q.lt('entry_date', today);
+    if (dateFrom) q = q.gte('entry_date', dateFrom);
+    if (dateTo) q = q.lte('entry_date', dateTo);
+    const term = searchQuery.replace(/[%,()]/g, ' ').trim();
+    if (term) q = q.ilike('topic', `%${term}%`);
+    q = q.order('entry_date', { ascending: upcoming }).range(from, to);   // upcoming: soonest first; else newest first
+
+    const { data, error, count } = await q;
+    if (error) {
+        tbody.innerHTML = `<tr><td colspan="5" class="loader" style="color:var(--red)">Error loading schedule: ${escapeHtml(error.message)}</td></tr>`;
         return;
     }
-
-    allEntries = eRes.data || [];
-    calRooms = roomsRes.data || [];
-
-    const filter = document.getElementById('room-filter');
-    if (filter && filter.options.length <= 2) {
-        calRooms.forEach(r => {
-            const opt = document.createElement('option');
-            opt.value = r.id; opt.textContent = r.name;
-            filter.appendChild(opt);
-        });
-    }
-
-    applyFilters();
+    allEntries = data || [];
+    totalCount = count || 0;
+    renderEntries(allEntries);
+    renderPager();
 }
 
-function applyFilters() {
-    const q = (document.getElementById('search-input')?.value || '').toLowerCase();
-    const roomId = document.getElementById('room-filter')?.value || '';
-    const when = document.getElementById('when-filter')?.value || 'upcoming';
-    const today = todayISO();
-
-    let list = allEntries;
-    if (roomId === '__none__') list = list.filter(e => !e.room_id);
-    else if (roomId) list = list.filter(e => e.room_id === roomId);
-    if (when === 'upcoming') list = list.filter(e => e.entry_date >= today);
-    else if (when === 'past') list = list.filter(e => e.entry_date < today);
-    if (q) list = list.filter(e => (e.topic || '').toLowerCase().includes(q));
-
-    renderEntries(list);
+function renderPager() {
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    if (currentPage > totalPages) currentPage = totalPages;
+    const info = document.getElementById('pager-info');
+    if (!info) return;
+    if (totalCount === 0) info.textContent = 'No entries match.';
+    else {
+        const start = (currentPage - 1) * pageSize + 1, end = Math.min(currentPage * pageSize, totalCount);
+        info.textContent = `Showing ${start}–${end} of ${totalCount} entr${totalCount === 1 ? 'y' : 'ies'}`;
+    }
+    document.getElementById('page-label').textContent = `Page ${currentPage} of ${totalPages}`;
+    const prev = document.getElementById('prev-btn'), next = document.getElementById('next-btn');
+    prev.disabled = currentPage <= 1; next.disabled = currentPage >= totalPages;
+    prev.style.opacity = prev.disabled ? '.4' : '1'; next.style.opacity = next.disabled ? '.4' : '1';
 }
 
 function renderEntries(list) {
     const tbody = document.getElementById('entry-tbody');
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="loader">No schedule entries found. Click "Add Entry" to create one.</td></tr>`;
+        const any = searchQuery || roomFilter || dateFrom || dateTo || whenFilter !== 'all';
+        tbody.innerHTML = `<tr><td colspan="5" class="loader">${any ? 'No entries match your filters.' : 'No schedule entries yet. Click "Add Entry" to create one.'}</td></tr>`;
         return;
     }
     tbody.innerHTML = list.map(e => `
