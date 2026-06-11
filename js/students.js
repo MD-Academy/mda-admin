@@ -207,6 +207,10 @@ async function createSingleStudent(e) {
         showModalAlert(alert, 'Please enter both name and email.', 'error');
         return;
     }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        showModalAlert(alert, 'Please enter a valid email address — the student will receive their login details here.', 'error');
+        return;
+    }
     if (!ensureSafe(alert, [['Full Name', full_name], ['Email', email]])) return;
 
     btn.disabled = true; btn.textContent = 'Creating…';
@@ -215,7 +219,7 @@ async function createSingleStudent(e) {
         const res = await apiRequest('POST', '/admin/create-student', { full_name, email, expiry_date });
         closeModal('create-modal');
         document.getElementById('single-form').reset();
-        showCredentials([{ full_name: res.full_name, email: res.email, password: res.password }]);
+        showCredentials([{ full_name: res.full_name, email: res.email, password: res.password, email_sent: res.email_sent }]);
         loadStudents();
     } catch (err) {
         showModalAlert(alert, err.message, 'error');
@@ -317,13 +321,20 @@ async function runBulkCreate() {
 // ── CREDENTIALS DISPLAY ──
 function showCredentials(list) {
     const body = document.getElementById('creds-body');
+    const showMail = list.some(c => c.email_sent !== undefined);
+    const anyUnsent = list.some(c => c.email_sent === false);
+    const mailCell = (c) => c.email_sent === undefined ? ''
+        : (c.email_sent
+            ? '<td><span class="badge badge-green">✅ Sent</span></td>'
+            : '<td><span class="badge badge-red">⚠️ Not sent</span></td>');
     body.innerHTML = `
-        <p class="creds-warning">⚠️ Save these credentials now — passwords are shown only once. Hand them to the students.</p>
+        <p class="creds-warning">⚠️ Save these credentials now — passwords are shown only once.${showMail ? ' A welcome email was sent automatically where shown below; hand over manually for any marked "Not sent."' : ' Hand them to the students.'}</p>
+        ${anyUnsent ? '<div class="alert error" style="display:block;margin-bottom:12px;">Some welcome emails could not be sent (check the email address or Resend setup). Those students must be given their details manually.</div>' : ''}
         <div class="preview-table-wrap">
             <table class="data-table">
-                <thead><tr><th>Name</th><th>Email</th><th>Password</th></tr></thead>
+                <thead><tr><th>Name</th><th>Email</th><th>Password</th>${showMail ? '<th>Welcome email</th>' : ''}</tr></thead>
                 <tbody>${list.map(c => `
-                    <tr><td>${escapeHtml(c.full_name)}</td><td>${escapeHtml(c.email)}</td><td><code>${escapeHtml(c.password)}</code></td></tr>
+                    <tr><td>${escapeHtml(c.full_name)}</td><td>${escapeHtml(c.email)}</td><td><code>${escapeHtml(c.password)}</code></td>${showMail ? mailCell(c) : ''}</tr>
                 `).join('')}</tbody>
             </table>
         </div>
