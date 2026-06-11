@@ -53,8 +53,8 @@
                     <div class="panel" style="margin-bottom:22px; display:flex; align-items:center; gap:18px;">
                         <div class="avatar-big" id="avatar-big">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : initials}</div>
                         <div>
-                            <button class="btn btn-primary btn-sm" id="avatar-btn">Upload Photo</button>
-                            <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
+                            <button class="btn btn-primary btn-sm" id="prof-avatar-btn">Upload Photo</button>
+                            <input type="file" id="prof-avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
                             <div class="hint" id="avatar-msg" style="margin-top:8px;">PNG, JPG, WEBP or GIF — up to 500&nbsp;KB.</div>
                         </div>
                     </div>
@@ -104,8 +104,8 @@
             // Avatar
             const msg = document.getElementById('avatar-msg');
             const showMsg = (t, err) => { msg.textContent = t; msg.style.color = err ? 'var(--red)' : 'var(--green)'; };
-            document.getElementById('avatar-btn').onclick = () => document.getElementById('avatar-input').click();
-            document.getElementById('avatar-input').onchange = async (e) => {
+            document.getElementById('prof-avatar-btn').onclick = () => document.getElementById('prof-avatar-input').click();
+            document.getElementById('prof-avatar-input').onchange = async (e) => {
                 const file = e.target.files[0]; e.target.value = '';
                 if (!file) return;
                 const ext = (file.name.split('.').pop() || '').toLowerCase();
@@ -121,6 +121,7 @@
                     const upd = await db.from('profiles').update({ avatar_url: url }).eq('id', uid);
                     if (upd.error) throw new Error(upd.error.message);
                     document.getElementById('avatar-big').innerHTML = `<img src="${esc(url)}" alt="">`;
+                    const ti = document.getElementById('avatar-inner'); if (ti) ti.innerHTML = `<img src="${esc(url)}" alt="">`;
                     refreshCache({ avatar_url: url });
                     showMsg('Photo updated!', false);
                 } catch (err) { showMsg(err.message, true); }
