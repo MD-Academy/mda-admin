@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — My Profile</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <style>
+        .avatar-big { width: 84px; height: 84px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+            background: linear-gradient(135deg, #20262f, #b91c5c); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 28px; }
+        .avatar-big img { width: 100%; height: 100%; object-fit: cover; }
+    </style>
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        function esc(s){ return s ? String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
+        const ALLOWED_IMG = ['png','jpg','jpeg','webp','gif'];
+        const AVATAR_MAX = 500 * 1024;
+        const TITLES = ['', 'Dr', 'Prof', 'Mr', 'Mrs', 'Ms', 'Mx'];
+        let AUTH = null;
+
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+            AUTH = auth;
+            renderLayout('profile', 'My Profile', 'Your account & security settings', auth.profile);
+
+            const uid = auth.session.user.id;
+            const email = auth.session.user.email || '—';
+            const { data: prof } = await db.from('profiles').select('full_name, title, avatar_url').eq('id', uid).single();
+            const p = prof || {};
+            const initials = (p.full_name || 'A').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+
+            document.getElementById('page-content').innerHTML = `
+                <div style="max-width:580px;">
+                    <div class="panel" style="margin-bottom:22px; display:flex; align-items:center; gap:18px;">
+                        <div class="avatar-big" id="avatar-big">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : initials}</div>
+                        <div>
+                            <button class="btn btn-primary btn-sm" id="avatar-btn">Upload Photo</button>
+                            <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
+                            <div class="hint" id="avatar-msg" style="margin-top:8px;">PNG, JPG, WEBP or GIF — up to 500&nbsp;KB.</div>
+                        </div>
+                    </div>
+
+                    <div class="panel" style="margin-bottom:22px;">
+                        <div class="section-title" style="margin-bottom:16px;">Details</div>
+                        <div class="alert" id="prof-alert" style="display:none;"></div>
+                        <form id="prof-form">
+                            <div class="form-row">
+                                <div class="form-field" style="max-width:140px;">
+                                    <label>Title</label>
+                                    <select id="f-title">${TITLES.map(t => `<option value="${t}" ${t===(p.title||'')?'selected':''}>${t || '—'}</option>`).join('')}</select>
+                                </div>
+                                <div class="form-field">
+                                    <label>Full Name</label>
+                                    <input type="text" id="f-name" value="${esc(p.full_name||'')}" required>
+                                </div>
+                            </div>
+                            <div class="form-field">
+                                <label>Email <span style="color:var(--text-muted);font-weight:400;">(read-only — contact the office to change)</span></label>
+                                <input type="text" value="${esc(email)}" disabled>
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="prof-btn">Save Changes</button>
+                        </form>
+                    </div>
+
+                    <div class="panel" style="margin-bottom:22px;">
+                        <div class="section-title" style="margin-bottom:16px;">Change Password</div>
+                        <div class="alert" id="pw-alert" style="display:none;"></div>
+                        <form id="pw-form">
+                            <div class="form-field"><label>New Password</label><input type="password" id="pw1" placeholder="At least 8 characters" required></div>
+                            <div class="form-field"><label>Confirm New Password</label><input type="password" id="pw2" placeholder="Re-type the new password" required></div>
+                            <button type="submit" class="btn btn-primary" id="pw-btn">Update Password</button>
+                        </form>
+                    </div>
+
+                    <div class="panel">
+                        <div class="section-title" style="margin-bottom:10px;">Two-Factor Authentication (2FA)</div>
+                        <p class="hint">Add an extra layer of security with an authenticator app. <strong>Coming in the next update.</strong></p>
+                    </div>
+                </div>`;
+
+            function refreshCache(patch) {
+                try { const k = `mda_profile_${uid}`; const c = JSON.parse(sessionStorage.getItem(k) || '{}'); Object.assign(c, patch); sessionStorage.setItem(k, JSON.stringify(c)); } catch(e){}
+            }
+
+            // Avatar
+            const msg = document.getElementById('avatar-msg');
+            const showMsg = (t, err) => { msg.textContent = t; msg.style.color = err ? 'var(--red)' : 'var(--green)'; };
+            document.getElementById('avatar-btn').onclick = () => document.getElementById('avatar-input').click();
+            document.getElementById('avatar-input').onchange = async (e) => {
+                const file = e.target.files[0]; e.target.value = '';
+                if (!file) return;
+                const ext = (file.name.split('.').pop() || '').toLowerCase();
+                if (!file.type.startsWith('image/') || !ALLOWED_IMG.includes(ext)) { showMsg('Please choose an image (PNG, JPG, WEBP or GIF).', true); return; }
+                if (file.size > AVATAR_MAX) { showMsg(`Image too large (${(file.size/1024).toFixed(0)} KB). Max 500 KB.`, true); return; }
+                showMsg('Uploading…', false);
+                try {
+                    const path = `${uid}/avatar.${ext}`;
+                    const up = await db.storage.from('avatars').upload(path, file, { contentType: file.type, upsert: true });
+                    if (up.error) throw new Error(up.error.message);
+                    const { data: pub } = db.storage.from('avatars').getPublicUrl(path);
+                    const url = `${pub.publicUrl}?t=${Date.now()}`;
+                    const upd = await db.from('profiles').update({ avatar_url: url }).eq('id', uid);
+                    if (upd.error) throw new Error(upd.error.message);
+                    document.getElementById('avatar-big').innerHTML = `<img src="${esc(url)}" alt="">`;
+                    refreshCache({ avatar_url: url });
+                    showMsg('Photo updated!', false);
+                } catch (err) { showMsg(err.message, true); }
+            };
+
+            // Details
+            const pAlert = document.getElementById('prof-alert');
+            document.getElementById('prof-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                pAlert.style.display = 'none';
+                const title = document.getElementById('f-title').value;
+                const full_name = document.getElementById('f-name').value.trim();
+                const btn = document.getElementById('prof-btn');
+                if (!full_name) { pAlert.className='alert error'; pAlert.textContent='Full name is required.'; pAlert.style.display='block'; return; }
+                if (!ensureSafe(pAlert, [['Full Name', full_name], ['Title', title]])) return;
+                btn.disabled = true; btn.textContent = 'Saving…';
+                try {
+                    const { error } = await db.from('profiles').update({ full_name, title: title || null }).eq('id', uid);
+                    if (error) throw new Error(error.message);
+                    refreshCache({ full_name });
+                    pAlert.className='alert success'; pAlert.textContent='Profile updated.'; pAlert.style.display='block';
+                } catch (err) { pAlert.className='alert error'; pAlert.textContent=err.message; pAlert.style.display='block'; }
+                finally { btn.disabled=false; btn.textContent='Save Changes'; }
+            });
+
+            // Password
+            const pwAlert = document.getElementById('pw-alert');
+            document.getElementById('pw-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                pwAlert.style.display = 'none';
+                const p1 = document.getElementById('pw1').value, p2 = document.getElementById('pw2').value;
+                const btn = document.getElementById('pw-btn');
+                if (p1.length < 8) { pwAlert.className='alert error'; pwAlert.textContent='Password must be at least 8 characters.'; pwAlert.style.display='block'; return; }
+                if (p1 !== p2) { pwAlert.className='alert error'; pwAlert.textContent='The two passwords do not match.'; pwAlert.style.display='block'; return; }
+                btn.disabled = true; btn.textContent = 'Updating…';
+                try {
+                    const { error } = await db.auth.updateUser({ password: p1 });
+                    if (error) throw new Error(error.message);
+                    document.getElementById('pw-form').reset();
+                    pwAlert.className='alert success'; pwAlert.textContent='Password updated successfully.'; pwAlert.style.display='block';
+                } catch (err) { pwAlert.className='alert error'; pwAlert.textContent=err.message; pwAlert.style.display='block'; }
+                finally { btn.disabled=false; btn.textContent='Update Password'; }
+            });
+        })();
+    </script>
+</body>
+</html>
