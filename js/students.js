@@ -1,32 +1,148 @@
-// Students management page logic.
+// Students management page logic. Server-side search / course filter / pagination
+// so the list stays fast at thousands of students.
 
-let allStudents = [];
+let allStudents = [];          // the current page of rows
 let selectedIds = new Set();
+let courseMap = {};            // course_id -> name
+let studentCourses = {};       // student_id -> [course names] (current page)
+let currentPage = 1;
+let pageSize = 25;
+let totalCount = 0;
+let searchQuery = '';
+let courseFilter = '';
+let searchTimer = null;
+let EMAIL_COL = true;          // falls back to false if the profiles.email migration isn't applied yet
+
+// Populate the course-filter dropdown once.
+async function loadCourseOptions() {
+    const { data, error } = await db.from('courses').select('id, name').order('name', { ascending: true });
+    if (error) { console.error('[students] could not load courses:', error); return; }
+    courseMap = {};
+    const sel = document.getElementById('course-filter');
+    (data || []).forEach(c => {
+        courseMap[c.id] = c.name;
+        const opt = document.createElement('option');
+        opt.value = c.id; opt.textContent = c.name;
+        sel.appendChild(opt);
+    });
+}
+
+function onSearchInput() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        searchQuery = (document.getElementById('search-input').value || '').trim();
+        currentPage = 1;
+        loadStudents();
+    }, 300);
+}
+
+function onFilterChange() {
+    courseFilter = document.getElementById('course-filter').value || '';
+    pageSize = parseInt(document.getElementById('page-size').value, 10) || 25;
+    currentPage = 1;
+    loadStudents();
+}
+
+function changePage(delta) {
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const next = currentPage + delta;
+    if (next < 1 || next > totalPages) return;
+    currentPage = next;
+    loadStudents();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 async function loadStudents() {
     const tbody = document.getElementById('students-tbody');
-    tbody.innerHTML = `<tr><td colspan="5" class="loader">Loading students…</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="loader">Loading students…</td></tr>`;
 
-    const { data, error } = await db
-        .from('profiles')
-        .select('id, full_name, status, expiry_date, created_at')
-        .eq('role', 'student')
-        .order('created_at', { ascending: false });
+    // If filtering by course, get that course's enrolled student IDs first.
+    let idFilter = null;
+    if (courseFilter) {
+        const { data: enr, error: enrErr } = await db
+            .from('course_enrollments').select('student_id').eq('course_id', courseFilter);
+        if (enrErr) {
+            tbody.innerHTML = `<tr><td colspan="7" class="loader" style="color:var(--red)">Couldn't load that course's students: ${escapeHtml(enrErr.message)}</td></tr>`;
+            return;
+        }
+        idFilter = [...new Set((enr || []).map(e => e.student_id))];
+        if (idFilter.length === 0) {
+            allStudents = []; totalCount = 0;
+            renderStudents([]); renderPager();
+            return;
+        }
+    }
 
+    const from = (currentPage - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const cols = EMAIL_COL
+        ? 'id, full_name, email, status, expiry_date, created_at'
+        : 'id, full_name, status, expiry_date, created_at';
+    let q = db.from('profiles').select(cols, { count: 'exact' }).eq('role', 'student');
+    if (idFilter) q = q.in('id', idFilter);
+    const term = searchQuery.replace(/[%,()]/g, ' ').trim();   // keep the .or() filter syntax safe
+    if (term) q = q.or(EMAIL_COL ? `full_name.ilike.%${term}%,email.ilike.%${term}%` : `full_name.ilike.%${term}%`);
+    q = q.order('created_at', { ascending: false }).range(from, to);
+
+    const { data, error, count } = await q;
     if (error) {
-        tbody.innerHTML = `<tr><td colspan="5" class="loader" style="color:var(--red)">Error loading students: ${error.message}</td></tr>`;
+        // If the email column isn't there yet, retry name-only so the page still works.
+        if (EMAIL_COL && /email/i.test(error.message || '')) { EMAIL_COL = false; return loadStudents(); }
+        tbody.innerHTML = `<tr><td colspan="7" class="loader" style="color:var(--red)">Error loading students: ${escapeHtml(error.message)}</td></tr>`;
         return;
     }
 
     allStudents = data || [];
+    totalCount = count || 0;
+
+    // Fetch the enrolled course(s) for just this page of students (<=100 ids, safe).
+    studentCourses = {};
+    const ids = allStudents.map(s => s.id);
+    if (ids.length) {
+        const { data: enr, error: cErr } = await db
+            .from('course_enrollments').select('student_id, course_id').in('student_id', ids);
+        if (cErr) console.error('[students] could not load enrolments:', cErr);
+        (enr || []).forEach(e => {
+            const nm = courseMap[e.course_id] || 'Course';
+            (studentCourses[e.student_id] = studentCourses[e.student_id] || []).push(nm);
+        });
+    }
+
     renderStudents(allStudents);
+    renderPager();
+}
+
+function renderPager() {
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    if (currentPage > totalPages) currentPage = totalPages;
+    const info = document.getElementById('pager-info');
+    const label = document.getElementById('page-label');
+    const prev = document.getElementById('prev-btn');
+    const next = document.getElementById('next-btn');
+    if (!info) return;
+    if (totalCount === 0) {
+        info.textContent = 'No students match.';
+    } else {
+        const start = (currentPage - 1) * pageSize + 1;
+        const end = Math.min(currentPage * pageSize, totalCount);
+        info.textContent = `Showing ${start}–${end} of ${totalCount} student${totalCount === 1 ? '' : 's'}`;
+    }
+    label.textContent = `Page ${currentPage} of ${totalPages}`;
+    prev.disabled = currentPage <= 1;
+    next.disabled = currentPage >= totalPages;
+    prev.style.opacity = prev.disabled ? '.4' : '1';
+    next.style.opacity = next.disabled ? '.4' : '1';
 }
 
 function renderStudents(students) {
     const tbody = document.getElementById('students-tbody');
 
     if (students.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="loader">No students yet. Click "Add Student" or "Bulk Import" to create accounts.</td></tr>`;
+        const msg = (searchQuery || courseFilter)
+            ? 'No students match your search/filter.'
+            : 'No students yet. Click "Add Student" or "Bulk Import" to create accounts.';
+        tbody.innerHTML = `<tr><td colspan="7" class="loader">${msg}</td></tr>`;
         updateBulkBar();
         return;
     }
@@ -45,14 +161,19 @@ function renderStudents(students) {
         }
 
         const expiryText = s.expiry_date ? formatDate(s.expiry_date) : 'No expiry';
+        const courses = studentCourses[s.id] || [];
+        const courseCell = courses.length
+            ? courses.map(c => `<span class="badge badge-blue" style="margin:2px 4px 2px 0;">${escapeHtml(c)}</span>`).join('')
+            : '<span style="color:var(--text-muted);">— none —</span>';
 
         return `
             <tr>
                 <td><input type="checkbox" class="row-check" ${selectedIds.has(s.id) ? 'checked' : ''} onclick="toggleSelect('${s.id}', this)"></td>
                 <td><strong>${escapeHtml(s.full_name || '—')}</strong></td>
+                <td>${escapeHtml(s.email || '—')}</td>
+                <td>${courseCell}</td>
                 <td>${statusBadge}</td>
                 <td>${expiryText}</td>
-                <td>${formatDate(s.created_at)}</td>
                 <td class="row-actions">
                     <button class="btn btn-ghost btn-sm" onclick="openActivity('${s.id}')">Activity</button>
                     <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
@@ -74,20 +195,17 @@ function toggleSelect(id, cb) {
 }
 
 function toggleSelectAll(cb) {
-    // Select/deselect everything currently shown (respects the search filter).
-    const q = (document.getElementById('search-input')?.value || '').toLowerCase();
-    const visible = allStudents.filter(s => (s.full_name || '').toLowerCase().includes(q));
-    if (cb.checked) visible.forEach(s => selectedIds.add(s.id));
-    else visible.forEach(s => selectedIds.delete(s.id));
-    renderStudents(visible);
+    // Select/deselect every student on the current page.
+    if (cb.checked) allStudents.forEach(s => selectedIds.add(s.id));
+    else allStudents.forEach(s => selectedIds.delete(s.id));
+    renderStudents(allStudents);
 }
 
 function clearSelection() {
     selectedIds.clear();
     const sa = document.getElementById('select-all');
     if (sa) sa.checked = false;
-    const q = (document.getElementById('search-input')?.value || '').toLowerCase();
-    renderStudents(allStudents.filter(s => (s.full_name || '').toLowerCase().includes(q)));
+    renderStudents(allStudents);
 }
 
 function updateBulkBar() {
@@ -180,12 +298,6 @@ function escapeHtml(str) {
 function formatDate(d) {
     if (!d) return '—';
     return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-// ── SEARCH ──
-function filterStudents() {
-    const q = document.getElementById('search-input').value.toLowerCase();
-    renderStudents(allStudents.filter(s => (s.full_name || '').toLowerCase().includes(q)));
 }
 
 // ── MODALS ──

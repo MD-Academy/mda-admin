@@ -169,8 +169,16 @@
                 <div class="toolbar">
                     <div class="search-box">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" id="search-input" placeholder="Search students by name…" oninput="filterStudents()">
+                        <input type="text" id="search-input" placeholder="Search by name or email…" oninput="onSearchInput()">
                     </div>
+                    <select id="course-filter" onchange="onFilterChange()" style="height:42px;border:1.5px solid var(--border);border-radius:10px;padding:0 12px;font-family:'Inter',sans-serif;font-size:14px;background:#fff;cursor:pointer;">
+                        <option value="">All courses</option>
+                    </select>
+                    <select id="page-size" onchange="onFilterChange()" style="height:42px;border:1.5px solid var(--border);border-radius:10px;padding:0 12px;font-family:'Inter',sans-serif;font-size:14px;background:#fff;cursor:pointer;">
+                        <option value="25">25 / page</option>
+                        <option value="50">50 / page</option>
+                        <option value="100">100 / page</option>
+                    </select>
                     <div class="toolbar-actions">
                         <button class="btn btn-ghost" onclick="openModal('bulk-modal')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -196,21 +204,31 @@
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th style="width:36px;"><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)" title="Select all"></th>
+                                <th style="width:36px;"><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)" title="Select all on this page"></th>
                                 <th>Name</th>
+                                <th>Email</th>
+                                <th>Course(s)</th>
                                 <th>Status</th>
                                 <th>Expiry</th>
-                                <th>Created</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="students-tbody">
-                            <tr><td colspan="6" class="loader">Loading students…</td></tr>
+                            <tr><td colspan="7" class="loader">Loading students…</td></tr>
                         </tbody>
                     </table>
+                    <div id="pager" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 4px 4px;flex-wrap:wrap;">
+                        <div id="pager-info" style="font-size:13px;color:var(--text-muted);"></div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <button class="btn btn-ghost btn-sm" id="prev-btn" onclick="changePage(-1)">← Prev</button>
+                            <span id="page-label" style="font-size:13px;color:var(--text);"></span>
+                            <button class="btn btn-ghost btn-sm" id="next-btn" onclick="changePage(1)">Next →</button>
+                        </div>
+                    </div>
                 </div>
             `;
 
+            await loadCourseOptions();
             loadStudents();
         })();
     </script>
