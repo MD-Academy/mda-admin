@@ -107,20 +107,7 @@ async function toggleExamVis(id) {
     applyFilters();
 }
 
-// ── COURSE CHECKLIST ──
-function renderExamCourseChecklist(selected = []) {
-    const el = document.getElementById('exam-course-list');
-    if (allCourses.length === 0) {
-        el.innerHTML = `<div class="empty">No courses exist yet. Create one in the Courses section first.</div>`;
-        return;
-    }
-    const sel = new Set(selected);
-    el.innerHTML = allCourses.map(c => `
-        <label class="check-row"><input type="checkbox" value="${c.id}" ${sel.has(c.id) ? 'checked' : ''}> ${escapeHtml(c.name)}</label>`).join('');
-}
-function checkedExamCourseIds() {
-    return Array.from(document.querySelectorAll('#exam-course-list input[type="checkbox"]:checked')).map(cb => cb.value);
-}
+// Exam→course assignment now lives in the Course editor (Courses → open a course → Exams).
 
 // ── TYPE / FILE ──
 function onTypeChange() {
@@ -156,7 +143,6 @@ function openExamModal(id = null) {
         if (e.type === 'pdf' && e.storage_path) {
             document.getElementById('exam-file-current').textContent = 'A PDF is already uploaded. Choose a file only to replace it.';
         }
-        renderExamCourseChecklist(examCourseLinks[e.id] || []);
     } else {
         document.getElementById('exam-modal-title').textContent = 'Add Exam';
         document.getElementById('exam-id').value = '';
@@ -165,7 +151,6 @@ function openExamModal(id = null) {
         document.getElementById('exam-type').value = 'manual';
         document.getElementById('exam-threshold').value = 70;
         document.getElementById('exam-timelimit').value = '';
-        renderExamCourseChecklist([]);
     }
     onTypeChange();
     openModal('exam-modal');
@@ -181,7 +166,6 @@ async function saveExam(ev) {
     const type = document.getElementById('exam-type').value;
     const threshold = parseInt(document.getElementById('exam-threshold').value, 10);
     const timelimit = document.getElementById('exam-timelimit').value;
-    const courseIds = checkedExamCourseIds();
     const existing = id ? allExams.find(x => x.id === id) : null;
 
     const payload = {
@@ -219,13 +203,6 @@ async function saveExam(ev) {
             const res = await db.from('exams').insert(payload).select('id').single();
             if (res.error) throw new Error(res.error.message);
             examId = res.data.id;
-        }
-
-        // Reset course assignments.
-        await db.from('exam_courses').delete().eq('exam_id', examId);
-        if (courseIds.length) {
-            const linkRes = await db.from('exam_courses').insert(courseIds.map(cid => ({ exam_id: examId, course_id: cid })));
-            if (linkRes.error) throw new Error(linkRes.error.message);
         }
 
         closeModal('exam-modal');
