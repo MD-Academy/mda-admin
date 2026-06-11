@@ -34,6 +34,11 @@ async function requireAdmin() {
         window.location.href = 'index.html';
         return null;
     }
+    // If 2FA is enrolled but not yet completed this session, send back to login to finish it.
+    try {
+        const { data: aal } = await db.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') { window.location.href = 'index.html'; return null; }
+    } catch (e) { /* ignore */ }
     sessionStorage.setItem(cacheKey, JSON.stringify(profile));
     return { session, profile };
 }

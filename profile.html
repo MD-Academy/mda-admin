@@ -22,6 +22,7 @@
     <script src="js/auth.js"></script>
     <script src="js/layout.js"></script>
     <script src="js/ui.js"></script>
+    <script src="js/mfa.js"></script>
     <script>
         function esc(s){ return s ? String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
         const ALLOWED_IMG = ['png','jpg','jpeg','webp','gif'];
@@ -86,7 +87,7 @@
 
                     <div class="panel">
                         <div class="section-title" style="margin-bottom:10px;">Two-Factor Authentication (2FA)</div>
-                        <p class="hint">Add an extra layer of security with an authenticator app. <strong>Coming in the next update.</strong></p>
+                        <div id="mfa-section"></div>
                     </div>
                 </div>`;
 
@@ -157,6 +158,9 @@
                 } catch (err) { pwAlert.className='alert error'; pwAlert.textContent=err.message; pwAlert.style.display='block'; }
                 finally { btn.disabled=false; btn.textContent='Update Password'; }
             });
+
+            // 2FA section
+            renderMfaSection('mfa-section');
         })();
     </script>
 </body>
