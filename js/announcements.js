@@ -19,39 +19,70 @@ function formatDateTime(d) {
     return new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-// ── LOAD ──
+// ── FILTER / PAGINATION STATE ──
+let currentPage = 1, pageSize = 25, totalCount = 0, searchQuery = '', searchTimer = null;
+
+function onSearchInput() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        searchQuery = (document.getElementById('search-input').value || '').trim();
+        currentPage = 1; loadAnnouncements();
+    }, 300);
+}
+function onFilterChange() {
+    pageSize = parseInt(document.getElementById('page-size').value, 10) || 25;
+    currentPage = 1; loadAnnouncements();
+}
+function changePage(delta) {
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const n = currentPage + delta;
+    if (n < 1 || n > totalPages) return;
+    currentPage = n; loadAnnouncements(); window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── LOAD (server-side: search + pagination) ──
 async function loadAnnouncements() {
     const list = document.getElementById('ann-list');
     list.innerHTML = `<div class="loader">Loading announcements…</div>`;
 
-    const { data, error } = await db
-        .from('announcements')
-        .select('id, title, body, posted_at, created_at')
-        .order('posted_at', { ascending: false });
+    const from = (currentPage - 1) * pageSize, to = from + pageSize - 1;
+    let q = db.from('announcements').select('id, title, body, posted_at, created_at', { count: 'exact' });
+    const term = searchQuery.replace(/[%,()]/g, ' ').trim();
+    if (term) q = q.or(`title.ilike.%${term}%,body.ilike.%${term}%`);
+    q = q.order('posted_at', { ascending: false }).range(from, to);
 
+    const { data, error, count } = await q;
     if (error) {
         list.innerHTML = `<div class="loader" style="color:var(--red)">Error loading announcements: ${escapeHtml(error.message)}</div>`;
         return;
     }
-
     allAnnouncements = data || [];
-    applyFilters();
+    totalCount = count || 0;
+    renderAnnouncements(allAnnouncements);
+    renderPager();
 }
 
-function applyFilters() {
-    const q = (document.getElementById('search-input')?.value || '').toLowerCase();
-    let list = allAnnouncements;
-    if (q) list = list.filter(a =>
-        (a.title || '').toLowerCase().includes(q) ||
-        (a.body || '').toLowerCase().includes(q)
-    );
-    renderAnnouncements(list);
+function renderPager() {
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    if (currentPage > totalPages) currentPage = totalPages;
+    const info = document.getElementById('pager-info');
+    if (!info) return;
+    if (totalCount === 0) info.textContent = '';
+    else {
+        const start = (currentPage - 1) * pageSize + 1, end = Math.min(currentPage * pageSize, totalCount);
+        info.textContent = `Showing ${start}–${end} of ${totalCount} announcement${totalCount === 1 ? '' : 's'}`;
+    }
+    document.getElementById('page-label').textContent = `Page ${currentPage} of ${totalPages}`;
+    const prev = document.getElementById('prev-btn'), next = document.getElementById('next-btn');
+    prev.disabled = currentPage <= 1; next.disabled = currentPage >= totalPages;
+    prev.style.opacity = prev.disabled ? '.4' : '1'; next.style.opacity = next.disabled ? '.4' : '1';
 }
 
 function renderAnnouncements(list) {
     const el = document.getElementById('ann-list');
     if (list.length === 0) {
-        el.innerHTML = `<div class="empty-state"><h3>No announcements</h3><p>Click "New Announcement" to post one.</p></div>`;
+        const any = searchQuery;
+        el.innerHTML = `<div class="empty-state"><h3>${any ? 'No matches' : 'No announcements'}</h3><p>${any ? 'Try a different search.' : 'Click "New Announcement" to post one.'}</p></div>`;
         return;
     }
     el.innerHTML = list.map(a => `
