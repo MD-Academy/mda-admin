@@ -56,6 +56,7 @@ function renderAdmins() {
                 <td>${formatDate(a.created_at)}</td>
                 <td class="row-actions">
                     <button class="btn btn-ghost btn-sm" onclick="resetAdminPw('${a.id}', '${escapeHtml(a.full_name).replace(/'/g, "\\'")}')">Reset PW</button>
+                    <button class="btn btn-ghost btn-sm" onclick="resetAdminMfa('${a.id}')">Reset 2FA</button>
                     ${isSelf
                         ? '<button class="btn btn-ghost btn-sm" disabled style="opacity:.4;cursor:default;" title="You cannot block your own account">Block</button>'
                         : `<button class="btn btn-ghost btn-sm" onclick="toggleAdminStatus('${a.id}')">${a.status === 'suspended' ? 'Activate' : 'Block'}</button>`}
@@ -154,6 +155,21 @@ async function toggleAdminStatus(id) {
     } catch (err) {
         alert(`Failed to update status: ${err.message}`);
     }
+}
+
+async function resetAdminMfa(id) {
+    const a = allAdmins.find(x => x.id === id);
+    const name = a ? (a.full_name || 'this admin') : 'this admin';
+    const ok = await confirmDialog({
+        title: `Reset 2FA for ${name}?`,
+        message: 'This removes their two-factor authentication so they can log in with just their password (then set it up again). Use this if they lost their authenticator app.',
+        confirmText: 'Reset 2FA'
+    });
+    if (!ok) return;
+    try {
+        const r = await apiRequest('POST', `/admin/clear-mfa/${id}`);
+        alert(r.removed ? '2FA has been reset for this account.' : 'This account had no 2FA set.');
+    } catch (err) { alert(`Failed to reset 2FA: ${err.message}`); }
 }
 
 async function deleteAdmin(id, name) {

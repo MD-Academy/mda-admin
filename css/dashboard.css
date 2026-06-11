@@ -301,7 +301,7 @@ body {
     font-weight: 600;
 }
 
-.row-actions { display: flex; gap: 6px; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* ── BADGES ── */
 .badge {

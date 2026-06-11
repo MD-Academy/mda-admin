@@ -58,6 +58,7 @@ function renderStudents(students) {
                     <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
                     <button class="btn btn-ghost btn-sm" onclick="toggleStatus('${s.id}')">${s.status === 'suspended' ? 'Activate' : 'Block'}</button>
                     <button class="btn btn-ghost btn-sm" onclick="resetPw('${s.id}', '${escapeHtml(s.full_name)}')">Reset PW</button>
+                    <button class="btn btn-ghost btn-sm" onclick="resetMfa('${s.id}')">Reset 2FA</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}', '${escapeHtml(s.full_name)}')">Delete</button>
                 </td>
             </tr>
@@ -385,6 +386,22 @@ async function saveEdit(e) {
 // ── LOGIN ACTIVITY REPORT ──
 function openActivity(id) {
     window.location.href = `activity.html?id=${encodeURIComponent(id)}`;
+}
+
+// ── RESET 2FA (lockout recovery) ──
+async function resetMfa(id) {
+    const s = allStudents.find(x => x.id === id);
+    const name = s ? (s.full_name || 'this student') : 'this student';
+    const ok = await confirmDialog({
+        title: `Reset 2FA for ${name}?`,
+        message: 'This removes their two-factor authentication so they can log in with just their password (then set 2FA up again). Use this if they lost their authenticator app.',
+        confirmText: 'Reset 2FA'
+    });
+    if (!ok) return;
+    try {
+        const r = await apiRequest('POST', `/admin/clear-mfa/${id}`);
+        alert(r.removed ? '2FA has been reset for this student.' : 'This student had no 2FA set.');
+    } catch (err) { alert(`Failed to reset 2FA: ${err.message}`); }
 }
 
 // ── BLOCK / ACTIVATE (suspend without deleting) ──
