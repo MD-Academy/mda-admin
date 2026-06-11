@@ -155,6 +155,17 @@ async function saveEntry(e) {
         if (res.error) throw new Error(res.error.message);
         closeModal('entry-modal');
         loadEntries();
+        // Email subscribed students (new entries only). Mail failure must not affect the save.
+        if (!id) {
+            apiRequest('POST', '/admin/notify/schedule', {
+                topic: payload.topic,
+                entry_date: payload.entry_date,
+                subject_name: payload.room_id ? roomName(payload.room_id) : null,
+                details: payload.details
+            })
+                .then(r => console.log(`[calendar] notified ${r.sent}/${r.recipients} subscribers`))
+                .catch(err => console.error('[calendar] notify failed:', err));
+        }
     } catch (err) {
         showModalAlert(alert, err.message, 'error');
     } finally {

@@ -120,6 +120,12 @@ async function saveAnnouncement(e) {
         if (res.error) throw new Error(res.error.message);
         closeModal('ann-modal');
         loadAnnouncements();
+        // Email subscribed students (new posts only). Never let a mail hiccup affect the save.
+        if (!id) {
+            apiRequest('POST', '/admin/notify/announcement', { title, body })
+                .then(r => console.log(`[announcements] notified ${r.sent}/${r.recipients} subscribers`))
+                .catch(err => console.error('[announcements] notify failed:', err));
+        }
     } catch (err) {
         showModalAlert(alert, err.message, 'error');
     } finally {
