@@ -1,6 +1,16 @@
-// Announcements — notices shown to all students.
+// Announcements — notices shown to all students, or targeted to one course.
 
 let allAnnouncements = [];
+let annCourses = [];
+
+async function loadAnnCourses() {
+    const { data, error } = await db.from('courses').select('id, name').order('name', { ascending: true });
+    if (error) { console.error('[announcements] could not load courses:', error); return; }
+    annCourses = data || [];
+    const sel = document.getElementById('ann-target');
+    if (sel) annCourses.forEach(c => sel.appendChild(new Option(c.name, c.id)));
+}
+function courseNameById(id) { const c = annCourses.find(x => x.id === id); return c ? c.name : 'Course'; }
 
 // ── HELPERS ──
 function escapeHtml(str) {
@@ -46,7 +56,7 @@ async function loadAnnouncements() {
     list.innerHTML = `<div class="loader">Loading announcements…</div>`;
 
     const from = (currentPage - 1) * pageSize, to = from + pageSize - 1;
-    let q = db.from('announcements').select('id, title, body, posted_at, created_at', { count: 'exact' });
+    let q = db.from('announcements').select('id, title, body, course_id, posted_at, created_at', { count: 'exact' });
     const term = searchQuery.replace(/[%,()]/g, ' ').trim();
     if (term) q = q.or(`title.ilike.%${term}%,body.ilike.%${term}%`);
     q = q.order('posted_at', { ascending: false }).range(from, to);
@@ -85,10 +95,14 @@ function renderAnnouncements(list) {
         el.innerHTML = `<div class="empty-state"><h3>${any ? 'No matches' : 'No announcements'}</h3><p>${any ? 'Try a different search.' : 'Click "New Announcement" to post one.'}</p></div>`;
         return;
     }
-    el.innerHTML = list.map(a => `
+    el.innerHTML = list.map(a => {
+        const audience = a.course_id
+            ? `<span class="badge" style="background:#fdeef4;color:var(--crimson);">${escapeHtml(courseNameById(a.course_id))}</span>`
+            : `<span class="badge badge-green">All students</span>`;
+        return `
         <div class="ann-card">
             <div class="ann-head">
-                <div class="ann-title">${escapeHtml(a.title)}</div>
+                <div class="ann-title">${escapeHtml(a.title)} ${audience}</div>
                 <div class="ann-date">${formatDateTime(a.posted_at || a.created_at)}</div>
             </div>
             <div class="ann-body">${escapeHtml(a.body)}</div>
@@ -96,8 +110,8 @@ function renderAnnouncements(list) {
                 <button class="btn btn-ghost btn-sm" onclick="openAnnModal('${a.id}')">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteAnnouncement('${a.id}')">Delete</button>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 // ── CREATE / EDIT ──
@@ -112,12 +126,14 @@ function openAnnModal(id = null) {
         document.getElementById('ann-id').value = a.id;
         document.getElementById('ann-title').value = a.title || '';
         document.getElementById('ann-body').value = a.body || '';
+        document.getElementById('ann-target').value = a.course_id || '';
         document.getElementById('ann-save-btn').textContent = 'Save Changes';
     } else {
         document.getElementById('ann-modal-title').textContent = 'New Announcement';
         document.getElementById('ann-id').value = '';
         document.getElementById('ann-title').value = '';
         document.getElementById('ann-body').value = '';
+        document.getElementById('ann-target').value = '';
         document.getElementById('ann-save-btn').textContent = 'Publish';
     }
     openModal('ann-modal');
@@ -133,6 +149,7 @@ async function saveAnnouncement(e) {
     const id = document.getElementById('ann-id').value;
     const title = document.getElementById('ann-title').value.trim();
     const body = document.getElementById('ann-body').value.trim();
+    const course_id = document.getElementById('ann-target').value || null;
 
     if (!title || !body) { showModalAlert(alert, 'Title and message are required.', 'error'); return; }
     if (!ensureSafe(alert, [['Title', title], ['Message', body]])) return;
@@ -141,19 +158,19 @@ async function saveAnnouncement(e) {
     try {
         let res;
         if (id) {
-            res = await db.from('announcements').update({ title, body }).eq('id', id);
+            res = await db.from('announcements').update({ title, body, course_id }).eq('id', id);
         } else {
             const { data: { session } } = await db.auth.getSession();
             res = await db.from('announcements').insert({
-                title, body, posted_by: session ? session.user.id : null
+                title, body, course_id, posted_by: session ? session.user.id : null
             });
         }
         if (res.error) throw new Error(res.error.message);
         closeModal('ann-modal');
         loadAnnouncements();
-        // Email subscribed students (new posts only). Never let a mail hiccup affect the save.
+        // Email students (new posts only) — scoped to the course if one was chosen.
         if (!id) {
-            apiRequest('POST', '/admin/notify/announcement', { title, body })
+            apiRequest('POST', '/admin/notify/announcement', { title, body, course_id })
                 .then(r => console.log(`[announcements] notified ${r.sent}/${r.recipients} subscribers`))
                 .catch(err => console.error('[announcements] notify failed:', err));
         }

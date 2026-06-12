@@ -2,6 +2,7 @@
 
 let allEntries = [];
 let calRooms = [];
+let calCourses = [];
 
 // ── HELPERS ──
 function escapeHtml(str) {
@@ -19,10 +20,13 @@ function formatDate(d) {
     if (!d) return '—';
     return new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 }
-function roomName(id) {
-    if (!id) return '<span class="badge badge-blue">General</span>';
-    const r = calRooms.find(x => x.id === id);
-    return r ? escapeHtml(r.name) : '<span class="badge badge-blue">General</span>';
+function roomNameById(id) { const r = calRooms.find(x => x.id === id); return r ? r.name : 'Subject'; }
+function courseNameById(id) { const c = calCourses.find(x => x.id === id); return c ? c.name : 'Course'; }
+// Audience badge for an entry: a course, a subject, or everyone.
+function targetBadge(e) {
+    if (e.course_id) return `<span class="badge" style="background:#fdeef4;color:var(--crimson);">${escapeHtml(courseNameById(e.course_id))}</span>`;
+    if (e.room_id) return `<span class="badge badge-blue">${escapeHtml(roomNameById(e.room_id))}</span>`;
+    return `<span class="badge badge-green">All students</span>`;
 }
 function todayISO() {
     const d = new Date(); d.setHours(0, 0, 0, 0);
@@ -34,15 +38,37 @@ let currentPage = 1, pageSize = 25, totalCount = 0;
 let searchQuery = '', roomFilter = '', whenFilter = 'upcoming', dateFrom = '', dateTo = '', searchTimer = null;
 
 async function loadRoomOptions() {
-    const { data, error } = await db.from('rooms').select('id, name').order('order_index', { ascending: true });
-    if (error) { console.error('[calendar] could not load subjects:', error); return; }
-    calRooms = data || [];
+    const [roomRes, courseRes] = await Promise.all([
+        db.from('rooms').select('id, name').order('order_index', { ascending: true }),
+        db.from('courses').select('id, name').order('name', { ascending: true })
+    ]);
+    if (roomRes.error) console.error('[calendar] could not load subjects:', roomRes.error);
+    if (courseRes.error) console.error('[calendar] could not load courses:', courseRes.error);
+    calRooms = roomRes.data || [];
+    calCourses = courseRes.data || [];
     const filter = document.getElementById('room-filter');
-    calRooms.forEach(r => {
-        const opt = document.createElement('option');
-        opt.value = r.id; opt.textContent = r.name;
-        filter.appendChild(opt);
-    });
+    if (calCourses.length) {
+        const og = document.createElement('optgroup'); og.label = 'Courses';
+        calCourses.forEach(c => og.appendChild(new Option(c.name, `course:${c.id}`)));
+        filter.appendChild(og);
+    }
+    if (calRooms.length) {
+        const og = document.createElement('optgroup'); og.label = 'Subjects';
+        calRooms.forEach(r => og.appendChild(new Option(r.name, `room:${r.id}`)));
+        filter.appendChild(og);
+    }
+}
+
+// Build the "Show to" select: General + a course + a subject.
+function fillTargetSelect(e) {
+    const sel = document.getElementById('entry-target');
+    const cur = e ? (e.course_id ? `course:${e.course_id}` : (e.room_id ? `room:${e.room_id}` : '')) : '';
+    let html = `<option value="" ${cur === '' ? 'selected' : ''}>— General (all students) —</option>`;
+    if (calCourses.length) html += `<optgroup label="A specific course">` +
+        calCourses.map(c => `<option value="course:${c.id}" ${cur === `course:${c.id}` ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('') + `</optgroup>`;
+    if (calRooms.length) html += `<optgroup label="A specific subject">` +
+        calRooms.map(r => `<option value="room:${r.id}" ${cur === `room:${r.id}` ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join('') + `</optgroup>`;
+    sel.innerHTML = html;
 }
 
 function onSearchInput() {
@@ -76,9 +102,10 @@ async function loadEntries() {
     const upcoming = whenFilter === 'upcoming';
     const from = (currentPage - 1) * pageSize, to = from + pageSize - 1;
 
-    let q = db.from('schedule_entries').select('id, room_id, entry_date, topic, details', { count: 'exact' });
-    if (roomFilter === '__none__') q = q.is('room_id', null);
-    else if (roomFilter) q = q.eq('room_id', roomFilter);
+    let q = db.from('schedule_entries').select('id, room_id, course_id, entry_date, topic, details', { count: 'exact' });
+    if (roomFilter === '__general__') q = q.is('room_id', null).is('course_id', null);
+    else if (roomFilter.startsWith('course:')) q = q.eq('course_id', roomFilter.slice(7));
+    else if (roomFilter.startsWith('room:')) q = q.eq('room_id', roomFilter.slice(5));
     if (whenFilter === 'upcoming') q = q.gte('entry_date', today);
     else if (whenFilter === 'past') q = q.lt('entry_date', today);
     if (dateFrom) q = q.gte('entry_date', dateFrom);
@@ -124,7 +151,7 @@ function renderEntries(list) {
     tbody.innerHTML = list.map(e => `
         <tr>
             <td><strong>${formatDate(e.entry_date)}</strong></td>
-            <td>${roomName(e.room_id)}</td>
+            <td>${targetBadge(e)}</td>
             <td>${escapeHtml(e.topic)}</td>
             <td>${e.details ? escapeHtml(e.details) : '<span style="color:var(--text-muted)">—</span>'}</td>
             <td class="row-actions">
@@ -133,13 +160,6 @@ function renderEntries(list) {
             </td>
         </tr>
     `).join('');
-}
-
-// ── ROOM SELECT ──
-function fillRoomSelect(selectedRoomId = '') {
-    const sel = document.getElementById('entry-room');
-    sel.innerHTML = `<option value="" ${selectedRoomId ? '' : 'selected'}>— General (all students) —</option>` +
-        calRooms.map(r => `<option value="${r.id}" ${r.id === selectedRoomId ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join('');
 }
 
 // ── CREATE / EDIT ──
@@ -152,14 +172,14 @@ function openEntryModal(id = null) {
         if (!e) return;
         document.getElementById('entry-modal-title').textContent = 'Edit Schedule Entry';
         document.getElementById('entry-id').value = e.id;
-        fillRoomSelect(e.room_id);
+        fillTargetSelect(e);
         document.getElementById('entry-date').value = e.entry_date || '';
         document.getElementById('entry-topic').value = e.topic || '';
         document.getElementById('entry-details').value = e.details || '';
     } else {
         document.getElementById('entry-modal-title').textContent = 'Add Schedule Entry';
         document.getElementById('entry-id').value = '';
-        fillRoomSelect('');
+        fillTargetSelect(null);
         document.getElementById('entry-date').value = '';
         document.getElementById('entry-topic').value = '';
         document.getElementById('entry-details').value = '';
@@ -174,8 +194,10 @@ async function saveEntry(e) {
     alert.style.display = 'none';
 
     const id = document.getElementById('entry-id').value;
+    const target = document.getElementById('entry-target').value || '';
     const payload = {
-        room_id: document.getElementById('entry-room').value || null,
+        room_id: target.startsWith('room:') ? target.slice(5) : null,
+        course_id: target.startsWith('course:') ? target.slice(7) : null,
         entry_date: document.getElementById('entry-date').value,
         topic: document.getElementById('entry-topic').value.trim(),
         details: document.getElementById('entry-details').value.trim() || null
@@ -200,8 +222,9 @@ async function saveEntry(e) {
             apiRequest('POST', '/admin/notify/schedule', {
                 topic: payload.topic,
                 entry_date: payload.entry_date,
-                subject_name: payload.room_id ? roomName(payload.room_id) : null,
-                details: payload.details
+                subject_name: payload.room_id ? roomNameById(payload.room_id) : null,
+                details: payload.details,
+                course_id: payload.course_id
             })
                 .then(r => console.log(`[calendar] notified ${r.sent}/${r.recipients} subscribers`))
                 .catch(err => console.error('[calendar] notify failed:', err));

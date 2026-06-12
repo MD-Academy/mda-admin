@@ -25,8 +25,8 @@
                     <input type="hidden" id="entry-id">
                     <div class="form-row">
                         <div class="form-field">
-                            <label>Subject <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                            <select id="entry-room"></select>
+                            <label>Show to</label>
+                            <select id="entry-target"></select>
                         </div>
                         <div class="form-field">
                             <label>Date</label>
@@ -70,8 +70,8 @@
                         <input type="text" id="search-input" placeholder="Search by topic…" oninput="onSearchInput()">
                     </div>
                     <select id="room-filter" class="filter-select" onchange="onFilterChange()">
-                        <option value="">All subjects</option>
-                        <option value="__none__">General (no subject)</option>
+                        <option value="">All audiences</option>
+                        <option value="__general__">General (everyone)</option>
                     </select>
                     <select id="when-filter" class="filter-select" onchange="onFilterChange()">
                         <option value="upcoming">Upcoming</option>
@@ -99,7 +99,7 @@
                         <thead>
                             <tr>
                                 <th>Date</th>
-                                <th>Subject</th>
+                                <th>Shown to</th>
                                 <th>Topic</th>
                                 <th>Details</th>
                                 <th>Actions</th>

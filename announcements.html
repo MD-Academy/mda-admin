@@ -24,6 +24,11 @@
                     <div class="alert" id="ann-alert" style="display:none;"></div>
                     <input type="hidden" id="ann-id">
                     <div class="form-field">
+                        <label>Show to</label>
+                        <select id="ann-target"><option value="">— General (all students) —</option></select>
+                        <div class="hint">Keep "General" for everyone (e.g. office notices), or pick a course so only its enrolled students see it.</div>
+                    </div>
+                    <div class="form-field">
                         <label>Title</label>
                         <input type="text" id="ann-title" placeholder="e.g. Holiday schedule update" required>
                     </div>
@@ -83,6 +88,7 @@
                 </div>
             `;
 
+            await loadAnnCourses();
             loadAnnouncements();
         })();
     </script>
