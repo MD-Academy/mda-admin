@@ -178,10 +178,9 @@ async function duplicateCourse(id) {
         }).select('id').single();
         if (ins.error) throw new Error(ins.error.message);
         const newId = ins.data.id;
-        // 2) Carry over subjects, exams and recording assignments.
+        // 2) Carry over the setup only — subjects + exams. NOT recordings, NOT students.
         await _copyCourseLinks('course_subjects', 'room_id', id, newId);
         await _copyCourseLinks('exam_courses', 'exam_id', id, newId);
-        await _copyCourseLinks('recording_courses', 'recording_id', id, newId);
         await loadCourses();
     } catch (err) {
         alert(`Could not duplicate the course: ${err.message}`);

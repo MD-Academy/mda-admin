@@ -44,7 +44,7 @@ async function initCourse(courseId, profile) {
     document.getElementById('page-content').innerHTML = `
         <style>
             .pill-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 7px; }
-            .pill-zone { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; min-height: 46px; padding: 11px; border: 1.5px dashed var(--border); border-radius: 12px; }
+            .pill-zone { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; min-height: 46px; max-height: 190px; overflow-y: auto; padding: 11px; border: 1.5px dashed var(--border); border-radius: 12px; }
             .pill-zone-assigned { background: #fbfcfe; border-style: solid; }
             .pill { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none; transition: transform .06s, background .12s; }
             .pill:active { transform: scale(.96); }
@@ -121,6 +121,7 @@ async function loadData() {
     }
     courseRecordings.forEach(r => { recPickMap[r.id] = r; });
     renderCourseRecAssigned();
+    runRecPickSearch();   // show the most recent recordings to add, by default
 
     // Enrolment is superadmin-only.
     if (IS_SUPER) {
@@ -207,16 +208,18 @@ async function runRecPickSearch() {
     const el = document.getElementById('course-recs-results');
     if (!el) return;
     const term = (document.getElementById('rec-pick-search').value || '').replace(/[%,()]/g, ' ').trim();
-    if (!term) { el.innerHTML = `<span class="pill-empty">Type a title to find recordings to add.</span>`; return; }
     el.innerHTML = `<span class="pill-empty">Searching…</span>`;
-    const { data, error } = await db.from('recordings').select('id, title, recorded_date')
-        .eq('kind', 'zoom').ilike('title', `%${term}%`).order('recorded_date', { ascending: false }).limit(25);
+    // Newest first. With no search term we show the most recent few; searching finds older ones.
+    let q = db.from('recordings').select('id, title, recorded_date').eq('kind', 'zoom');
+    if (term) q = q.ilike('title', `%${term}%`);
+    const { data, error } = await q.order('recorded_date', { ascending: false }).limit(term ? 30 : 12);
     if (error) { el.innerHTML = `<span class="pill-empty" style="color:var(--red)">${escapeHtml(error.message)}</span>`; return; }
     const assigned = new Set(courseRecordings.map(r => r.id));
     const avail = (data || []).filter(r => !assigned.has(r.id));
     avail.forEach(r => { recPickMap[r.id] = r; });
-    if (avail.length === 0) { el.innerHTML = `<span class="pill-empty">No more recordings match.</span>`; return; }
-    el.innerHTML = avail.map(r => `
+    if (avail.length === 0) { el.innerHTML = `<span class="pill-empty">${term ? 'No recordings match.' : 'No more recordings to add.'}</span>`; return; }
+    const hint = term ? '' : `<div class="pill-empty" style="width:100%;margin:0 0 2px;">Most recent recordings — type a title to find older ones.</div>`;
+    el.innerHTML = hint + avail.map(r => `
         <span class="pill pill-available" onclick="toggleCourseRecording('${r.id}')" title="Click to add to this course">${escapeHtml(r.title)} <span style="opacity:.55;font-weight:500;">· ${fmtRecDate(r.recorded_date)}</span> <span class="plus">+</span></span>`).join('');
 }
 
