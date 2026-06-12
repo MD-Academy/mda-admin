@@ -18,12 +18,14 @@ async function loadCourseOptions() {
     const { data, error } = await db.from('courses').select('id, name').order('name', { ascending: true });
     if (error) { console.error('[students] could not load courses:', error); return; }
     courseMap = {};
-    const sel = document.getElementById('course-filter');
+    const filterSel = document.getElementById('course-filter');
+    const createSel = document.getElementById('new-course');
+    const bulkSel = document.getElementById('bulk-course');
     (data || []).forEach(c => {
         courseMap[c.id] = c.name;
-        const opt = document.createElement('option');
-        opt.value = c.id; opt.textContent = c.name;
-        sel.appendChild(opt);
+        if (filterSel) filterSel.appendChild(new Option(c.name, c.id));   // list filter
+        if (createSel) createSel.appendChild(new Option(c.name, c.id));   // enrol-on-create
+        if (bulkSel) bulkSel.appendChild(new Option(c.name, c.id));       // enrol whole import
     });
 }
 
@@ -314,6 +316,7 @@ async function createSingleStudent(e) {
     const full_name = document.getElementById('new-name').value.trim();
     const email = document.getElementById('new-email').value.trim();
     const expiry_date = document.getElementById('new-expiry').value || null;
+    const course_id = document.getElementById('new-course').value || null;
 
     if (!full_name || !email) {
         showModalAlert(alert, 'Please enter both name and email.', 'error');
@@ -328,7 +331,7 @@ async function createSingleStudent(e) {
     btn.disabled = true; btn.textContent = 'Creating…';
 
     try {
-        const res = await apiRequest('POST', '/admin/create-student', { full_name, email, expiry_date });
+        const res = await apiRequest('POST', '/admin/create-student', { full_name, email, expiry_date, course_id });
         closeModal('create-modal');
         document.getElementById('single-form').reset();
         showCredentials([{ full_name: res.full_name, email: res.email, password: res.password, email_sent: res.email_sent }]);
@@ -402,13 +405,15 @@ async function runBulkCreate() {
     }
 
     const expiry_date = document.getElementById('bulk-expiry').value || null;
+    const course_id = document.getElementById('bulk-course').value || null;
 
     btn.disabled = true; btn.textContent = `Creating ${bulkParsed.length} accounts…`;
 
     try {
         const res = await apiRequest('POST', '/admin/bulk-create-students', {
             students: bulkParsed,
-            expiry_date
+            expiry_date,
+            course_id
         });
 
         closeModal('bulk-modal');

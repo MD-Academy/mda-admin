@@ -4,8 +4,10 @@ let COURSE_ID = null;
 let course = null;
 let allSubjects = [];        // rooms
 let courseSubjectIds = new Set();
-let allStudents = [];        // profiles role=student
+let enrolledStudents = [];   // full objects of students enrolled in THIS course
 let enrolledIds = new Set();
+let stuMap = {};             // id -> student object (enrolled + search results)
+let stuSearchTimer = null;
 let allExams = [];           // [{id, title, type}]
 let courseExamIds = new Set();
 let courseRecordings = [];   // assigned recordings [{id, title, recorded_date}]
@@ -34,9 +36,10 @@ async function initCourse(courseId, profile) {
     const studentsPanel = IS_SUPER ? `
             <div class="panel" style="padding:22px;">
                 <div class="section-title">Enrolled students <span class="count-pill" id="enrolled-count">0</span></div>
-                <div class="search-box" style="margin:6px 0 14px; min-width:0;">
+                <p class="hint" style="margin:-8px 0 12px;">Showing only students enrolled in this course. Search by name or email to find and enrol anyone else.</p>
+                <div class="search-box" style="margin:0 0 14px; min-width:0;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <input type="text" id="student-search" placeholder="Search by name or email…" oninput="renderStudents()">
+                    <input type="text" id="student-search" placeholder="Search to find or add a student…" oninput="onStudentSearch()">
                 </div>
                 <div id="students-list"><div class="loader">Loading…</div></div>
             </div>` : '';
@@ -123,25 +126,23 @@ async function loadData() {
     renderCourseRecAssigned();
     runRecPickSearch();   // show the most recent recordings to add, by default
 
-    // Enrolment is superadmin-only.
+    // Enrolment is superadmin-only. Load ONLY the enrolled students (the roster);
+    // adding others is search-driven so the panel scales to thousands across schools.
     if (IS_SUPER) {
-        const [students, enrRes] = await Promise.all([
-            fetchStudents(),
-            db.from('course_enrollments').select('student_id').eq('course_id', COURSE_ID)
-        ]);
-        allStudents = students;
-        enrolledIds = new Set((enrRes.data || []).map(r => r.student_id));
+        const enrRes = await db.from('course_enrollments').select('student_id').eq('course_id', COURSE_ID);
+        const ids = [...new Set((enrRes.data || []).map(r => r.student_id))];
+        enrolledIds = new Set(ids);
+        enrolledStudents = [];
+        if (ids.length) {
+            let res = await db.from('profiles').select('id, full_name, status, email').in('id', ids).order('full_name', { ascending: true });
+            if (res.error && /email/i.test(res.error.message || '')) {
+                res = await db.from('profiles').select('id, full_name, status').in('id', ids).order('full_name', { ascending: true });
+            }
+            enrolledStudents = res.data || [];
+        }
+        enrolledStudents.forEach(s => { stuMap[s.id] = s; });
         renderStudents();
     }
-}
-
-// Fetch students with email; fall back to name-only if the profiles.email migration isn't applied yet.
-async function fetchStudents() {
-    let res = await db.from('profiles').select('id, full_name, status, email').eq('role', 'student').order('full_name', { ascending: true });
-    if (res.error && /email/i.test(res.error.message || '')) {
-        res = await db.from('profiles').select('id, full_name, status').eq('role', 'student').order('full_name', { ascending: true });
-    }
-    return res.data || [];
 }
 
 // ── EXAMS IN THIS COURSE (two-zone pill picker, click to move) ──
@@ -278,30 +279,9 @@ async function toggleSubject(roomId) {
     renderSubjects();
 }
 
-// ── STUDENTS / ENROLLMENT ──
-function renderStudents() {
-    const el = document.getElementById('students-list');
-    document.getElementById('enrolled-count').textContent = enrolledIds.size;
-
-    const q = (document.getElementById('student-search')?.value || '').toLowerCase();
-    const list = allStudents.filter(s =>
-        (s.full_name || '').toLowerCase().includes(q) ||
-        (s.email || '').toLowerCase().includes(q)
-    );
-
-    if (allStudents.length === 0) {
-        el.innerHTML = `<div class="empty-state" style="padding:24px;"><p>No students exist yet. Create accounts in the Students section first.</p></div>`;
-        return;
-    }
-    if (list.length === 0) {
-        el.innerHTML = `<div class="loader">No students match your search.</div>`;
-        return;
-    }
-
-    // Enrolled first, then the rest.
-    list.sort((a, b) => (enrolledIds.has(b.id) ? 1 : 0) - (enrolledIds.has(a.id) ? 1 : 0));
-
-    el.innerHTML = `<div class="list-rows">${list.map(s => {
+// ── STUDENTS / ENROLLMENT (enrolled roster by default; search to add anyone) ──
+function _studentRows(list) {
+    return `<div class="list-rows">${list.map(s => {
         const enrolled = enrolledIds.has(s.id);
         const suspended = s.status === 'suspended';
         return `
@@ -312,12 +292,44 @@ function renderStudents() {
                     ${suspended ? '<div class="lr-sub" style="color:var(--red)">Suspended</div>' : ''}
                 </div>
                 <div class="lr-actions">
-                    <button class="btn btn-sm ${enrolled ? 'btn-danger' : 'btn-primary'}" onclick="toggleEnroll('${s.id}')">
-                        ${enrolled ? 'Remove' : 'Enrol'}
-                    </button>
+                    <button class="btn btn-sm ${enrolled ? 'btn-danger' : 'btn-primary'}" onclick="toggleEnroll('${s.id}')">${enrolled ? 'Remove' : 'Enrol'}</button>
                 </div>
             </div>`;
     }).join('')}</div>`;
+}
+
+// Default view = the enrolled roster (no global list).
+function renderStudents() {
+    const el = document.getElementById('students-list');
+    if (!el) return;
+    document.getElementById('enrolled-count').textContent = enrolledIds.size;
+    if ((document.getElementById('student-search')?.value || '').trim()) return;  // a search is showing
+    const sorted = [...enrolledStudents].sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+    el.innerHTML = sorted.length
+        ? _studentRows(sorted)
+        : `<div class="empty-state" style="padding:24px;"><p>No students enrolled yet. Search above to find and enrol students, or enrol a whole intake from <strong>Students → Bulk Import</strong>.</p></div>`;
+}
+
+function onStudentSearch() {
+    clearTimeout(stuSearchTimer);
+    stuSearchTimer = setTimeout(runStudentSearch, 300);
+}
+
+async function runStudentSearch() {
+    const el = document.getElementById('students-list');
+    const term = (document.getElementById('student-search').value || '').replace(/[%,()]/g, ' ').trim();
+    if (!term) { renderStudents(); return; }
+    el.innerHTML = `<div class="loader">Searching…</div>`;
+    let res = await db.from('profiles').select('id, full_name, status, email').eq('role', 'student')
+        .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`).order('full_name', { ascending: true }).limit(30);
+    if (res.error && /email/i.test(res.error.message || '')) {
+        res = await db.from('profiles').select('id, full_name, status').eq('role', 'student')
+            .ilike('full_name', `%${term}%`).order('full_name', { ascending: true }).limit(30);
+    }
+    if (res.error) { el.innerHTML = `<div class="loader" style="color:var(--red)">${escapeHtml(res.error.message)}</div>`; return; }
+    const results = res.data || [];
+    results.forEach(s => { stuMap[s.id] = s; });
+    el.innerHTML = results.length ? _studentRows(results) : `<div class="loader">No students match "${escapeHtml(term)}".</div>`;
 }
 
 async function toggleEnroll(studentId) {
@@ -325,10 +337,15 @@ async function toggleEnroll(studentId) {
         const { error } = await db.from('course_enrollments').delete().eq('course_id', COURSE_ID).eq('student_id', studentId);
         if (error) { alert(`Failed: ${error.message}`); return; }
         enrolledIds.delete(studentId);
+        enrolledStudents = enrolledStudents.filter(s => s.id !== studentId);
     } else {
         const { error } = await db.from('course_enrollments').insert({ course_id: COURSE_ID, student_id: studentId });
         if (error) { alert(`Failed: ${error.message}`); return; }
         enrolledIds.add(studentId);
+        if (stuMap[studentId] && !enrolledStudents.some(s => s.id === studentId)) enrolledStudents.push(stuMap[studentId]);
     }
-    renderStudents();
+    document.getElementById('enrolled-count').textContent = enrolledIds.size;
+    // Refresh: if a search is active, re-render results (button labels flip); else show roster.
+    if ((document.getElementById('student-search')?.value || '').trim()) runStudentSearch();
+    else renderStudents();
 }
