@@ -34,7 +34,8 @@ function courseName(id) {
 function courseNamesFor(recId) {
     const ids = recCourseLinks[recId] || [];
     if (ids.length === 0) return '<span style="color:var(--text-muted)">— Unassigned —</span>';
-    return ids.map(id => `<span class="badge badge-blue" style="margin:1px 2px;">${escapeHtml(courseName(id))}</span>`).join('');
+    return `<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">${ids.map(id =>
+        `<span class="badge badge-blue">${escapeHtml(courseName(id))}</span>`).join('')}</div>`;
 }
 
 const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -156,12 +157,30 @@ function renderRecordings(list) {
             <td class="row-actions">
                 <a class="btn btn-ghost btn-sm" href="${escapeHtml(r.aws_url)}" target="_blank" rel="noopener">Preview</a>
                 <button class="btn btn-ghost btn-sm" onclick="openRecModal('${r.id}')">Edit</button>
-                <button class="btn btn-ghost btn-sm" onclick="duplicateRecording('${r.id}')">Duplicate</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteRecording('${r.id}')">Delete</button>
+                <span class="row-menu-wrap">
+                    <button class="row-dots" onclick="toggleCardMenu(event, '${r.id}')" aria-label="More options" title="More">⋯</button>
+                    <div class="card-menu" id="menu-${r.id}">
+                        <button onclick="duplicateRecording('${r.id}')">
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            Duplicate recording
+                        </button>
+                    </div>
+                </span>
             </td>
         </tr>
     `).join('');
 }
+
+// ── ROW ⋯ MENU ──
+function toggleCardMenu(e, id) {
+    e.stopPropagation();
+    const menu = document.getElementById(`menu-${id}`);
+    const open = menu.classList.contains('open');
+    document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open'));
+    if (!open) menu.classList.add('open');
+}
+document.addEventListener('click', () => document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open')));
 
 // ── VISIBILITY ──
 async function toggleVisibility(id) {
