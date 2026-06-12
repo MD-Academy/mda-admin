@@ -91,7 +91,7 @@ function renderExams(list) {
                 <td>${visToggleHtml(e.id, e.is_visible)}</td>
                 <td class="row-actions">
                     ${contentBtn}
-                    <button class="btn btn-ghost btn-sm" onclick="openExamModal('${e.id}')">Edit</button>
+                    <button class="btn btn-ghost btn-sm" onclick="openExamModal('${e.id}')">Edit details</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteExam('${e.id}')">Delete</button>
                 </td>
             </tr>`;
@@ -133,7 +133,7 @@ function openExamModal(id = null) {
     if (id) {
         const e = allExams.find(x => x.id === id);
         if (!e) return;
-        document.getElementById('exam-modal-title').textContent = 'Edit Exam';
+        document.getElementById('exam-modal-title').textContent = 'Edit Exam Details';
         document.getElementById('exam-id').value = e.id;
         document.getElementById('exam-title').value = e.title || '';
         document.getElementById('exam-desc').value = e.description || '';

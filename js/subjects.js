@@ -110,8 +110,8 @@ function renderRooms() {
                     ${count} lesson${count === 1 ? '' : 's'}
                 </span>
                 <div class="ec-actions">
-                    <button class="btn btn-primary btn-sm" onclick="openRoom('${r.id}')">Open</button>
-                    <button class="btn btn-ghost btn-sm" onclick="openRoomModal('${r.id}')">Edit</button>
+                    <button class="btn btn-primary btn-sm" onclick="openRoom('${r.id}')">Manage</button>
+                    <button class="btn btn-ghost btn-sm" onclick="openRoomModal('${r.id}')">Edit details</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteRoom('${r.id}')">Delete</button>
                 </div>
             </div>`;
@@ -143,7 +143,7 @@ function openRoomModal(id = null) {
     if (id) {
         const r = allRooms.find(x => x.id === id);
         if (!r) return;
-        document.getElementById('room-modal-title').textContent = 'Edit Subject';
+        document.getElementById('room-modal-title').textContent = 'Edit Subject Details';
         document.getElementById('room-id').value = r.id;
         document.getElementById('room-name').value = r.name || '';
         document.getElementById('room-slug').value = r.slug || '';

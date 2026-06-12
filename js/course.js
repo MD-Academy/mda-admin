@@ -253,7 +253,7 @@ function renderSubjects() {
             <div class="list-row">
                 <div class="lr-body"><div class="lr-title">${escapeHtml(s.name)}</div></div>
                 <div class="lr-actions">
-                    ${inCourse ? `<button class="btn btn-ghost btn-sm" onclick="openSubject('${s.id}')">Open</button>` : ''}
+                    ${inCourse ? `<button class="btn btn-ghost btn-sm" onclick="openSubject('${s.id}')">Manage</button>` : ''}
                     <button class="btn btn-sm ${inCourse ? 'btn-danger' : 'btn-primary'}" onclick="toggleSubject('${s.id}')">
                         ${inCourse ? 'Remove' : 'Add'}
                     </button>

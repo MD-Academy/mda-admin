@@ -246,7 +246,7 @@ function renderLessons() {
                 ${visToggleHtml('toggleLessonVis', l.id, l.is_visible)}
                 <button class="btn btn-ghost btn-sm" onclick="moveLesson('${l.id}', -1)" ${i === 0 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move up">↑</button>
                 <button class="btn btn-ghost btn-sm" onclick="moveLesson('${l.id}', 1)" ${i === lessons.length - 1 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move down">↓</button>
-                <button class="btn btn-ghost btn-sm" onclick="openLessonForm('${l.id}')">Edit</button>
+                <button class="btn btn-ghost btn-sm" onclick="openLessonForm('${l.id}')">Edit details</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteLesson('${l.id}')">Delete</button>
             </div>
         </div>`).join('')}</div>`;
@@ -257,7 +257,7 @@ function openLessonForm(id = null) {
     if (id) {
         const l = lessons.find(x => x.id === id);
         if (!l) return;
-        document.getElementById('lesson-modal-title').textContent = 'Edit Lesson';
+        document.getElementById('lesson-modal-title').textContent = 'Edit Lesson Details';
         document.getElementById('lesson-id').value = l.id;
         document.getElementById('lesson-title').value = l.title || '';
         document.getElementById('lesson-desc').value = l.description || '';

@@ -130,8 +130,8 @@ function renderCourses() {
                         : `<span class="ec-meta" style="background:var(--bg);color:var(--text-muted);">No expiry</span>`}
                 </div>
                 <div class="ec-actions">
-                    <button class="btn btn-primary btn-sm" onclick="openCourse('${c.id}')">Open</button>
-                    <button class="btn btn-ghost btn-sm" onclick="openCourseModal('${c.id}')">Edit</button>
+                    <button class="btn btn-primary btn-sm" onclick="openCourse('${c.id}')">Manage</button>
+                    <button class="btn btn-ghost btn-sm" onclick="openCourseModal('${c.id}')">Edit details</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteCourse('${c.id}')">Delete</button>
                 </div>
             </div>`;
@@ -197,7 +197,7 @@ function openCourseModal(id = null) {
     if (id) {
         const c = allCourses.find(x => x.id === id);
         if (!c) return;
-        document.getElementById('course-modal-title').textContent = 'Edit Course';
+        document.getElementById('course-modal-title').textContent = 'Edit Course Details';
         document.getElementById('course-id').value = c.id;
         document.getElementById('course-name').value = c.name || '';
         document.getElementById('course-desc').value = c.description || '';
