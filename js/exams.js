@@ -35,7 +35,7 @@ async function loadExams() {
     tbody.innerHTML = `<tr><td colspan="6" class="loader">Loading exams…</td></tr>`;
 
     const [exRes, courseRes, linkRes, qRes] = await Promise.all([
-        db.from('exams').select('id, title, description, type, pass_threshold, storage_path, time_limit_minutes, is_visible, created_at').order('created_at', { ascending: false }),
+        db.from('exams').select('id, title, description, type, pass_threshold, storage_path, time_limit_minutes, max_attempts, is_visible, created_at').order('created_at', { ascending: false }),
         db.from('courses').select('id, name').order('created_at', { ascending: false }),
         db.from('exam_courses').select('exam_id, course_id'),
         db.from('exam_questions').select('id, exam_id')
@@ -86,7 +86,7 @@ function renderExams(list) {
             <tr>
                 <td><strong>${escapeHtml(e.title)}</strong></td>
                 <td>${typeBadge}</td>
-                <td>${e.pass_threshold}%</td>
+                <td>${e.pass_threshold}%<br><span style="font-size:11px;color:var(--text-muted);">${e.max_attempts ? e.max_attempts + ' attempt' + (e.max_attempts === 1 ? '' : 's') : 'unlimited tries'}</span></td>
                 <td>${coursesBadges(e.id)}</td>
                 <td>${visToggleHtml(e.id, e.is_visible)}</td>
                 <td class="row-actions">
@@ -140,6 +140,7 @@ function openExamModal(id = null) {
         document.getElementById('exam-type').value = e.type;
         document.getElementById('exam-threshold').value = e.pass_threshold ?? 70;
         document.getElementById('exam-timelimit').value = e.time_limit_minutes || '';
+        document.getElementById('exam-attempts').value = e.max_attempts || '';
         if (e.type === 'pdf' && e.storage_path) {
             document.getElementById('exam-file-current').textContent = 'A PDF is already uploaded. Choose a file only to replace it.';
         }
@@ -151,6 +152,7 @@ function openExamModal(id = null) {
         document.getElementById('exam-type').value = 'manual';
         document.getElementById('exam-threshold').value = 70;
         document.getElementById('exam-timelimit').value = '';
+        document.getElementById('exam-attempts').value = '1';   // default: once (blank = unlimited)
     }
     onTypeChange();
     openModal('exam-modal');
@@ -166,6 +168,8 @@ async function saveExam(ev) {
     const type = document.getElementById('exam-type').value;
     const threshold = parseInt(document.getElementById('exam-threshold').value, 10);
     const timelimit = document.getElementById('exam-timelimit').value;
+    const attemptsRaw = document.getElementById('exam-attempts').value;
+    const maxAttempts = attemptsRaw && parseInt(attemptsRaw, 10) >= 1 ? parseInt(attemptsRaw, 10) : null;
     const existing = id ? allExams.find(x => x.id === id) : null;
 
     const payload = {
@@ -173,7 +177,8 @@ async function saveExam(ev) {
         description: document.getElementById('exam-desc').value.trim() || null,
         type,
         pass_threshold: (threshold >= 1 && threshold <= 100) ? threshold : 70,
-        time_limit_minutes: (type === 'manual' && timelimit) ? parseInt(timelimit, 10) : null
+        time_limit_minutes: (type === 'manual' && timelimit) ? parseInt(timelimit, 10) : null,
+        max_attempts: maxAttempts
     };
 
     if (!payload.title) { showModalAlert(alert, 'Title is required.', 'error'); return; }
