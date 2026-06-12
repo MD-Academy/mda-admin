@@ -106,7 +106,14 @@ function renderCourses() {
         const subs = subjectCounts[c.id] || 0;
         const studs = studentCounts[c.id] || 0;
         return `
-            <div class="entity-card">
+            <div class="entity-card" style="position:relative; overflow:visible;">
+                <button class="card-menu-btn" onclick="toggleCardMenu(event, '${c.id}')" aria-label="More options" title="More">⋯</button>
+                <div class="card-menu" id="menu-${c.id}">
+                    <button onclick="duplicateCourse('${c.id}')">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Duplicate course
+                    </button>
+                </div>
                 ${c.image_url ? `<div style="height:88px;margin:-22px -22px 14px;border-radius:16px 16px 0 0;background:url('${escapeHtml(c.image_url)}') center/cover;"></div>` : ''}
                 <div class="ec-head">
                     <div class="ec-title">${escapeHtml(c.name)}</div>
@@ -133,6 +140,52 @@ function renderCourses() {
 
 function openCourse(id) {
     window.location.href = `course.html?id=${encodeURIComponent(id)}`;
+}
+
+// ── CARD MENU (⋯) + DUPLICATE COURSE ──
+function toggleCardMenu(e, id) {
+    e.stopPropagation();
+    const menu = document.getElementById(`menu-${id}`);
+    const open = menu.classList.contains('open');
+    document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open'));
+    if (!open) menu.classList.add('open');
+}
+document.addEventListener('click', () => document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open')));
+
+async function _copyCourseLinks(table, col, srcCourseId, newCourseId) {
+    const { data, error } = await db.from(table).select(col).eq('course_id', srcCourseId);
+    if (error) throw new Error(error.message);
+    const rows = (data || []).map(r => ({ course_id: newCourseId, [col]: r[col] }));
+    if (rows.length) {
+        const ins = await db.from(table).insert(rows);
+        if (ins.error) throw new Error(ins.error.message);
+    }
+}
+
+async function duplicateCourse(id) {
+    document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open'));
+    const src = allCourses.find(x => x.id === id);
+    if (!src) return;
+    const container = document.getElementById('courses-container');
+    try {
+        // 1) Create the copy (no students).
+        const ins = await db.from('courses').insert({
+            name: `Copy of ${src.name}`,
+            description: src.description,
+            expires_at: src.expires_at,
+            is_visible: src.is_visible,
+            image_url: src.image_url
+        }).select('id').single();
+        if (ins.error) throw new Error(ins.error.message);
+        const newId = ins.data.id;
+        // 2) Carry over subjects, exams and recording assignments.
+        await _copyCourseLinks('course_subjects', 'room_id', id, newId);
+        await _copyCourseLinks('exam_courses', 'exam_id', id, newId);
+        await _copyCourseLinks('recording_courses', 'recording_id', id, newId);
+        await loadCourses();
+    } catch (err) {
+        alert(`Could not duplicate the course: ${err.message}`);
+    }
 }
 
 function openCourseModal(id = null) {

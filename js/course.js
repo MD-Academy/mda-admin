@@ -8,6 +8,9 @@ let allStudents = [];        // profiles role=student
 let enrolledIds = new Set();
 let allExams = [];           // [{id, title, type}]
 let courseExamIds = new Set();
+let courseRecordings = [];   // assigned recordings [{id, title, recorded_date}]
+let recPickMap = {};         // id -> recording object (from search results + assigned)
+let recPickTimer = null;
 let IS_SUPER = false;        // superadmin manages; admins (teachers) view only
 
 function escapeHtml(str) {
@@ -73,6 +76,18 @@ async function initCourse(courseId, profile) {
                     </div>
                     <div id="course-exams-list"><div class="loader">Loading…</div></div>
                 </div>
+                <div class="panel" style="padding:22px;">
+                    <div class="section-title">Zoom recordings in this course</div>
+                    <p class="hint" style="margin:-8px 0 12px;">Assign recordings to this course — enrolled students will see them.</p>
+                    <div class="pill-label">In this course</div>
+                    <div class="pill-zone pill-zone-assigned" id="course-recs-assigned"><div class="loader">Loading…</div></div>
+                    <div class="pill-label" style="margin-top:14px;">Add a recording</div>
+                    <div class="search-box" style="margin:0 0 10px; min-width:0;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="rec-pick-search" placeholder="Search recordings by title…" oninput="onRecPickSearch()">
+                    </div>
+                    <div class="pill-zone" id="course-recs-results"><span class="pill-empty">Type a title to find recordings to add.</span></div>
+                </div>
             </div>
             ${studentsPanel}
         </div>
@@ -95,6 +110,17 @@ async function loadData() {
     allExams = exRes.data || [];
     courseExamIds = new Set((ecRes.data || []).map(r => r.exam_id));
     renderCourseExams();
+
+    // Recordings assigned to this course (search-to-add for the rest, since recordings grow large).
+    const recLinks = await db.from('recording_courses').select('recording_id').eq('course_id', COURSE_ID);
+    const recIds = [...new Set((recLinks.data || []).map(r => r.recording_id))];
+    courseRecordings = [];
+    if (recIds.length) {
+        const rr = await db.from('recordings').select('id, title, recorded_date').in('id', recIds);
+        courseRecordings = rr.data || [];
+    }
+    courseRecordings.forEach(r => { recPickMap[r.id] = r; });
+    renderCourseRecAssigned();
 
     // Enrolment is superadmin-only.
     if (IS_SUPER) {
@@ -155,6 +181,58 @@ async function toggleExam(examId) {
         courseExamIds.add(examId);
     }
     renderCourseExams();
+}
+
+// ── RECORDINGS IN THIS COURSE (assigned pills + search-to-add) ──
+function fmtRecDate(d) { return d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''; }
+
+function renderCourseRecAssigned() {
+    const el = document.getElementById('course-recs-assigned');
+    if (!el) return;
+    if (courseRecordings.length === 0) {
+        el.innerHTML = `<span class="pill-empty">No recordings assigned yet — search below to add.</span>`;
+        return;
+    }
+    const sorted = [...courseRecordings].sort((a, b) => (b.recorded_date || '').localeCompare(a.recorded_date || ''));
+    el.innerHTML = sorted.map(r => `
+        <span class="pill pill-assigned" onclick="toggleCourseRecording('${r.id}')" title="Click to remove from this course">${escapeHtml(r.title)} <span style="opacity:.6;font-weight:500;">· ${fmtRecDate(r.recorded_date)}</span> <span class="x">✕</span></span>`).join('');
+}
+
+function onRecPickSearch() {
+    clearTimeout(recPickTimer);
+    recPickTimer = setTimeout(runRecPickSearch, 300);
+}
+
+async function runRecPickSearch() {
+    const el = document.getElementById('course-recs-results');
+    if (!el) return;
+    const term = (document.getElementById('rec-pick-search').value || '').replace(/[%,()]/g, ' ').trim();
+    if (!term) { el.innerHTML = `<span class="pill-empty">Type a title to find recordings to add.</span>`; return; }
+    el.innerHTML = `<span class="pill-empty">Searching…</span>`;
+    const { data, error } = await db.from('recordings').select('id, title, recorded_date')
+        .eq('kind', 'zoom').ilike('title', `%${term}%`).order('recorded_date', { ascending: false }).limit(25);
+    if (error) { el.innerHTML = `<span class="pill-empty" style="color:var(--red)">${escapeHtml(error.message)}</span>`; return; }
+    const assigned = new Set(courseRecordings.map(r => r.id));
+    const avail = (data || []).filter(r => !assigned.has(r.id));
+    avail.forEach(r => { recPickMap[r.id] = r; });
+    if (avail.length === 0) { el.innerHTML = `<span class="pill-empty">No more recordings match.</span>`; return; }
+    el.innerHTML = avail.map(r => `
+        <span class="pill pill-available" onclick="toggleCourseRecording('${r.id}')" title="Click to add to this course">${escapeHtml(r.title)} <span style="opacity:.55;font-weight:500;">· ${fmtRecDate(r.recorded_date)}</span> <span class="plus">+</span></span>`).join('');
+}
+
+async function toggleCourseRecording(recId) {
+    const isAssigned = courseRecordings.some(r => r.id === recId);
+    if (isAssigned) {
+        const { error } = await db.from('recording_courses').delete().eq('course_id', COURSE_ID).eq('recording_id', recId);
+        if (error) { alert(`Failed: ${error.message}`); return; }
+        courseRecordings = courseRecordings.filter(r => r.id !== recId);
+    } else {
+        const { error } = await db.from('recording_courses').insert({ course_id: COURSE_ID, recording_id: recId });
+        if (error) { alert(`Failed: ${error.message}`); return; }
+        if (recPickMap[recId]) courseRecordings.push(recPickMap[recId]);
+    }
+    renderCourseRecAssigned();
+    runRecPickSearch();
 }
 
 // ── SUBJECTS ──

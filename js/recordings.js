@@ -156,6 +156,7 @@ function renderRecordings(list) {
             <td class="row-actions">
                 <a class="btn btn-ghost btn-sm" href="${escapeHtml(r.aws_url)}" target="_blank" rel="noopener">Preview</a>
                 <button class="btn btn-ghost btn-sm" onclick="openRecModal('${r.id}')">Edit</button>
+                <button class="btn btn-ghost btn-sm" onclick="duplicateRecording('${r.id}')">Duplicate</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteRecording('${r.id}')">Delete</button>
             </td>
         </tr>
@@ -172,23 +173,7 @@ async function toggleVisibility(id) {
     renderRecordings(allRecordings);
 }
 
-// ── COURSE CHECKLIST ──
-function renderCourseChecklist(selectedIds = []) {
-    const el = document.getElementById('rec-course-list');
-    if (recCourses.length === 0) {
-        el.innerHTML = `<div class="empty">No courses exist yet. Create one in the Courses section first.</div>`;
-        return;
-    }
-    const sel = new Set(selectedIds);
-    el.innerHTML = recCourses.map(c => `
-        <label class="check-row">
-            <input type="checkbox" value="${c.id}" ${sel.has(c.id) ? 'checked' : ''}>
-            ${escapeHtml(c.name)}
-        </label>`).join('');
-}
-function checkedCourseIds() {
-    return Array.from(document.querySelectorAll('#rec-course-list input[type="checkbox"]:checked')).map(cb => cb.value);
-}
+// Recording→course assignment now lives in the Course editor (Courses → open a course → Recordings).
 
 // ── CREATE / EDIT ──
 function openRecModal(id = null) {
@@ -205,7 +190,6 @@ function openRecModal(id = null) {
         document.getElementById('rec-date').value = r.recorded_date || '';
         document.getElementById('rec-url').value = r.aws_url || '';
         document.getElementById('rec-duration').value = r.duration_seconds ? Math.round(r.duration_seconds / 60) : '';
-        renderCourseChecklist(recCourseLinks[r.id] || []);
     } else {
         document.getElementById('rec-modal-title').textContent = 'Add Recording';
         document.getElementById('rec-id').value = '';
@@ -214,7 +198,6 @@ function openRecModal(id = null) {
         document.getElementById('rec-date').value = '';
         document.getElementById('rec-url').value = '';
         document.getElementById('rec-duration').value = '';
-        renderCourseChecklist([]);
     }
     openModal('rec-modal');
 }
@@ -227,7 +210,6 @@ async function saveRecording(e) {
 
     const id = document.getElementById('rec-id').value;
     const durationMin = document.getElementById('rec-duration').value;
-    const courseIds = checkedCourseIds();
 
     const payload = {
         kind: 'zoom',
@@ -242,35 +224,50 @@ async function saveRecording(e) {
         showModalAlert(alert, 'Please fill in all required fields.', 'error');
         return;
     }
-    if (courseIds.length === 0) {
-        showModalAlert(alert, 'Please assign the recording to at least one course.', 'error');
-        return;
-    }
     if (!ensureSafe(alert, [['Title', payload.title], ['Professor', payload.professor], ['Video URL', payload.aws_url]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
-        let recId = id;
         if (id) {
             const res = await db.from('recordings').update(payload).eq('id', id);
             if (res.error) throw new Error(res.error.message);
-            // Reset course links to match the new selection.
-            await db.from('recording_courses').delete().eq('recording_id', id);
         } else {
             const res = await db.from('recordings').insert(payload).select('id').single();
             if (res.error) throw new Error(res.error.message);
-            recId = res.data.id;
         }
-        const links = courseIds.map(cid => ({ recording_id: recId, course_id: cid }));
-        const linkRes = await db.from('recording_courses').insert(links);
-        if (linkRes.error) throw new Error(linkRes.error.message);
-
         closeModal('rec-modal');
         loadRecordings();
     } catch (err) {
         showModalAlert(alert, err.message, 'error');
     } finally {
         btn.disabled = false; btn.textContent = 'Save Recording';
+    }
+}
+
+async function duplicateRecording(id) {
+    const r = allRecordings.find(x => x.id === id);
+    if (!r) return;
+    try {
+        const ins = await db.from('recordings').insert({
+            kind: 'zoom',
+            title: `Copy of ${r.title}`,
+            professor: r.professor,
+            recorded_date: r.recorded_date,
+            aws_url: r.aws_url,
+            duration_seconds: r.duration_seconds,
+            is_visible: r.is_visible
+        }).select('id').single();
+        if (ins.error) throw new Error(ins.error.message);
+        // Copy its course assignments.
+        const links = recCourseLinks[id] || [];
+        if (links.length) {
+            const rows = links.map(cid => ({ recording_id: ins.data.id, course_id: cid }));
+            const li = await db.from('recording_courses').insert(rows);
+            if (li.error) throw new Error(li.error.message);
+        }
+        loadRecordings();
+    } catch (err) {
+        alert(`Could not duplicate the recording: ${err.message}`);
     }
 }
 
