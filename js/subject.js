@@ -261,13 +261,11 @@ function openLessonForm(id = null) {
         document.getElementById('lesson-id').value = l.id;
         document.getElementById('lesson-title').value = l.title || '';
         document.getElementById('lesson-desc').value = l.description || '';
-        document.getElementById('lesson-image').value = l.image_url || '';
     } else {
         document.getElementById('lesson-modal-title').textContent = 'Add Lesson';
         document.getElementById('lesson-id').value = '';
         document.getElementById('lesson-title').value = '';
         document.getElementById('lesson-desc').value = '';
-        document.getElementById('lesson-image').value = '';
     }
     openModal('lesson-modal');
 }
@@ -284,10 +282,9 @@ async function saveLesson(e) {
 
     const payload = {
         title,
-        description: document.getElementById('lesson-desc').value.trim() || null,
-        image_url: document.getElementById('lesson-image').value.trim() || null
+        description: document.getElementById('lesson-desc').value.trim() || null
     };
-    if (!ensureSafe(alert, [['Lesson Title', payload.title], ['Description', payload.description], ['Image URL', payload.image_url]])) return;
+    if (!ensureSafe(alert, [['Lesson Title', payload.title], ['Description', payload.description]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
