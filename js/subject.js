@@ -236,7 +236,7 @@ function renderLessons() {
         return;
     }
     list.innerHTML = `<div class="list-rows">${lessons.map((l, i) => `
-        <div class="list-row">
+        <div class="list-row" data-id="${l.id}">
             <div class="lr-index">${i + 1}</div>
             <div class="lr-body">
                 <div class="lr-title">${escapeHtml(l.title)}</div>
@@ -329,6 +329,17 @@ async function deleteLesson(id) {
     await loadAll();
 }
 
+// Visual feedback after a reorder: highlight the moved row and smooth-scroll to it.
+function flashMovedRow(id) {
+    requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-id="${id}"]`);
+        if (!el) return;
+        el.classList.add('row-just-moved');
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+        setTimeout(() => el.classList.remove('row-just-moved'), 950);
+    });
+}
+
 async function moveLesson(id, direction) {
     const idx = lessons.findIndex(l => l.id === id);
     const target = idx + direction;
@@ -340,6 +351,7 @@ async function moveLesson(id, direction) {
     ]);
     if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
     await loadAll();
+    flashMovedRow(id);
 }
 
 // ════════════ RECORDINGS & LECTURES (shared) ════════════
@@ -354,7 +366,7 @@ function renderRecordings(kind) {
     }
     const reorder = kind === 'lecture';   // lectures are manually orderable; zoom is by date
     tbody.innerHTML = list.map((r, i) => `
-        <tr>
+        <tr data-id="${r.id}">
             <td><strong>${escapeHtml(r.title)}</strong></td>
             <td>${escapeHtml(lessonTitle(r.lesson_id))}</td>
             <td>${escapeHtml(r.professor)}</td>
@@ -383,6 +395,7 @@ async function moveRecording(id, direction) {
     ]);
     if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
     await loadAll();
+    flashMovedRow(id);
 }
 
 function openRecModal(kind, id = null) {
@@ -481,7 +494,7 @@ async function deleteRecording(id) {
 // ════════════ MATERIALS ════════════
 function materialRowHtml(m, i, n) {
     return `
-        <tr>
+        <tr data-id="${m.id}">
             <td><strong>${escapeHtml(m.title)}</strong>${m.external_url ? ' <span title="External link">🔗</span>' : ''}</td>
             <td><span class="badge badge-blue">${escapeHtml((m.type || 'file').toUpperCase())}</span></td>
             <td>${escapeHtml(lessonTitle(m.lesson_id))}</td>
@@ -528,6 +541,7 @@ async function moveMaterial(id, direction) {
     ]);
     if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
     await loadAll();
+    flashMovedRow(id);
 }
 
 // Next order_index for a new material within this room+category (so it lands at the bottom).
@@ -835,7 +849,7 @@ function renderQuizQuestions() {
             const opts = Array.isArray(q.options_json) ? q.options_json : [];
             const correct = opts[q.correct_answer_index] || '—';
             return `
-                <div class="list-row">
+                <div class="list-row" data-id="${q.id}">
                     <div class="lr-index">${i + 1}</div>
                     <div class="lr-body">
                         <div class="lr-title">${escapeHtml(q.question_text)}</div>
@@ -1006,4 +1020,5 @@ async function moveQuestion(id, dir) {
     ]);
     if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
     await refreshQuizQuestions();
+    flashMovedRow(id);
 }

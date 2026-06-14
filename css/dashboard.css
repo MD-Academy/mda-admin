@@ -292,6 +292,10 @@ body {
     vertical-align: middle;
 }
 .data-table tbody tr:hover { background: var(--bg); }
+/* Highlight a row/item right after it's reordered (move up/down). */
+@keyframes rowMoved { 0% { background-color: rgba(37,99,235,.20); } 100% { background-color: transparent; } }
+.row-just-moved, .row-just-moved > td { animation: rowMoved 0.9s ease-out; }
+.row-just-moved { border-radius: 8px; }
 .data-table code {
     background: var(--bg);
     padding: 3px 8px;
