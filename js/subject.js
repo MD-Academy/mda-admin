@@ -181,8 +181,8 @@ function switchTab(name) {
 async function loadAll() {
     const [lRes, rRes, mRes] = await Promise.all([
         db.from('lessons').select('id, title, description, image_url, order_index, is_visible').eq('room_id', ROOM_ID).order('order_index', { ascending: true }),
-        db.from('recordings').select('id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, kind, is_visible').eq('room_id', ROOM_ID).eq('kind', 'lecture').order('created_at', { ascending: true }),
-        db.from('materials').select('id, lesson_id, title, type, storage_path, external_url, created_at, category, is_visible').eq('room_id', ROOM_ID).order('created_at', { ascending: true })
+        db.from('recordings').select('id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, kind, is_visible, order_index, created_at').eq('room_id', ROOM_ID).eq('kind', 'lecture').order('order_index', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true }),
+        db.from('materials').select('id, lesson_id, title, type, storage_path, external_url, created_at, category, is_visible, order_index').eq('room_id', ROOM_ID).order('order_index', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true })
     ]);
 
     lessons = lRes.data || [];
@@ -352,7 +352,8 @@ function renderRecordings(kind) {
         tbody.innerHTML = `<tr><td colspan="${colspan}" class="loader">No ${label} yet.</td></tr>`;
         return;
     }
-    tbody.innerHTML = list.map(r => `
+    const reorder = kind === 'lecture';   // lectures are manually orderable; zoom is by date
+    tbody.innerHTML = list.map((r, i) => `
         <tr>
             <td><strong>${escapeHtml(r.title)}</strong></td>
             <td>${escapeHtml(lessonTitle(r.lesson_id))}</td>
@@ -361,11 +362,27 @@ function renderRecordings(kind) {
             <td>${formatDuration(r.duration_seconds)}</td>
             <td>${visToggleHtml('toggleRecVis', r.id, r.is_visible)}</td>
             <td class="row-actions">
+                ${reorder ? `<button class="btn btn-ghost btn-sm" onclick="moveRecording('${r.id}', -1)" ${i === 0 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move up">↑</button>
+                <button class="btn btn-ghost btn-sm" onclick="moveRecording('${r.id}', 1)" ${i === list.length - 1 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move down">↓</button>` : ''}
                 <a class="btn btn-ghost btn-sm" href="${escapeHtml(r.aws_url)}" target="_blank" rel="noopener">Preview</a>
                 <button class="btn btn-ghost btn-sm" onclick="openRecModal('${kind}', '${r.id}')">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteRecording('${r.id}')">Delete</button>
             </td>
         </tr>`).join('');
+}
+
+async function moveRecording(id, direction) {
+    const list = recordings.filter(r => r.kind === 'lecture');
+    const idx = list.findIndex(r => r.id === id);
+    const target = idx + direction;
+    if (idx < 0 || target < 0 || target >= list.length) return;
+    const a = list[idx], b = list[target];
+    const [r1, r2] = await Promise.all([
+        db.from('recordings').update({ order_index: b.order_index }).eq('id', a.id),
+        db.from('recordings').update({ order_index: a.order_index }).eq('id', b.id)
+    ]);
+    if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
+    await loadAll();
 }
 
 function openRecModal(kind, id = null) {
@@ -433,6 +450,8 @@ async function saveRecording(e) {
         if (id) {
             res = await db.from('recordings').update(payload).eq('id', id);
         } else {
+            const lectures = recordings.filter(r => r.kind === 'lecture');
+            payload.order_index = lectures.length ? Math.max(...lectures.map(r => r.order_index || 0)) + 1 : 1;
             res = await db.from('recordings').insert(payload);
         }
         if (res.error) throw new Error(res.error.message);
@@ -460,7 +479,7 @@ async function deleteRecording(id) {
 }
 
 // ════════════ MATERIALS ════════════
-function materialRowHtml(m) {
+function materialRowHtml(m, i, n) {
     return `
         <tr>
             <td><strong>${escapeHtml(m.title)}</strong>${m.external_url ? ' <span title="External link">🔗</span>' : ''}</td>
@@ -469,6 +488,8 @@ function materialRowHtml(m) {
             <td>${formatDate(m.created_at)}</td>
             <td>${visToggleHtml('toggleMaterialVis', m.id, m.is_visible)}</td>
             <td class="row-actions">
+                <button class="btn btn-ghost btn-sm" onclick="moveMaterial('${m.id}', -1)" ${i === 0 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move up">↑</button>
+                <button class="btn btn-ghost btn-sm" onclick="moveMaterial('${m.id}', 1)" ${i === n - 1 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move down">↓</button>
                 <button class="btn btn-ghost btn-sm" onclick="previewMaterial('${m.id}', this)">Preview</button>
                 <button class="btn btn-ghost btn-sm" onclick="openMaterialEdit('${m.id}')">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteMaterial('${m.id}')">Delete</button>
@@ -480,7 +501,7 @@ function renderMaterials() {
     const tbody = document.getElementById('materials-tbody');
     const list = materials.filter(m => matCategory(m) === 'material');
     tbody.innerHTML = list.length
-        ? list.map(materialRowHtml).join('')
+        ? list.map((m, i) => materialRowHtml(m, i, list.length)).join('')
         : `<tr><td colspan="6" class="loader">No materials yet.</td></tr>`;
 }
 
@@ -488,8 +509,31 @@ function renderNotes() {
     const tbody = document.getElementById('notes-tbody');
     const list = materials.filter(m => matCategory(m) === 'note');
     tbody.innerHTML = list.length
-        ? list.map(materialRowHtml).join('')
+        ? list.map((m, i) => materialRowHtml(m, i, list.length)).join('')
         : `<tr><td colspan="6" class="loader">No notes yet.</td></tr>`;
+}
+
+async function moveMaterial(id, direction) {
+    const m = materials.find(x => x.id === id);
+    if (!m) return;
+    const cat = matCategory(m);
+    const list = materials.filter(x => matCategory(x) === cat);
+    const idx = list.findIndex(x => x.id === id);
+    const target = idx + direction;
+    if (idx < 0 || target < 0 || target >= list.length) return;
+    const a = list[idx], b = list[target];
+    const [r1, r2] = await Promise.all([
+        db.from('materials').update({ order_index: b.order_index }).eq('id', a.id),
+        db.from('materials').update({ order_index: a.order_index }).eq('id', b.id)
+    ]);
+    if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
+    await loadAll();
+}
+
+// Next order_index for a new material within this room+category (so it lands at the bottom).
+function nextMaterialOrder(category) {
+    const list = materials.filter(m => matCategory(m) === (category === 'note' ? 'note' : 'material'));
+    return list.length ? Math.max(...list.map(m => m.order_index || 0)) + 1 : 1;
 }
 
 function openUploadModal(category = 'material') {
@@ -556,7 +600,8 @@ async function saveUpload(e) {
         btn.disabled = true; btn.textContent = 'Saving…';
         try {
             const ins = await db.from('materials').insert({
-                room_id: ROOM_ID, lesson_id, title, type: linkType, storage_path: null, external_url: url, category
+                room_id: ROOM_ID, lesson_id, title, type: linkType, storage_path: null, external_url: url, category,
+                order_index: nextMaterialOrder(category)
             });
             if (ins.error) throw new Error(`Saving record failed: ${ins.error.message}`);
             closeModal('upload-modal');
@@ -595,7 +640,8 @@ async function saveUpload(e) {
         if (up.error) throw new Error(`Upload failed: ${up.error.message}`);
 
         const ins = await db.from('materials').insert({
-            room_id: ROOM_ID, lesson_id, title, type: ext, storage_path: path, category
+            room_id: ROOM_ID, lesson_id, title, type: ext, storage_path: path, category,
+            order_index: nextMaterialOrder(category)
         });
         if (ins.error) {
             await db.storage.from(MATERIALS_BUCKET).remove([path]);
