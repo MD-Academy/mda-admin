@@ -7,16 +7,16 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 // Whitelisted file extensions per category. Anything not in the list
 // (e.g. .exe, .zip, .js, .html, .bat) is rejected with a clear error.
 const ALLOWED_EXT = {
-    material: ['pdf', 'ppt', 'pptx', 'doc', 'docx', 'png', 'jpg', 'jpeg'],
-    note: ['pdf', 'txt', 'jpg', 'jpeg', 'png']
+    material: ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp'],
+    note: ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp']
 };
 const ALLOWED_HINT = {
-    material: 'PDF, PPTX, DOCX, images — up to 50 MB',
-    note: 'PDF, TXT, JPG, PNG — up to 50 MB'
+    material: 'PDF or images (PNG, JPG, WEBP, GIF) — export slides/Word to PDF or use a link — up to 50 MB',
+    note: 'PDF or images (PNG, JPG, WEBP, GIF) — up to 50 MB'
 };
 const ACCEPT_ATTR = {
-    material: '.pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg',
-    note: '.pdf,.txt,.png,.jpg,.jpeg'
+    material: '.pdf,.png,.jpg,.jpeg,.gif,.webp',
+    note: '.pdf,.png,.jpg,.jpeg,.gif,.webp'
 };
 
 let ROOM_ID = null;
