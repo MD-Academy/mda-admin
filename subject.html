@@ -99,6 +99,10 @@
             <form onsubmit="saveUpload(event)">
                 <div class="modal-body">
                     <div class="alert" id="upload-alert" style="display:none;"></div>
+                    <div style="background:#eef4ff;border:1px solid #d6e4ff;border-radius:9px;padding:11px 13px;margin-bottom:16px;font-size:13px;line-height:1.6;color:#1e3a5f;">
+                        <strong>Supported uploads: PDF or images</strong> (PNG, JPG, WEBP, GIF) — they display read-only with the watermark.<br>
+                        <strong>PowerPoint or Word?</strong> Export it to <strong>PDF</strong> first (File → Save As / Export → PDF), or use <strong>🔗 External link</strong> to share it (opens in a new tab).
+                    </div>
                     <input type="hidden" id="upload-category" value="material">
                     <input type="hidden" id="upload-source" value="file">
                     <div class="seg-toggle" style="display:flex;gap:8px;margin-bottom:16px;">
