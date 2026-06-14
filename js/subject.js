@@ -181,8 +181,8 @@ function switchTab(name) {
 async function loadAll() {
     const [lRes, rRes, mRes] = await Promise.all([
         db.from('lessons').select('id, title, description, image_url, order_index, is_visible').eq('room_id', ROOM_ID).order('order_index', { ascending: true }),
-        db.from('recordings').select('id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, kind, is_visible').eq('room_id', ROOM_ID).eq('kind', 'lecture').order('recorded_date', { ascending: false }),
-        db.from('materials').select('id, lesson_id, title, type, storage_path, external_url, created_at, category, is_visible').eq('room_id', ROOM_ID).order('created_at', { ascending: false })
+        db.from('recordings').select('id, lesson_id, title, professor, recorded_date, aws_url, duration_seconds, kind, is_visible').eq('room_id', ROOM_ID).eq('kind', 'lecture').order('created_at', { ascending: true }),
+        db.from('materials').select('id, lesson_id, title, type, storage_path, external_url, created_at, category, is_visible').eq('room_id', ROOM_ID).order('created_at', { ascending: true })
     ]);
 
     lessons = lRes.data || [];
