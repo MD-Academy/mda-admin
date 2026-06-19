@@ -97,7 +97,7 @@ function openUniModal(id = null) {
 function renderDegreeEditor() {
     const chips = document.getElementById('uni-degree-chips');
     chips.innerHTML = editDegrees.length
-        ? editDegrees.map((d, i) => `<span class="pill pill-assigned" style="cursor:default;">${escapeHtml(d)} <span class="x" style="cursor:pointer;" onclick="removeDegree(${i})">✕</span></span>`).join('')
+        ? editDegrees.map((d, i) => `<span class="pill pill-assigned" style="cursor:default;">${escapeHtml(d)} <span class="x" title="Remove this degree" style="cursor:pointer;" onclick="removeDegree(${i})">✕</span></span>`).join('')
         : `<span class="hint">No degrees added yet.</span>`;
     const quick = document.getElementById('uni-degree-quick');
     quick.innerHTML = COMMON_DEGREES.filter(d => !editDegrees.includes(d))

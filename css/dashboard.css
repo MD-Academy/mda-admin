@@ -745,7 +745,8 @@ body {
 .pill-assigned { background: #fdecf3; color: #b91c5c; border-color: #f3c6d9; }
 .pill-available { background: #f1f5f9; color: var(--text); border-color: var(--border); }
 .pill-available:hover { background: #eaf1fb; border-color: #9cc0f0; }
-.pill .x { font-weight: 800; opacity: .55; }
+.pill .x { font-weight: 800; opacity: .55; padding: 0 2px; border-radius: 4px; }
+.pill .x:hover { opacity: 1; color: var(--red); background: rgba(220,38,38,.12); }
 .pill .plus { font-weight: 800; opacity: .5; font-size: 15px; line-height: 1; }
 
 /* ── Course checkbox list (enrol-on-create) ── */
