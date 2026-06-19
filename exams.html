@@ -55,6 +55,10 @@
                             <div class="hint">How many times a student may take it. Leave blank for unlimited. The Gradebook keeps the last score.</div>
                         </div>
                     </div>
+                    <label class="notify-row" style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;cursor:pointer;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:16px;">
+                        <span><strong>Counts toward graduation</strong><br><span style="color:var(--text-muted);font-size:12.5px;font-weight:400;">Include this exam in the final GPA and the diploma eligibility check. Turn off for practice quizzes.</span></span>
+                        <input type="checkbox" id="exam-counts" checked style="width:20px;height:20px;flex-shrink:0;accent-color:var(--red);cursor:pointer;">
+                    </label>
                     <div class="form-field" id="pdf-field" style="display:none;">
                         <label>Exam PDF</label>
                         <label class="upload-zone" for="exam-file" style="padding:20px;">

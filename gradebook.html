@@ -39,6 +39,49 @@
         </div>
     </div>
 
+    <!-- ISSUE DIPLOMA MODAL -->
+    <div class="modal-overlay" id="diploma-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3 id="diploma-title">Issue Diploma & Recommendation Letter</h3>
+                <button class="modal-close" onclick="closeModal('diploma-modal')">&times;</button>
+            </div>
+            <form onsubmit="issueDiploma(event)">
+                <div class="modal-body">
+                    <div class="alert" id="diploma-alert" style="display:none;"></div>
+                    <input type="hidden" id="dip-student">
+                    <p id="dip-context" style="font-size:14px;color:var(--text-muted);margin-bottom:6px;"></p>
+                    <div id="dip-status"><div class="loader">Checking the student's standing…</div></div>
+
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label>Final grade / distinction <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                            <input type="text" id="dip-grade" placeholder="e.g. With Distinction, Grade A, 92%">
+                            <div class="hint">Printed on the diploma if set. Leave blank to omit.</div>
+                        </div>
+                        <div class="form-field">
+                            <label>Teacher's note <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                            <input type="text" id="dip-remark" placeholder="A line about this student (helps the letter)">
+                        </div>
+                    </div>
+
+                    <div class="form-field">
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
+                            <label style="margin:0;">Recommendation letter</label>
+                            <button type="button" class="btn btn-ghost btn-sm" id="dip-draft-btn" onclick="draftLetter()">✨ Draft with AI</button>
+                        </div>
+                        <textarea id="dip-letter" rows="12" placeholder="Write the recommendation letter here, or click “Draft with AI” to generate a draft you can edit. The Academy letterhead, date and signature are added automatically."></textarea>
+                        <div class="hint">The student always sees your final, edited text — review it before sending.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('diploma-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="dip-send-btn">Approve &amp; Send</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>

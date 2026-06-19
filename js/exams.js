@@ -35,7 +35,7 @@ async function loadExams() {
     tbody.innerHTML = `<tr><td colspan="6" class="loader">Loading exams…</td></tr>`;
 
     const [exRes, courseRes, linkRes, qRes] = await Promise.all([
-        db.from('exams').select('id, title, description, type, pass_threshold, storage_path, time_limit_minutes, max_attempts, is_visible, created_at').order('created_at', { ascending: false }),
+        db.from('exams').select('id, title, description, type, pass_threshold, storage_path, time_limit_minutes, max_attempts, is_visible, counts_toward_graduation, created_at').order('created_at', { ascending: false }),
         db.from('courses').select('id, name').order('created_at', { ascending: false }),
         db.from('exam_courses').select('exam_id, course_id'),
         db.from('exam_questions').select('id, exam_id')
@@ -141,6 +141,7 @@ function openExamModal(id = null) {
         document.getElementById('exam-threshold').value = e.pass_threshold ?? 70;
         document.getElementById('exam-timelimit').value = e.time_limit_minutes || '';
         document.getElementById('exam-attempts').value = e.max_attempts || '';
+        document.getElementById('exam-counts').checked = e.counts_toward_graduation !== false;
         if (e.type === 'pdf' && e.storage_path) {
             document.getElementById('exam-file-current').textContent = 'A PDF is already uploaded. Choose a file only to replace it.';
         }
@@ -153,6 +154,7 @@ function openExamModal(id = null) {
         document.getElementById('exam-threshold').value = 70;
         document.getElementById('exam-timelimit').value = '';
         document.getElementById('exam-attempts').value = '1';   // default: once (blank = unlimited)
+        document.getElementById('exam-counts').checked = true;
     }
     onTypeChange();
     openModal('exam-modal');
@@ -178,7 +180,8 @@ async function saveExam(ev) {
         type,
         pass_threshold: (threshold >= 1 && threshold <= 100) ? threshold : 70,
         time_limit_minutes: (type === 'manual' && timelimit) ? parseInt(timelimit, 10) : null,
-        max_attempts: maxAttempts
+        max_attempts: maxAttempts,
+        counts_toward_graduation: document.getElementById('exam-counts').checked
     };
 
     if (!payload.title) { showModalAlert(alert, 'Title is required.', 'error'); return; }
