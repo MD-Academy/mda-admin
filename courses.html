@@ -45,8 +45,11 @@
                     </div>
                     <div class="form-field">
                         <label>Access expires on <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                        <input type="date" id="course-expiry">
-                        <div class="hint">After this date the course (and its subjects) disappears for enrolled students until you extend it. Leave blank for no expiry.</div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <input type="date" id="course-expiry" style="flex:1;" oninput="toggleCourseExpiryClear()">
+                            <button type="button" class="btn btn-ghost btn-sm" id="course-expiry-clear" onclick="clearCourseExpiry()" style="display:none;white-space:nowrap;">Remove expiry</button>
+                        </div>
+                        <div class="hint">After this date the course (and its subjects) disappears for enrolled students until you extend it. Leave blank — or click <strong>Remove expiry</strong> — for no expiry (the course stays active forever).</div>
                     </div>
                     <div class="form-field">
                         <label>Cover Image <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>

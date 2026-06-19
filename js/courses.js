@@ -210,7 +210,18 @@ function openCourseModal(id = null) {
         document.getElementById('course-desc').value = '';
         document.getElementById('course-expiry').value = '';
     }
+    toggleCourseExpiryClear();
     openModal('course-modal');
+}
+
+// Show "Remove expiry" only when a date is set; clearing it makes the course never expire.
+function toggleCourseExpiryClear() {
+    const btn = document.getElementById('course-expiry-clear');
+    if (btn) btn.style.display = document.getElementById('course-expiry').value ? 'inline-flex' : 'none';
+}
+function clearCourseExpiry() {
+    document.getElementById('course-expiry').value = '';
+    toggleCourseExpiryClear();
 }
 
 async function saveCourse(e) {
