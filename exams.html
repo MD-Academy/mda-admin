@@ -87,7 +87,10 @@
             <div class="modal-body">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
                     <div class="section-title" style="margin:0;">Questions <span id="eq-count" class="count-pill">0</span></div>
-                    <button class="btn btn-primary btn-sm" onclick="openQuestionForm()">+ Add Question</button>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-ghost btn-sm" onclick="openImport()">📄 Import from PDF</button>
+                        <button class="btn btn-primary btn-sm" onclick="openQuestionForm()">+ Add Question</button>
+                    </div>
                 </div>
                 <div id="eq-list"><div class="loader">Loading…</div></div>
                 <div class="alert" id="eq-note" style="display:block;background:#eff5ff;color:#1d4ed8;border:1px solid #bfdbfe;margin-top:16px;">Add as many questions as you like. The score is the % answered correctly; the pass mark is set on the exam.</div>
@@ -124,6 +127,31 @@
                     <button type="submit" class="btn btn-primary" id="question-save-btn">Save Question</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- IMPORT FROM PDF MODAL -->
+    <div class="modal-overlay" id="import-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3>Import questions from PDF</h3>
+                <button class="modal-close" onclick="closeModal('import-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert" id="import-alert" style="display:none;"></div>
+                <div id="import-pick">
+                    <p class="hint" style="margin-top:0;">Upload a PDF of an existing multiple-choice exam. The system reads the questions and — if the PDF includes an answer key — the correct answers. You'll review and edit everything before anything is added. Works best when the PDF has a clear answer key.</p>
+                    <input type="file" id="import-file" accept="application/pdf,.pdf">
+                    <div class="hint" style="margin-top:8px;">PDF only, up to 25 MB.</div>
+                </div>
+                <div id="import-status" style="display:none;"></div>
+                <div id="import-review" style="display:none;"></div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('import-modal')">Cancel</button>
+                <button type="button" class="btn btn-primary" id="import-read-btn" onclick="extractPdf()">Read PDF</button>
+                <button type="button" class="btn btn-primary" id="import-save-btn" style="display:none;" onclick="saveImported()">Add questions</button>
+            </div>
         </div>
     </div>
 

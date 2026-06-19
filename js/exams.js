@@ -393,3 +393,158 @@ async function moveQuestion(id, dir) {
     if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
     await refreshQuestions();
 }
+
+// ════════════ IMPORT FROM PDF ════════════
+let IMPORTED = [];   // [{ question, options[], correct_index }]
+
+function openImport() {
+    document.getElementById('import-alert').style.display = 'none';
+    document.getElementById('import-file').value = '';
+    document.getElementById('import-pick').style.display = 'block';
+    document.getElementById('import-status').style.display = 'none';
+    const review = document.getElementById('import-review');
+    review.style.display = 'none'; review.innerHTML = '';
+    const readBtn = document.getElementById('import-read-btn');
+    readBtn.style.display = 'inline-block'; readBtn.disabled = false; readBtn.textContent = 'Read PDF';
+    document.getElementById('import-save-btn').style.display = 'none';
+    IMPORTED = [];
+    openModal('import-modal');
+}
+
+function _fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(',', 2)[1] || '');
+        r.onerror = () => reject(new Error('Could not read the file.'));
+        r.readAsDataURL(file);
+    });
+}
+
+async function extractPdf() {
+    const alert = document.getElementById('import-alert'); alert.style.display = 'none';
+    const file = document.getElementById('import-file').files[0];
+    if (!file) { showModalAlert(alert, 'Please choose a PDF first.', 'error'); return; }
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { showModalAlert(alert, 'Please upload a PDF file.', 'error'); return; }
+    if (file.size > 25 * 1024 * 1024) { showModalAlert(alert, 'That PDF is too large (max 25 MB).', 'error'); return; }
+
+    const btn = document.getElementById('import-read-btn');
+    const status = document.getElementById('import-status');
+    btn.disabled = true; btn.textContent = 'Reading…';
+    status.style.display = 'block';
+    status.innerHTML = `<div class="loader">Reading the PDF and extracting questions… this can take up to a minute for a long exam.</div>`;
+    try {
+        const b64 = await _fileToBase64(file);
+        const data = await apiRequest('POST', '/exams/import-pdf', { pdf_base64: b64, filename: file.name });
+        IMPORTED = (data.questions || []).map(q => ({
+            question: q.question || '',
+            options: Array.isArray(q.options) ? q.options.slice() : [],
+            correct_index: Number.isInteger(q.correct_index) ? q.correct_index : -1
+        }));
+        status.style.display = 'none';
+        if (IMPORTED.length === 0) {
+            showModalAlert(alert, 'No multiple-choice questions were found in that PDF.', 'error');
+            btn.disabled = false; btn.textContent = 'Read PDF';
+            return;
+        }
+        document.getElementById('import-pick').style.display = 'none';
+        btn.style.display = 'none';
+        document.getElementById('import-save-btn').style.display = 'inline-block';
+        renderImportReview();
+    } catch (err) {
+        status.style.display = 'none';
+        showModalAlert(alert, err.message || 'Import failed.', 'error');
+        btn.disabled = false; btn.textContent = 'Read PDF';
+    }
+}
+
+function renderImportReview() {
+    const box = document.getElementById('import-review');
+    box.style.display = 'block';
+    const missing = IMPORTED.filter(q => q.correct_index < 0).length;
+    const note = missing
+        ? `<strong>${missing}</strong> question${missing === 1 ? '' : 's'} need a correct answer set (none was detected) before importing.`
+        : 'Answers were detected from the PDF — please double-check each one.';
+    const banner = `<div class="alert" style="display:block;background:#eff5ff;color:#1d4ed8;border:1px solid #bfdbfe;margin-bottom:14px;">
+        Review the ${IMPORTED.length} extracted question${IMPORTED.length === 1 ? '' : 's'} below. Edit any wording or options, and confirm the correct answer (the selected circle). ${note}</div>`;
+    box.innerHTML = banner + IMPORTED.map((q, qi) => `
+        <div class="panel" style="padding:16px;margin-bottom:12px;" data-q="${qi}">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px;">
+                <strong>Question ${qi + 1}</strong>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeImportQuestion(${qi})">Remove</button>
+            </div>
+            <textarea class="imp-q" style="width:100%;" rows="2">${escapeHtml(q.question)}</textarea>
+            <div style="margin-top:10px;">
+                ${q.options.map((o, oi) => `
+                    <div class="option-row" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <input type="radio" name="imp-correct-${qi}" ${oi === q.correct_index ? 'checked' : ''}>
+                        <input type="text" class="imp-opt" style="flex:1;" value="${escapeHtml(o)}" placeholder="Option text">
+                        <button type="button" class="opt-remove" onclick="removeImportOption(${qi}, ${oi})" title="Remove">&times;</button>
+                    </div>`).join('')}
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="addImportOption(${qi})">+ Add Option</button>
+        </div>`).join('');
+}
+
+function _syncImportFromDom() {
+    document.querySelectorAll('#import-review [data-q]').forEach(card => {
+        const qi = parseInt(card.getAttribute('data-q'), 10);
+        if (!IMPORTED[qi]) return;
+        IMPORTED[qi].question = card.querySelector('.imp-q').value;
+        const rows = Array.from(card.querySelectorAll('.option-row'));
+        IMPORTED[qi].options = rows.map(r => r.querySelector('.imp-opt').value);
+        IMPORTED[qi].correct_index = rows.findIndex(r => r.querySelector('input[type="radio"]').checked);
+    });
+}
+
+function addImportOption(qi) {
+    _syncImportFromDom();
+    if (IMPORTED[qi].options.length >= 6) return;
+    IMPORTED[qi].options.push('');
+    renderImportReview();
+}
+function removeImportOption(qi, oi) {
+    _syncImportFromDom();
+    if (IMPORTED[qi].options.length <= 2) return;
+    IMPORTED[qi].options.splice(oi, 1);
+    if (IMPORTED[qi].correct_index === oi) IMPORTED[qi].correct_index = -1;
+    else if (IMPORTED[qi].correct_index > oi) IMPORTED[qi].correct_index -= 1;
+    renderImportReview();
+}
+function removeImportQuestion(qi) {
+    _syncImportFromDom();
+    IMPORTED.splice(qi, 1);
+    if (IMPORTED.length === 0) { closeModal('import-modal'); return; }
+    renderImportReview();
+}
+
+async function saveImported() {
+    const alert = document.getElementById('import-alert'); alert.style.display = 'none';
+    _syncImportFromDom();
+
+    const clean = [];
+    for (let i = 0; i < IMPORTED.length; i++) {
+        const q = IMPORTED[i];
+        const text = (q.question || '').trim();
+        const options = (q.options || []).map(o => (o || '').trim());
+        if (!text) { showModalAlert(alert, `Question ${i + 1}: enter the question text.`, 'error'); return; }
+        if (options.length < 2 || options.some(o => !o)) { showModalAlert(alert, `Question ${i + 1}: fill in at least two options (no blanks).`, 'error'); return; }
+        if (q.correct_index < 0 || q.correct_index >= options.length) { showModalAlert(alert, `Question ${i + 1}: mark the correct answer.`, 'error'); return; }
+        if (!ensureSafe(alert, [[`Question ${i + 1}`, text], ...options.map((o, oi) => [`Q${i + 1} option ${oi + 1}`, o])])) return;
+        clean.push({ question_text: text, options_json: options, correct_answer_index: q.correct_index });
+    }
+
+    const btn = document.getElementById('import-save-btn');
+    btn.disabled = true; btn.textContent = 'Adding…';
+    try {
+        let nextOrder = currentQuestions.length ? Math.max(...currentQuestions.map(q => q.order_index || 0)) + 1 : 1;
+        const rows = clean.map(c => ({ exam_id: currentExam.id, ...c, order_index: nextOrder++ }));
+        const { error } = await db.from('exam_questions').insert(rows);
+        if (error) throw new Error(error.message);
+        closeModal('import-modal');
+        await refreshQuestions();
+    } catch (err) {
+        showModalAlert(alert, err.message || 'Could not add the questions.', 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Add questions';
+    }
+}
