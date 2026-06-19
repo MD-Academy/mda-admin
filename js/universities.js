@@ -79,13 +79,14 @@ function openUniModal(id = null) {
         document.getElementById('uni-location').value = u.location || '';
         document.getElementById('uni-costs').value = u.costs || '';
         document.getElementById('uni-website').value = u.website || '';
+        document.getElementById('uni-app-link').value = u.application_url || '';
         document.getElementById('uni-desc').value = u.description || '';
         editDegrees = Array.isArray(u.degrees) ? u.degrees.slice() : [];
         editExamDates = Array.isArray(u.exam_dates) ? u.exam_dates.slice() : [];
         if (u.image_url) document.getElementById('uni-image-current').textContent = 'A photo is set — choose a file to replace it.';
     } else {
         document.getElementById('uni-modal-title').textContent = 'Add University';
-        ['uni-id', 'uni-name', 'uni-country', 'uni-location', 'uni-costs', 'uni-website', 'uni-desc'].forEach(f => document.getElementById(f).value = '');
+        ['uni-id', 'uni-name', 'uni-country', 'uni-location', 'uni-costs', 'uni-website', 'uni-app-link', 'uni-desc'].forEach(f => document.getElementById(f).value = '');
         editDegrees = [];
         editExamDates = [];
     }
@@ -172,15 +173,17 @@ async function saveUni(e) {
     const costs = document.getElementById('uni-costs').value.trim();
     const description = document.getElementById('uni-desc').value.trim();
     const web = cleanWebsite(document.getElementById('uni-website').value);
+    const appLink = cleanWebsite(document.getElementById('uni-app-link').value);
 
     if (!name) { showModalAlert(alert, 'Please enter the university name.', 'error'); return; }
     if (editDegrees.length === 0) { showModalAlert(alert, 'Add at least one degree the university offers.', 'error'); return; }
-    if (!web.ok) { showModalAlert(alert, web.msg, 'error'); return; }
+    if (!web.ok) { showModalAlert(alert, 'Website: ' + web.msg, 'error'); return; }
+    if (!appLink.ok) { showModalAlert(alert, 'Application link: ' + appLink.msg, 'error'); return; }
     if (!ensureSafe(alert, [['Name', name], ['Country', country], ['Location', location], ['Costs', costs], ['Description', description]])) return;
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
-        const payload = { name, country: country || null, location: location || null, costs: costs || null, website: web.value, description: description || null, degrees: editDegrees, exam_dates: editExamDates };
+        const payload = { name, country: country || null, location: location || null, costs: costs || null, website: web.value, application_url: appLink.value, description: description || null, degrees: editDegrees, exam_dates: editExamDates };
         if (pickedUniImage) {
             const up = await uploadUniImage(pickedUniImage);
             if (up.error) throw new Error(up.error);
