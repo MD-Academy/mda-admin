@@ -52,14 +52,15 @@
             renderLayout('courses', 'Attendance', 'Mark and review class attendance by course', auth.profile);
 
             document.getElementById('page-content').innerHTML = `
-                <a class="back-link" href="courses.html">
+                <a class="back-link" id="back-link" href="courses.html">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-                    All Courses
+                    <span id="back-link-text">All Courses</span>
                 </a>
                 <div class="toolbar" style="flex-wrap:wrap;gap:10px;">
                     <select id="course-select" class="filter-select" onchange="onCourseChange()">
                         <option value="">Select a course…</option>
                     </select>
+                    <div id="course-name-label" style="display:none;font-size:19px;font-weight:800;color:var(--navy-800);align-self:center;"></div>
                     <button class="btn btn-primary" id="open-class-btn" style="display:none;" onclick="openClassModal()">+ Open attendance for today</button>
                     <div class="search-box">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>

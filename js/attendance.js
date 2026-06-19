@@ -31,7 +31,18 @@ async function loadCourses(preselect) {
         o.value = c.id; o.textContent = c.name;
         sel.appendChild(o);
     });
-    if (preselect && atCourses.some(c => c.id === preselect)) { sel.value = preselect; onCourseChange(); }
+    if (preselect && atCourses.some(c => c.id === preselect)) {
+        // Arrived straight from a course — no need to choose it again. Hide the picker, show its name.
+        const c = atCourses.find(x => x.id === preselect);
+        sel.value = preselect;
+        sel.style.display = 'none';
+        const lbl = document.getElementById('course-name-label');
+        if (lbl) { lbl.textContent = c.name; lbl.style.display = 'block'; }
+        const back = document.getElementById('back-link'), backTxt = document.getElementById('back-link-text');
+        if (back) back.href = `course.html?id=${encodeURIComponent(preselect)}`;
+        if (backTxt) backTxt.textContent = 'Back to course';
+        onCourseChange();
+    }
 }
 
 async function onCourseChange() {
