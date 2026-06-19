@@ -739,7 +739,8 @@ body {
 .slot-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .slot { min-width: 130px; border: 1.5px solid var(--border); border-radius: 10px; padding: 9px 12px; text-align: center; line-height: 1.3; }
 .slot .slot-t { font-weight: 700; font-size: 13px; color: var(--navy-800); }
-.slot .slot-n { font-size: 12px; color: var(--text); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; }
+.slot .slot-n { font-size: 12px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; }
+.slot:not(.slot-open) .slot-n { color: #15803d; font-weight: 700; }   /* booked student name = green for clarity */
 .slot.slot-open .slot-n { color: var(--text-muted); }
 
 @media (max-width: 900px) {
