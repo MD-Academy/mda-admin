@@ -15,23 +15,32 @@ let EMAIL_COL = true;          // falls back to false if the profiles.email migr
 
 // Populate the course-filter dropdown once.
 async function loadCourseOptions() {
-    const { data, error } = await db.from('courses').select('id, name').order('name', { ascending: true });
+    const { data, error } = await db.from('courses').select('id, name, expires_at').order('name', { ascending: true });
     if (error) { console.error('[students] could not load courses:', error); return; }
     courseMap = {};
     const filterSel = document.getElementById('course-filter');
     const bulkSel = document.getElementById('bulk-course');
     const createBox = document.getElementById('new-courses');
     const courses = data || [];
+
+    // A course is enrollable if it has no expiry, or its expiry is today or later.
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const isActive = c => !c.expires_at || String(c.expires_at) >= todayStr;
+    const activeCourses = courses.filter(isActive);
+
     courses.forEach(c => {
-        courseMap[c.id] = c.name;
-        if (filterSel) filterSel.appendChild(new Option(c.name, c.id));   // list filter
-        if (bulkSel) bulkSel.appendChild(new Option(c.name, c.id));       // enrol whole import (single course)
+        courseMap[c.id] = c.name;                                          // keep ALL names so roster badges resolve (incl. expired)
+        if (filterSel) filterSel.appendChild(new Option(c.name, c.id));    // list filter shows all courses
     });
-    // Enrol-on-create: a checkbox per course (a student must belong to at least one).
+    // Registration pickers show ONLY active courses (expired ones are hidden).
+    activeCourses.forEach(c => {
+        if (bulkSel) bulkSel.appendChild(new Option(c.name, c.id));        // enrol whole import (single active course)
+    });
     if (createBox) {
-        createBox.innerHTML = courses.length
-            ? courses.map(c => `<label><input type="checkbox" value="${c.id}"> ${escapeHtml(c.name)}</label>`).join('')
-            : `<div class="hint" style="color:var(--red);">No courses exist yet. Create a course first (Courses → New), then you can enrol students.</div>`;
+        createBox.innerHTML = activeCourses.length
+            ? activeCourses.map(c => `<label><input type="checkbox" value="${c.id}"> ${escapeHtml(c.name)}</label>`).join('')
+            : `<div class="hint" style="color:var(--red);">No active courses available. Create a course (or extend an expired one) before enrolling students.</div>`;
     }
 }
 
