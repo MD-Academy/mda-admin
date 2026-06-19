@@ -36,9 +36,9 @@
                         <div class="hint">Leave blank for no expiry. The student is locked out after this date.</div>
                     </div>
                     <div class="form-field">
-                        <label>Enrol into course <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                        <select id="new-course"><option value="">— None (enrol later) —</option></select>
-                        <div class="hint">The student is created and immediately enrolled in this course.</div>
+                        <label>Enrol into course(s) <span style="color:var(--red);">*</span></label>
+                        <div id="new-courses" class="course-checks"><div class="hint">Loading courses…</div></div>
+                        <div class="hint">Required — a student must belong to at least one course. Tick one or more.</div>
                     </div>
                     <div class="form-field">
                         <div class="hint">A secure password will be generated automatically and shown after creation.</div>
@@ -75,9 +75,9 @@
                     <div class="hint">Applies one expiry date to the entire batch. Leave blank for no expiry.</div>
                 </div>
                 <div class="form-field">
-                    <label>Enrol all into course <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                    <select id="bulk-course"><option value="">— None (enrol later) —</option></select>
-                    <div class="hint">Every imported student is enrolled in this course — so a whole intake lands in the right place at once.</div>
+                    <label>Enrol all into course <span style="color:var(--red);">*</span></label>
+                    <select id="bulk-course"><option value="">— Select a course —</option></select>
+                    <div class="hint">Required — every imported student is enrolled in this course, so a whole intake lands in the right place at once.</div>
                 </div>
                 <div id="bulk-preview" style="margin-top:18px;"></div>
             </div>

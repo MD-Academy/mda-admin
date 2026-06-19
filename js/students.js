@@ -19,14 +19,20 @@ async function loadCourseOptions() {
     if (error) { console.error('[students] could not load courses:', error); return; }
     courseMap = {};
     const filterSel = document.getElementById('course-filter');
-    const createSel = document.getElementById('new-course');
     const bulkSel = document.getElementById('bulk-course');
-    (data || []).forEach(c => {
+    const createBox = document.getElementById('new-courses');
+    const courses = data || [];
+    courses.forEach(c => {
         courseMap[c.id] = c.name;
         if (filterSel) filterSel.appendChild(new Option(c.name, c.id));   // list filter
-        if (createSel) createSel.appendChild(new Option(c.name, c.id));   // enrol-on-create
-        if (bulkSel) bulkSel.appendChild(new Option(c.name, c.id));       // enrol whole import
+        if (bulkSel) bulkSel.appendChild(new Option(c.name, c.id));       // enrol whole import (single course)
     });
+    // Enrol-on-create: a checkbox per course (a student must belong to at least one).
+    if (createBox) {
+        createBox.innerHTML = courses.length
+            ? courses.map(c => `<label><input type="checkbox" value="${c.id}"> ${escapeHtml(c.name)}</label>`).join('')
+            : `<div class="hint" style="color:var(--red);">No courses exist yet. Create a course first (Courses → New), then you can enrol students.</div>`;
+    }
 }
 
 function onSearchInput() {
@@ -316,7 +322,7 @@ async function createSingleStudent(e) {
     const full_name = document.getElementById('new-name').value.trim();
     const email = document.getElementById('new-email').value.trim();
     const expiry_date = document.getElementById('new-expiry').value || null;
-    const course_id = document.getElementById('new-course').value || null;
+    const course_ids = Array.from(document.querySelectorAll('#new-courses input[type="checkbox"]:checked')).map(c => c.value);
 
     if (!full_name || !email) {
         showModalAlert(alert, 'Please enter both name and email.', 'error');
@@ -326,12 +332,16 @@ async function createSingleStudent(e) {
         showModalAlert(alert, 'Please enter a valid email address — the student will receive their login details here.', 'error');
         return;
     }
+    if (course_ids.length === 0) {
+        showModalAlert(alert, 'Assign the student to at least one course.', 'error');
+        return;
+    }
     if (!ensureSafe(alert, [['Full Name', full_name], ['Email', email]])) return;
 
     btn.disabled = true; btn.textContent = 'Creating…';
 
     try {
-        const res = await apiRequest('POST', '/admin/create-student', { full_name, email, expiry_date, course_id });
+        const res = await apiRequest('POST', '/admin/create-student', { full_name, email, expiry_date, course_ids });
         closeModal('create-modal');
         document.getElementById('single-form').reset();
         showCredentials([{ full_name: res.full_name, email: res.email, password: res.password, email_sent: res.email_sent }]);
@@ -406,6 +416,11 @@ async function runBulkCreate() {
 
     const expiry_date = document.getElementById('bulk-expiry').value || null;
     const course_id = document.getElementById('bulk-course').value || null;
+
+    if (!course_id) {
+        showModalAlert(alert, 'Please choose a course to enrol the imported students into.', 'error');
+        return;
+    }
 
     btn.disabled = true; btn.textContent = `Creating ${bulkParsed.length} accounts…`;
 

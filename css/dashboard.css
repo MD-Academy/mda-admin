@@ -735,6 +735,11 @@ body {
 .att-amber { color: #d97706; }
 .att-red { color: #dc2626; }
 
+/* ── Course checkbox list (enrol-on-create) ── */
+.course-checks { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; border: 1.5px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+.course-checks label { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; padding: 4px 2px; }
+.course-checks input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--crimson); cursor: pointer; flex-shrink: 0; }
+
 /* ── PERSONAL MEETINGS slot grid (admin, read-only) ── */
 .slot-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .slot { min-width: 130px; border: 1.5px solid var(--border); border-radius: 10px; padding: 9px 12px; text-align: center; line-height: 1.3; }
