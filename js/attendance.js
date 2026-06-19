@@ -148,7 +148,7 @@ function renderAttendance() {
         const cells = atSessions.map(se => {
             const isPresent = atMarks[`${s.id}_${se.id}`] === true;
             if (isPresent) attended++;
-            return `<td><button class="att-mark ${isPresent ? 'att-present' : 'att-absent'}" onclick="toggleMark('${s.id}','${se.id}')" title="Click to toggle present/absent">${isPresent ? '✓' : '✗'}</button></td>`;
+            return `<td class="att-cell"><button class="att-mark ${isPresent ? 'att-present' : 'att-absent'}" onclick="toggleMark('${s.id}','${se.id}')" title="Click to toggle present/absent">${isPresent ? '✓' : '✗'}</button></td>`;
         }).join('');
         const pct = Math.round((attended / atSessions.length) * 100);
         return `<tr><td class="att-sticky"><strong>${escapeHtml(s.full_name || '—')}</strong></td>${cells}<td><span class="att-pct ${pctColor(pct)}">${pct}%</span></td></tr>`;

@@ -708,12 +708,20 @@ body {
 .ui-confirm-actions .btn { flex: 1; justify-content: center; }
 
 /* ── ATTENDANCE SHEET (grid: students × class dates) ── */
+/* width:auto so columns size to their content (compact, date-width) instead of stretching to fill the screen. */
+.att-table { width: auto; }
 .att-table th, .att-table td { text-align: center; white-space: nowrap; vertical-align: middle; }
 .att-table th:first-child, .att-table td:first-child { text-align: left; }
+/* Grey vertical dividers between every class column. */
+.att-table thead th, .att-table tbody td { border-right: 1px solid var(--border); }
+.att-table thead th:last-child, .att-table tbody td:last-child { border-right: none; }
 .att-table .att-sticky { position: sticky; left: 0; background: var(--card); z-index: 2; }
 .att-table thead .att-sticky { z-index: 3; }
-.att-col { position: relative; font-size: 12px; padding-right: 22px !important; }
-.att-col-sub { display: block; font-weight: 400; color: var(--text-muted); font-size: 11px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+/* Each class column = roughly the width of its date, packed tightly. */
+.att-table .att-col, .att-table .att-cell { width: 96px; }
+.att-table .att-cell { padding: 14px 8px; }
+.att-col { position: relative; font-size: 12px; padding: 12px 20px 12px 8px !important; }
+.att-col-sub { display: block; font-weight: 400; color: var(--text-muted); font-size: 11px; max-width: 88px; margin: 0 auto; overflow: hidden; text-overflow: ellipsis; }
 .att-del { position: absolute; top: 4px; right: 4px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 11px; line-height: 1; opacity: .4; padding: 2px; }
 .att-del:hover { color: var(--red); opacity: 1; }
 .att-mark { width: 36px; height: 34px; border-radius: 8px; border: 1.5px solid transparent; font-size: 15px; font-weight: 800; cursor: pointer; transition: background .12s, transform .06s; }
