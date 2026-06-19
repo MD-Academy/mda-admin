@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Attendance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- OPEN A NEW CLASS MODAL -->
+    <div class="modal-overlay" id="open-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Open attendance for today</h3>
+                <button class="modal-close" onclick="closeModal('open-modal')">&times;</button>
+            </div>
+            <form onsubmit="submitNewClass(event)">
+                <div class="modal-body">
+                    <div class="alert" id="open-alert" style="display:none;"></div>
+                    <p style="font-size:14px;color:var(--text-muted);margin-bottom:14px;">This creates today's class. Everyone is marked <strong>present</strong> — you then flip whoever was absent. The date is set automatically to today and cannot be changed.</p>
+                    <div class="form-field">
+                        <label>Your name (who is opening attendance)</label>
+                        <input type="text" id="opener-name" maxlength="120" required placeholder="e.g. Dr. Ariel Holan">
+                        <div class="hint">Recorded with the class as proof of who opened it.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('open-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="open-save-btn">Open class</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/attendance.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+            CURRENT_UID = auth.session.user.id;
+            ADMIN_NAME = auth.profile.full_name || '';
+            renderLayout('courses', 'Attendance', 'Mark and review class attendance by course', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <a class="back-link" href="courses.html">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                    All Courses
+                </a>
+                <div class="toolbar" style="flex-wrap:wrap;gap:10px;">
+                    <select id="course-select" class="filter-select" onchange="onCourseChange()">
+                        <option value="">Select a course…</option>
+                    </select>
+                    <button class="btn btn-primary" id="open-class-btn" style="display:none;" onclick="openClassModal()">+ Open attendance for today</button>
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="at-search" placeholder="Find a student by name…" oninput="onAtSearch()">
+                    </div>
+                    <select id="page-size" class="filter-select" onchange="onAtPageSize()">
+                        <option value="50">50 / page</option>
+                        <option value="25">25 / page</option>
+                        <option value="100">100 / page</option>
+                    </select>
+                </div>
+                <div id="attendance-container"><div class="loader">Choose a course to see its attendance sheet.</div></div>
+                <div id="pager" style="display:none;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;flex-wrap:wrap;">
+                    <div id="pager-info" style="font-size:13px;color:var(--text-muted);"></div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button class="btn btn-ghost btn-sm" id="prev-btn" onclick="changeAtPage(-1)">← Prev</button>
+                        <span id="page-label" style="font-size:13px;color:var(--text);"></span>
+                        <button class="btn btn-ghost btn-sm" id="next-btn" onclick="changeAtPage(1)">Next →</button>
+                    </div>
+                </div>
+            `;
+            const preselect = new URLSearchParams(location.search).get('course');
+            loadCourses(preselect);
+        })();
+    </script>
+</body>
+</html>

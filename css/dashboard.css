@@ -707,6 +707,26 @@ body {
 .ui-confirm-actions { display: flex; gap: 12px; }
 .ui-confirm-actions .btn { flex: 1; justify-content: center; }
 
+/* ── ATTENDANCE SHEET (grid: students × class dates) ── */
+.att-table th, .att-table td { text-align: center; white-space: nowrap; vertical-align: middle; }
+.att-table th:first-child, .att-table td:first-child { text-align: left; }
+.att-table .att-sticky { position: sticky; left: 0; background: var(--card); z-index: 2; }
+.att-table thead .att-sticky { z-index: 3; }
+.att-col { position: relative; font-size: 12px; padding-right: 22px !important; }
+.att-col-sub { display: block; font-weight: 400; color: var(--text-muted); font-size: 11px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+.att-del { position: absolute; top: 4px; right: 4px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 11px; line-height: 1; opacity: .4; padding: 2px; }
+.att-del:hover { color: var(--red); opacity: 1; }
+.att-mark { width: 36px; height: 34px; border-radius: 8px; border: 1.5px solid transparent; font-size: 15px; font-weight: 800; cursor: pointer; transition: background .12s, transform .06s; }
+.att-mark:active { transform: scale(.92); }
+.att-present { background: #e7f7ee; color: #15803d; border-color: #bbe9cd; }
+.att-present:hover { background: #d6f0e0; }
+.att-absent { background: #fdeaea; color: #dc2626; border-color: #f5c9c9; }
+.att-absent:hover { background: #fbdada; }
+.att-pct { font-weight: 800; font-size: 14px; }
+.att-green { color: #15803d; }
+.att-amber { color: #d97706; }
+.att-red { color: #dc2626; }
+
 @media (max-width: 900px) {
     .sidebar { transform: translateX(-100%); transition: transform 0.3s; }
     .sidebar.open { transform: translateX(0); }

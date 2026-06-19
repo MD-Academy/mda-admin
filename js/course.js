@@ -91,6 +91,11 @@ async function initCourse(courseId, profile) {
                     </div>
                     <div class="pill-zone" id="course-recs-results"><span class="pill-empty">Type a title to find recordings to add.</span></div>
                 </div>
+                <div class="panel" style="padding:22px;">
+                    <div class="section-title">Attendance</div>
+                    <p class="hint" style="margin:-8px 0 14px;">Open a class to mark who attended — everyone starts present, then flip absentees. The date locks to today. Students see only their own attendance and percentage.</p>
+                    <a class="btn btn-primary" href="attendance.html?course=${encodeURIComponent(COURSE_ID)}">Open Attendance Sheet →</a>
+                </div>
             </div>
             ${studentsPanel}
         </div>
