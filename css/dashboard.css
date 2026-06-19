@@ -735,6 +735,19 @@ body {
 .att-amber { color: #d97706; }
 .att-red { color: #dc2626; }
 
+/* ── Tabs + pill chips (university editor, pickers) ── */
+.tab-btn { background: transparent; border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font-size: 14px; font-weight: 700; color: var(--text-muted); cursor: pointer; }
+.tab-btn.active { color: var(--crimson); border-bottom-color: var(--crimson); }
+.pill-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 7px; }
+.pill-zone { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; min-height: 42px; padding: 10px; border: 1.5px dashed var(--border); border-radius: 12px; }
+.pill-zone-assigned { background: #fbfcfe; border-style: solid; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none; border: 1.5px solid transparent; }
+.pill-assigned { background: #fdecf3; color: #b91c5c; border-color: #f3c6d9; }
+.pill-available { background: #f1f5f9; color: var(--text); border-color: var(--border); }
+.pill-available:hover { background: #eaf1fb; border-color: #9cc0f0; }
+.pill .x { font-weight: 800; opacity: .55; }
+.pill .plus { font-weight: 800; opacity: .5; font-size: 15px; line-height: 1; }
+
 /* ── Course checkbox list (enrol-on-create) ── */
 .course-checks { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; border: 1.5px solid var(--border); border-radius: 10px; padding: 8px 10px; }
 .course-checks label { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; padding: 4px 2px; }
