@@ -94,12 +94,12 @@
             const auth = await requireAdmin();
             if (!auth) return;
             if (auth.profile.role !== 'superadmin') {
-                renderLayout('tuition', 'Tuition', '', auth.profile);
+                renderLayout('tuition', 'Program Tuition', '', auth.profile);
                 document.getElementById('page-content').innerHTML = `<div class="empty-state" style="padding:48px;"><h3>Superadmin only</h3><p>Tuition management is available to super administrators.</p></div>`;
                 return;
             }
             CURRENT_UID = auth.session.user.id;
-            renderLayout('tuition', 'Tuition', 'Set program prices, record payments, track balances', auth.profile);
+            renderLayout('tuition', 'Program Tuition', 'Set program prices, record payments, track balances', auth.profile);
 
             document.getElementById('page-content').innerHTML = `
                 <div class="toolbar" style="flex-wrap:wrap;gap:10px;">
