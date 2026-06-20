@@ -57,9 +57,15 @@ function renderLayout(activeId, pageTitle, pageSub, profile) {
                 </div>
                 <div class="topbar-user">
                     <div class="user-info">
-                        <strong>${_layoutEsc(profile.full_name || 'Admin')}</strong>
+                        <strong style="display:inline-flex;align-items:center;gap:7px;align-self:flex-start;margin-bottom:5px;background:linear-gradient(135deg,#b91c5c 0%,#7a2747 50%,#20262f 100%);color:#fff;font-weight:700;font-size:13.5px;padding:6px 13px;border-radius:10px;text-shadow:0 1px 2px rgba(0,0,0,.3);box-shadow:0 4px 12px rgba(185,28,92,.3),0 2px 4px rgba(32,38,47,.35),inset 0 1px 0 rgba(255,255,255,.28),inset 0 -2px 4px rgba(0,0,0,.25);">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            ${_layoutEsc(profile.full_name || 'Admin')}
+                        </strong>
                         <span>${isSuper ? 'Super Administrator' : 'Administrator'}</span>
                     </div>
+                    <span class="avatar-steth" aria-hidden="true" title="Medical Doctor Academy">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.3.3 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg>
+                    </span>
                     <button class="avatar avatar-btn" id="avatar-btn" title="Upload a photo">
                         <span class="avatar-inner" id="avatar-inner">${profile.avatar_url
                             ? `<img src="${_layoutEsc(profile.avatar_url)}" alt="">`

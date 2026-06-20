@@ -135,7 +135,7 @@ body {
 
 .topbar-user { display: flex; align-items: center; gap: 12px; }
 .topbar-user .avatar {
-    width: 40px; height: 40px;
+    width: 48px; height: 48px;
     border-radius: 50%;
     background: linear-gradient(135deg, #20262f, #b91c5c);
     display: flex; align-items: center; justify-content: center;
@@ -150,7 +150,7 @@ body {
     flex-shrink: 0;
 }
 .avatar-inner {
-    width: 40px; height: 40px;
+    width: 48px; height: 48px;
     border-radius: 50%;
     overflow: hidden;
     display: flex; align-items: center; justify-content: center;
@@ -169,6 +169,14 @@ body {
 }
 .avatar-edit svg { width: 9px; height: 9px; color: #fff; }
 .avatar-btn:hover .avatar-edit { opacity: 1; }
+/* Medical-academy stethoscope badge beside the avatar (admin colors). */
+.avatar-steth {
+    width: 32px; height: 32px; flex-shrink: 0;
+    background: linear-gradient(135deg, #b91c5c, #20262f); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 7px rgba(10,18,40,.28);
+}
+.avatar-steth svg { width: 18px; height: 18px; }
 .topbar-user .user-info { display: flex; flex-direction: column; }
 .topbar-user .user-info strong { font-size: 14px; color: var(--text); }
 .topbar-user .user-info span { font-size: 12px; color: var(--text-muted); }
