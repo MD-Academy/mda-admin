@@ -130,9 +130,10 @@
                             <option value="fewest">Fewest selections first</option>
                             <option value="az">Name (A–Z)</option>
                         </select>
-                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);white-space:nowrap;">
+                        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);white-space:nowrap;">
                             Target schools:
-                            <input type="number" id="report-target" min="1" max="20" value="3" style="width:62px;" oninput="onReportTarget()">
+                            <input type="number" id="report-target" min="1" max="20" value="3" oninput="onReportTarget()"
+                                style="height:42px;width:68px;border:1px solid var(--border);border-radius:10px;padding:0 10px;font-size:14px;font-family:'Inter',sans-serif;color:var(--text);background:var(--card);outline:none;text-align:center;">
                         </label>
                         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer;white-space:nowrap;">
                             <input type="checkbox" id="report-attention" onchange="onReportAttention()" style="width:18px;height:18px;accent-color:var(--red);">
