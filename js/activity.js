@@ -33,7 +33,13 @@ async function initActivity(studentId, profile) {
         <div class="report-head">
             <img src="assets/images/mda-logo.png" alt="MDA">
             <div class="rh-text">
-                <strong>Login Activity — ${escapeHtml(name)}</strong>
+                <strong>Login Activity</strong>
+                <div style="margin:8px 0 4px;">
+                    <span style="display:inline-flex;align-items:center;gap:7px;background:#eaf0fb;color:#0d2a52;font-weight:700;font-size:15px;padding:7px 15px;border-radius:10px;border:1px solid #c3d4f0;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        ${escapeHtml(name)}
+                    </span>
+                </div>
                 <span>Generated ${new Date().toLocaleString('en-GB')}</span>
             </div>
         </div>
