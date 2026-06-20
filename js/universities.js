@@ -12,6 +12,12 @@ let editDegrees = [];     // degrees chips while editing a university
 let editExamDates = [];   // exam date chips (ISO yyyy-mm-dd) while editing
 let pickedUniImage = null;
 let reportSearch = '';
+let reportCourse = '';          // course filter (course id)
+let reportSort = 'fewest';      // 'fewest' | 'az'
+let reportTarget = 3;           // "target schools" threshold
+let reportAttention = false;    // show only students below target
+let ROSTER = [];                // [{id, name, courseIds:Set, courseNames:[], items:[]}]
+let COURSES_LIST = [];          // [{id, name}]
 
 function escapeHtml(s) { return s ? String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
 function fmtExamDate(iso) { return iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''; }
@@ -210,56 +216,150 @@ async function deleteUni(id) {
 }
 
 // ════════════ STUDENT SELECTIONS REPORT ════════════
+// Full course-coverage roster: EVERY enrolled student, with their selections
+// (or a clear "no selection yet" flag) so the office can chase inactive ones.
 async function loadReport() {
     const box = document.getElementById('report-list');
     box.innerHTML = `<div class="loader">Loading student selections…</div>`;
     if (UNIS.length === 0) await loadUnis();
-    const { data, error } = await db.from('university_selections')
-        .select('id, student_id, student_name, university_id, status, degrees, is_final_choice')
-        .order('student_name', { ascending: true });
-    if (error) { box.innerHTML = `<div class="empty-state"><h3 style="color:var(--red)">Couldn't load selections</h3><p>${escapeHtml(error.message)}</p></div>`; return; }
-    SELS = data || [];
+
+    const [enrRes, selRes, courseRes] = await Promise.all([
+        db.from('course_enrollments').select('student_id, course_id'),
+        db.from('university_selections').select('id, student_id, student_name, university_id, status, degrees, is_final_choice'),
+        db.from('courses').select('id, name').order('name', { ascending: true })
+    ]);
+    if (enrRes.error || selRes.error) {
+        const msg = (enrRes.error || selRes.error).message;
+        box.innerHTML = `<div class="empty-state"><h3 style="color:var(--red)">Couldn't load the report</h3><p>${escapeHtml(msg)}</p></div>`;
+        return;
+    }
+    SELS = selRes.data || [];
+    COURSES_LIST = courseRes.data || [];
+    const courseName = id => (COURSES_LIST.find(c => c.id === id) || {}).name || 'Course';
+
+    // Names for every enrolled student.
+    const enrolls = enrRes.data || [];
+    const studentIds = [...new Set([...enrolls.map(e => e.student_id), ...SELS.map(s => s.student_id)])];
+    let nameById = {};
+    if (studentIds.length) {
+        const { data: profs } = await db.from('profiles').select('id, full_name').in('id', studentIds);
+        (profs || []).forEach(p => { nameById[p.id] = p.full_name; });
+    }
+
+    // Build the roster keyed by student.
+    const map = {};
+    const ensure = (sid) => (map[sid] = map[sid] || { id: sid, name: nameById[sid] || '', courseIds: new Set(), courseNames: [], items: [] });
+    enrolls.forEach(e => {
+        const stu = ensure(e.student_id);
+        if (!stu.courseIds.has(e.course_id)) { stu.courseIds.add(e.course_id); stu.courseNames.push(courseName(e.course_id)); }
+    });
+    SELS.forEach(s => {
+        const stu = ensure(s.student_id);
+        if (!stu.name) stu.name = s.student_name || '';
+        stu.items.push(s);
+    });
+    ROSTER = Object.values(map);
+
+    // Populate the course filter (keep current selection if still valid).
+    const sel = document.getElementById('report-course');
+    if (sel) {
+        const cur = reportCourse;
+        sel.innerHTML = `<option value="">All courses</option>` +
+            COURSES_LIST.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        sel.value = COURSES_LIST.some(c => c.id === cur) ? cur : '';
+        reportCourse = sel.value;
+    }
     renderReport();
 }
 
 function onReportSearch() { reportSearch = (document.getElementById('report-search').value || '').trim().toLowerCase(); renderReport(); }
+function onReportCourse() { reportCourse = document.getElementById('report-course').value; renderReport(); }
+function onReportSort() { reportSort = document.getElementById('report-sort').value; renderReport(); }
+function onReportAttention() { reportAttention = document.getElementById('report-attention').checked; renderReport(); }
+function onReportTarget() {
+    const v = parseInt(document.getElementById('report-target').value, 10);
+    reportTarget = (v >= 1 && v <= 20) ? v : 3;
+    renderReport();
+}
 
 function renderReport() {
     const box = document.getElementById('report-list');
-    let sels = SELS;
-    if (reportSearch) sels = sels.filter(s => (s.student_name || '').toLowerCase().includes(reportSearch));
-    if (sels.length === 0) {
-        box.innerHTML = `<div class="empty-state" style="padding:36px;"><p>${reportSearch ? 'No students match.' : 'No students have made selections yet.'}</p></div>`;
+    const summaryEl = document.getElementById('report-summary');
+
+    // Cohort = course + name filters (NOT the attention filter — summary covers the whole cohort).
+    let base = ROSTER.slice();
+    if (reportCourse) base = base.filter(s => s.courseIds.has(reportCourse));
+    if (reportSearch) base = base.filter(s => (s.name || '').toLowerCase().includes(reportSearch));
+
+    const noneCount = base.filter(s => s.items.length === 0).length;
+    const belowCount = base.filter(s => s.items.length > 0 && s.items.length < reportTarget).length;
+    if (summaryEl) {
+        summaryEl.innerHTML = base.length
+            ? `<strong>${base.length}</strong> student${base.length === 1 ? '' : 's'} ·
+               <span style="color:#b91c1c;font-weight:600;">${noneCount} with no selection</span> ·
+               <span style="color:#b45309;font-weight:600;">${belowCount} below target (${reportTarget})</span>`
+            : '';
+    }
+
+    // What we actually display (optionally only those needing attention).
+    let rows = base;
+    if (reportAttention) rows = rows.filter(s => s.items.length < reportTarget);
+
+    rows.sort((a, b) => reportSort === 'az'
+        ? (a.name || '').localeCompare(b.name || '')
+        : (a.items.length - b.items.length) || (a.name || '').localeCompare(b.name || ''));
+
+    if (rows.length === 0) {
+        const why = reportAttention ? 'No students need attention with the current target. 🎉'
+            : (reportSearch || reportCourse) ? 'No students match these filters.'
+            : 'No students are enrolled in any course yet.';
+        box.innerHTML = `<div class="empty-state" style="padding:36px;"><p>${why}</p></div>`;
         return;
     }
-    // Group by student.
-    const byStudent = {};
-    sels.forEach(s => { (byStudent[s.student_id] = byStudent[s.student_id] || { name: s.student_name, items: [] }).items.push(s); });
 
-    box.innerHTML = Object.values(byStudent).sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(stu => {
-        const rows = stu.items.map(s => {
-            const u = uniMap[s.university_id];
-            const uname = u ? u.name : 'University';
-            const degs = (s.degrees || []).join(', ') || '—';
-            const badge = s.status === 'accepted'
-                ? `<span class="badge badge-green">Accepted</span>`
-                : `<span class="badge badge-blue">Applying</span>`;
-            const star = s.is_final_choice ? ` <span class="badge" style="background:#fef3c7;color:#92400e;">★ Final choice</span>` : '';
-            return `<div class="list-row">
-                <div class="lr-body">
-                    <div class="lr-title">${escapeHtml(uname)} ${badge}${star}</div>
-                    <div class="lr-sub">Degrees: ${escapeHtml(degs)}</div>
-                </div>
-                <div class="lr-actions">
-                    <button class="btn btn-ghost btn-sm" onclick="ovrToggleStatus('${s.id}')">${s.status === 'accepted' ? 'Mark applying' : 'Mark accepted'}</button>
-                    <button class="btn btn-ghost btn-sm" onclick="ovrToggleFinal('${s.id}')">${s.is_final_choice ? 'Unset final' : 'Set ★ final'}</button>
-                    <button class="btn btn-danger btn-sm" onclick="ovrRemove('${s.id}')">Remove</button>
-                </div>
-            </div>`;
-        }).join('');
+    box.innerHTML = rows.map(stu => {
+        const courseChips = stu.courseNames.length
+            ? stu.courseNames.map(c => `<span class="badge badge-blue" style="margin-left:6px;">${escapeHtml(c)}</span>`).join('')
+            : `<span class="badge" style="background:#f1f5f9;color:#64748b;margin-left:6px;">No course</span>`;
+
+        const count = stu.items.length;
+        let countNote = '';
+        if (count === 0) {
+            countNote = `<div class="alert" style="display:block;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;margin:0;">⚠️ No universities selected yet — encourage this student to start choosing.</div>`;
+        } else {
+            const rowsHtml = stu.items.map(s => {
+                const u = uniMap[s.university_id];
+                const uname = u ? u.name : 'University';
+                const degs = (s.degrees || []).join(', ') || '—';
+                const badge = s.status === 'accepted'
+                    ? `<span class="badge badge-green">Accepted</span>`
+                    : `<span class="badge badge-blue">Applying</span>`;
+                const star = s.is_final_choice ? ` <span class="badge" style="background:#fef3c7;color:#92400e;">★ Final choice</span>` : '';
+                return `<div class="list-row">
+                    <div class="lr-body">
+                        <div class="lr-title">${escapeHtml(uname)} ${badge}${star}</div>
+                        <div class="lr-sub">Degrees: ${escapeHtml(degs)}</div>
+                    </div>
+                    <div class="lr-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="ovrToggleStatus('${s.id}')">${s.status === 'accepted' ? 'Mark applying' : 'Mark accepted'}</button>
+                        <button class="btn btn-ghost btn-sm" onclick="ovrToggleFinal('${s.id}')">${s.is_final_choice ? 'Unset final' : 'Set ★ final'}</button>
+                        <button class="btn btn-danger btn-sm" onclick="ovrRemove('${s.id}')">Remove</button>
+                    </div>
+                </div>`;
+            }).join('');
+            const belowNote = count < reportTarget
+                ? `<div class="hint" style="color:#b45309;margin:0 0 8px;">Only ${count} of ${reportTarget} target schools — could pick more.</div>`
+                : '';
+            countNote = belowNote + `<div class="list-rows">${rowsHtml}</div>`;
+        }
+
+        const countBadgeColor = count === 0 ? '#b91c1c' : (count < reportTarget ? '#b45309' : '#15803d');
         return `<div class="panel" style="padding:18px;margin-bottom:14px;">
-            <div class="section-title" style="margin:0 0 10px;">${escapeHtml(stu.name || 'Student')}</div>
-            <div class="list-rows">${rows}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                <div class="section-title" style="margin:0;">${escapeHtml(stu.name || 'Student')} ${courseChips}</div>
+                <span style="font-size:13px;font-weight:700;color:${countBadgeColor};white-space:nowrap;">${count} selected</span>
+            </div>
+            ${countNote}
         </div>`;
     }).join('');
 }
