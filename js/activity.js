@@ -35,8 +35,10 @@ async function initActivity(studentId, profile) {
             <div class="rh-text">
                 <strong>Login Activity</strong>
                 <div style="margin:8px 0 4px;">
-                    <span style="display:inline-flex;align-items:center;gap:7px;background:#eaf0fb;color:#0d2a52;font-weight:700;font-size:15px;padding:7px 15px;border-radius:10px;border:1px solid #c3d4f0;">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span style="display:inline-flex;align-items:center;gap:9px;background:#1d4ed8;color:#fff;font-weight:700;font-size:15px;padding:9px 18px;border-radius:11px;box-shadow:0 2px 8px rgba(29,78,216,.35);">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M21 8v4.5"/><circle cx="12" cy="14.5" r="2.4"/><path d="M7.6 21a4.4 4.4 0 0 1 8.8 0"/>
+                        </svg>
                         ${escapeHtml(name)}
                     </span>
                 </div>
@@ -70,7 +72,7 @@ async function initActivity(studentId, profile) {
         const endedAt = s.ended_at ? new Date(s.ended_at) : null;
         const lastSeen = s.last_seen_at ? new Date(s.last_seen_at) : null;
         const end = endedAt || lastSeen || start;
-        const active = !endedAt && (now - (lastSeen || start).getTime()) < 180000;
+        const active = !endedAt && (now - (lastSeen || start).getTime()) < 600000;  // seen in last 10 min
         const dur = Math.max(0, (end - start) / 1000);
         grand += dur;
         const k = dayKey(s.started_at);
