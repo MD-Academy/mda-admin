@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
-    <title>MDA Admin — Premedical Tuition</title>
+    <title>MDA Admin — Tuition</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/dashboard.css">
@@ -22,7 +22,7 @@
 <body>
     <div class="layout" id="app-layout"></div>
 
-    <!-- MANAGE STUDENT TUITION MODAL -->
+    <!-- MANAGE STUDENT × PROGRAM TUITION MODAL -->
     <div class="modal-overlay" id="manage-modal">
         <div class="modal wide">
             <div class="modal-head">
@@ -32,12 +32,13 @@
             <div class="modal-body">
                 <div class="alert" id="mg-alert" style="display:none;"></div>
                 <input type="hidden" id="mg-student">
+                <input type="hidden" id="mg-course">
 
                 <div class="form-row" style="display:flex;gap:12px;flex-wrap:wrap;">
                     <div class="form-field" style="flex:1;min-width:160px;">
-                        <label>Total tuition (<span id="mg-cur1">NIS</span>)</label>
+                        <label>Total for this program (<span id="mg-cur1">NIS</span>)</label>
                         <input type="number" id="mg-total" min="0" step="1" class="t-input" style="width:100%;">
-                        <div class="hint">This student's own total — special deals/help go here. Changing the general tuition won't affect it.</div>
+                        <div class="hint">This student's total for this program — special deals/help go here.</div>
                     </div>
                     <div class="form-field" style="flex:1;min-width:160px;">
                         <label>Payment deadline <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
@@ -93,34 +94,16 @@
             const auth = await requireAdmin();
             if (!auth) return;
             if (auth.profile.role !== 'superadmin') {
-                renderLayout('tuition', 'Premedical Tuition', '', auth.profile);
+                renderLayout('tuition', 'Tuition', '', auth.profile);
                 document.getElementById('page-content').innerHTML = `<div class="empty-state" style="padding:48px;"><h3>Superadmin only</h3><p>Tuition management is available to super administrators.</p></div>`;
                 return;
             }
             CURRENT_UID = auth.session.user.id;
-            renderLayout('tuition', 'Premedical Tuition', 'Set tuition, record payments, track balances', auth.profile);
+            renderLayout('tuition', 'Tuition', 'Set program prices, record payments, track balances', auth.profile);
 
             document.getElementById('page-content').innerHTML = `
-                <div class="panel" style="padding:18px 20px;margin-bottom:18px;">
-                    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
-                        <div>
-                            <label class="hint" style="display:block;margin-bottom:4px;">General premed tuition (new students)</label>
-                            <input type="number" id="gen-tuition" min="0" step="1" class="t-input" style="width:160px;">
-                        </div>
-                        <div>
-                            <label class="hint" style="display:block;margin-bottom:4px;">Currency</label>
-                            <input type="text" id="gen-currency" maxlength="8" class="t-input" style="width:90px;" placeholder="NIS">
-                        </div>
-                        <button class="btn btn-primary" onclick="saveGeneral()">Save</button>
-                        <span id="gen-saved" style="font-size:12px;font-weight:600;"></span>
-                        <div style="flex:1;"></div>
-                        <button class="btn btn-ghost btn-sm" onclick="applyDefaultToUnset()" title="Give every student who has no tuition set yet the current general amount.">Set unset students to general amount</button>
-                    </div>
-                    <div class="hint" style="margin-top:8px;">The general amount is a starting value for students who don't have a tuition set. It does <strong>not</strong> change students who already have one.</div>
-                </div>
-
                 <div class="toolbar" style="flex-wrap:wrap;gap:10px;">
-                    <select id="t-course" class="filter-select" onchange="onTuitionFilter()"><option value="">All courses</option></select>
+                    <select id="t-course" class="filter-select" onchange="onTuitionFilter()"><option value="">All programs</option></select>
                     <div class="search-box">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input type="text" id="t-search" placeholder="Find a student by name…" oninput="onTuitionFilter()">
@@ -133,6 +116,26 @@
                         <option value="notset">Not set</option>
                     </select>
                 </div>
+
+                <div class="panel" id="price-panel" style="display:none;padding:18px 20px;margin-bottom:18px;">
+                    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
+                        <div>
+                            <label class="hint" style="display:block;margin-bottom:4px;">Price for <strong id="price-course-name"></strong></label>
+                            <input type="number" id="course-price" min="0" step="1" class="t-input" style="width:160px;">
+                        </div>
+                        <div>
+                            <label class="hint" style="display:block;margin-bottom:4px;">Currency</label>
+                            <input type="text" id="course-currency" maxlength="8" class="t-input" style="width:90px;" placeholder="NIS">
+                        </div>
+                        <button class="btn btn-primary" onclick="saveCoursePrice()">Save price</button>
+                        <span id="price-saved" style="font-size:12px;font-weight:600;"></span>
+                        <div style="flex:1;"></div>
+                        <button class="btn btn-ghost btn-sm" onclick="applyPriceToUnset()" title="Give every enrolled student who has no tuition set for this program the current price.">Apply price to students without a tuition</button>
+                    </div>
+                    <div class="hint" style="margin-top:8px;">This is the default price students inherit for this program. It does <strong>not</strong> change students who already have a tuition set.</div>
+                </div>
+                <div class="panel" id="price-hint" style="padding:14px 18px;margin-bottom:18px;color:var(--text-muted);font-size:13.5px;">Pick a program above to set its price and see who owes what. “All programs” shows every priced program.</div>
+
                 <div id="t-summary" style="margin:0 0 14px;font-size:14px;color:var(--text);"></div>
                 <div id="tuition-list"><div class="loader">Loading…</div></div>`;
             loadTuition();
