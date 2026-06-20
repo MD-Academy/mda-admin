@@ -35,7 +35,7 @@ async function initActivity(studentId, profile) {
             <div class="rh-text">
                 <strong>Login Activity</strong>
                 <div style="margin:8px 0 4px;">
-                    <span style="display:inline-flex;align-items:center;gap:9px;background:#1d4ed8;color:#fff;font-weight:700;font-size:15px;padding:9px 18px;border-radius:11px;box-shadow:0 2px 8px rgba(29,78,216,.35);">
+                    <span style="display:inline-flex;align-items:center;gap:9px;background:linear-gradient(135deg,#2563eb 0%,#7a2a6b 55%,#b91c5c 100%);color:#fff;font-weight:700;font-size:15px;padding:10px 20px;border-radius:12px;text-shadow:0 1px 2px rgba(0,0,0,.22);box-shadow:0 6px 16px rgba(37,99,235,.28),0 3px 6px rgba(185,28,92,.28),inset 0 1px 0 rgba(255,255,255,.38),inset 0 -2px 5px rgba(0,0,0,.18);">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M21 8v4.5"/><circle cx="12" cy="14.5" r="2.4"/><path d="M7.6 21a4.4 4.4 0 0 1 8.8 0"/>
                         </svg>
