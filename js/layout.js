@@ -72,6 +72,9 @@ function renderLayout(activeId, pageTitle, pageSub, profile) {
                 </div>
             </header>
             <div class="content" id="page-content"></div>
+            <footer style="text-align:center;padding:16px 24px;color:#64748b;font-size:12px;line-height:1.5;border-top:1px solid var(--border);">
+                This platform was made by Diego Ilan Tevelev · © Medical Doctor Academy 2026. All rights reserved.
+            </footer>
         </div>
     `;
 
