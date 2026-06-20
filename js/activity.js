@@ -54,32 +54,51 @@ async function initActivity(studentId, profile) {
         return;
     }
 
-    // Group by day; compute per-session duration = (ended_at || last_seen_at) - started_at.
-    const days = {};   // dayKey -> { date, total, sessions: [] }
+    // Group by day; per-session duration = (ended_at || last_seen_at) - started_at.
+    // A session counts as "active" if it hasn't ended and was seen in the last 3 min.
+    const days = {};   // dayKey -> { total, rows: [] }
     let grand = 0;
+    const now = Date.now();
     sessions.forEach(s => {
         const start = new Date(s.started_at);
-        const end = new Date(s.ended_at || s.last_seen_at || s.started_at);
+        const endedAt = s.ended_at ? new Date(s.ended_at) : null;
+        const lastSeen = s.last_seen_at ? new Date(s.last_seen_at) : null;
+        const end = endedAt || lastSeen || start;
+        const active = !endedAt && (now - (lastSeen || start).getTime()) < 180000;
         const dur = Math.max(0, (end - start) / 1000);
         grand += dur;
         const k = dayKey(s.started_at);
         if (!days[k]) days[k] = { total: 0, rows: [], sort: start.getTime() };
         days[k].total += dur;
         days[k].sort = Math.max(days[k].sort, start.getTime());
-        days[k].rows.push({ start, end, dur });
+        days[k].rows.push({ start, end, dur, active });
     });
 
     const ordered = Object.keys(days).sort((a, b) => days[b].sort - days[a].sort);
+    const badgeActive = `<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:#dcfce7;color:#15803d;white-space:nowrap;">● Active</span>`;
+    const badgeEnded = `<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:#fee2e2;color:#b91c1c;white-space:nowrap;">Ended</span>`;
 
     report.innerHTML = `
         <div class="grand"><div>Total time recorded (all days)</div><div class="g-val">${fmtDur(grand)}</div></div>
+        <p class="hint no-print" style="margin:10px 2px 16px;">Each row is one login session: <strong>Started → Ended</strong>, with how long it lasted. <span style="color:#15803d;font-weight:600;">● Active</span> means the student is still in the portal.</p>
         ${ordered.map(k => {
             const d = days[k];
             d.rows.sort((a, b) => a.start - b.start);
             return `
             <div class="day-card">
                 <div class="day-head"><div class="d-date">${escapeHtml(k)}</div><div class="d-total">Total: ${fmtDur(d.total)}</div></div>
-                ${d.rows.map(r => `<div class="sess-row"><span>${fmtTime(r.start)} → ${fmtTime(r.end)}</span><span class="dur">${fmtDur(r.dur)}</span></div>`).join('')}
+                ${d.rows.map(r => {
+                    const endPart = r.active
+                        ? `<span style="color:#15803d;font-weight:600;">still active</span>`
+                        : `<strong>Ended</strong> ${fmtTime(r.end)}`;
+                    return `<div class="sess-row">
+                        <span><strong>Started</strong> ${fmtTime(r.start)} <span style="color:var(--text-muted);">→</span> ${endPart}</span>
+                        <span style="display:inline-flex;align-items:center;gap:12px;">
+                            <span class="dur">${fmtDur(r.dur)}</span>
+                            ${r.active ? badgeActive : badgeEnded}
+                        </span>
+                    </div>`;
+                }).join('')}
             </div>`;
         }).join('')}
     `;
