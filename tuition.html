@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Premedical Tuition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <style>
+        .badge { display:inline-block; padding:4px 11px; border-radius:999px; font-size:12px; font-weight:700; white-space:nowrap; }
+        .badge.paid { background:#dcfce7; color:#16a34a; }
+        .badge.progress { background:#f1f5f9; color:#475569; }
+        .badge.overdue { background:#fee2e2; color:#dc2626; }
+        .badge.notset { background:#fef3c7; color:#92400e; }
+        .pay-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; margin-bottom:8px; }
+        .money { font-variant-numeric: tabular-nums; }
+        .t-input { height:42px; border:1px solid var(--border); border-radius:10px; padding:0 12px; font-size:14px; font-family:'Inter',sans-serif; color:var(--text); background:var(--card); outline:none; }
+    </style>
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- MANAGE STUDENT TUITION MODAL -->
+    <div class="modal-overlay" id="manage-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3 id="mg-title">Tuition</h3>
+                <button class="modal-close" onclick="closeModal('manage-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert" id="mg-alert" style="display:none;"></div>
+                <input type="hidden" id="mg-student">
+
+                <div class="form-row" style="display:flex;gap:12px;flex-wrap:wrap;">
+                    <div class="form-field" style="flex:1;min-width:160px;">
+                        <label>Total tuition (<span id="mg-cur1">NIS</span>)</label>
+                        <input type="number" id="mg-total" min="0" step="1" class="t-input" style="width:100%;">
+                        <div class="hint">This student's own total — special deals/help go here. Changing the general tuition won't affect it.</div>
+                    </div>
+                    <div class="form-field" style="flex:1;min-width:160px;">
+                        <label>Payment deadline <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <input type="date" id="mg-deadline" class="t-input" style="width:100%;">
+                        <div class="hint">After this date, unpaid balances show as “overdue”.</div>
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin:-4px 0 16px;">
+                    <button class="btn btn-primary btn-sm" id="mg-save-btn" onclick="saveTuition()">Save total &amp; deadline</button>
+                </div>
+
+                <div class="panel" style="padding:14px 16px;margin-bottom:16px;background:var(--bg);">
+                    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:14px;">
+                        <div>Total: <strong class="money" id="mg-sum-total">—</strong></div>
+                        <div>Paid: <strong class="money" id="mg-sum-paid" style="color:#16a34a;">—</strong></div>
+                        <div>Left: <strong class="money" id="mg-sum-left" style="color:#b45309;">—</strong></div>
+                        <div id="mg-sum-status"></div>
+                    </div>
+                </div>
+
+                <div class="section-title" style="margin:0 0 10px;">Payments</div>
+                <div id="mg-payments"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:12px;border-top:1px solid var(--border);padding-top:14px;">
+                    <div style="flex:1;min-width:120px;">
+                        <label class="hint" style="display:block;margin-bottom:4px;">Amount (<span id="mg-cur2">NIS</span>)</label>
+                        <input type="number" id="pay-amount" min="0" step="1" class="t-input" style="width:100%;" placeholder="e.g. 8000">
+                    </div>
+                    <div style="min-width:150px;">
+                        <label class="hint" style="display:block;margin-bottom:4px;">Date received</label>
+                        <input type="date" id="pay-date" class="t-input" style="width:100%;">
+                    </div>
+                    <div style="flex:1;min-width:140px;">
+                        <label class="hint" style="display:block;margin-bottom:4px;">Note (optional)</label>
+                        <input type="text" id="pay-note" class="t-input" style="width:100%;" placeholder="e.g. Payment 1 — bank transfer">
+                    </div>
+                    <button class="btn btn-primary" onclick="addPayment()">+ Add payment</button>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('manage-modal')">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/tuition.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+            if (auth.profile.role !== 'superadmin') {
+                renderLayout('tuition', 'Premedical Tuition', '', auth.profile);
+                document.getElementById('page-content').innerHTML = `<div class="empty-state" style="padding:48px;"><h3>Superadmin only</h3><p>Tuition management is available to super administrators.</p></div>`;
+                return;
+            }
+            CURRENT_UID = auth.session.user.id;
+            renderLayout('tuition', 'Premedical Tuition', 'Set tuition, record payments, track balances', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="panel" style="padding:18px 20px;margin-bottom:18px;">
+                    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
+                        <div>
+                            <label class="hint" style="display:block;margin-bottom:4px;">General premed tuition (new students)</label>
+                            <input type="number" id="gen-tuition" min="0" step="1" class="t-input" style="width:160px;">
+                        </div>
+                        <div>
+                            <label class="hint" style="display:block;margin-bottom:4px;">Currency</label>
+                            <input type="text" id="gen-currency" maxlength="8" class="t-input" style="width:90px;" placeholder="NIS">
+                        </div>
+                        <button class="btn btn-primary" onclick="saveGeneral()">Save</button>
+                        <span id="gen-saved" style="font-size:12px;font-weight:600;"></span>
+                        <div style="flex:1;"></div>
+                        <button class="btn btn-ghost btn-sm" onclick="applyDefaultToUnset()" title="Give every student who has no tuition set yet the current general amount.">Set unset students to general amount</button>
+                    </div>
+                    <div class="hint" style="margin-top:8px;">The general amount is a starting value for students who don't have a tuition set. It does <strong>not</strong> change students who already have one.</div>
+                </div>
+
+                <div class="toolbar" style="flex-wrap:wrap;gap:10px;">
+                    <select id="t-course" class="filter-select" onchange="onTuitionFilter()"><option value="">All courses</option></select>
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="t-search" placeholder="Find a student by name…" oninput="onTuitionFilter()">
+                    </div>
+                    <select id="t-status" class="filter-select" onchange="onTuitionFilter()">
+                        <option value="">All statuses</option>
+                        <option value="progress">In progress</option>
+                        <option value="overdue">Overdue</option>
+                        <option value="paid">Completed</option>
+                        <option value="notset">Not set</option>
+                    </select>
+                </div>
+                <div id="t-summary" style="margin:0 0 14px;font-size:14px;color:var(--text);"></div>
+                <div id="tuition-list"><div class="loader">Loading…</div></div>`;
+            loadTuition();
+        })();
+    </script>
+</body>
+</html>
