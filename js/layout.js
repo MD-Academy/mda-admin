@@ -72,7 +72,8 @@ function renderLayout(activeId, pageTitle, pageSub, profile) {
                 </div>
             </header>
             <div class="content" id="page-content"></div>
-            <footer style="text-align:center;padding:16px 24px;color:#64748b;font-size:12px;line-height:1.5;border-top:1px solid var(--border);">
+            <footer style="text-align:center;padding:16px 24px;color:#64748b;font-size:12px;line-height:1.6;border-top:1px solid var(--border);">
+                Your personal information is processed in accordance with our <a href="https://www.medicaldoctor-studies.com/privacy-policy/" target="_blank" rel="noopener" style="color:#475569;text-decoration:underline;">Privacy Policy</a>. By continuing to use this platform, you confirm that you have read, understood and agree to it.<br>
                 This platform was made by Diego Ilan Tevelev · © Medical Doctor Academy 2026. All rights reserved.
             </footer>
         </div>
