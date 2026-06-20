@@ -42,18 +42,31 @@ async function initActivity(studentId, profile) {
                         ${escapeHtml(name)}
                     </span>
                 </div>
-                <span>Generated ${new Date().toLocaleString('en-GB')}</span>
+                <span id="gen-time">Updated ${new Date().toLocaleString('en-GB')} · refreshes automatically</span>
             </div>
         </div>
         <div id="report"><div class="loader">Loading activity…</div></div>
     `;
+
+    // The report is a live view — re-query every 30s so "Active/Ended" reflects
+    // the student's current state without the admin reloading the page.
+    refreshActivity(studentId);
+    if (window._actTimer) clearInterval(window._actTimer);
+    window._actTimer = setInterval(() => refreshActivity(studentId), 30000);
+}
+
+async function refreshActivity(studentId) {
+    const report = document.getElementById('report');
+    if (!report) { if (window._actTimer) clearInterval(window._actTimer); return; }
 
     const { data, error } = await db.from('login_sessions')
         .select('started_at, last_seen_at, ended_at')
         .eq('student_id', studentId)
         .order('started_at', { ascending: false });
 
-    const report = document.getElementById('report');
+    const gt = document.getElementById('gen-time');
+    if (gt) gt.textContent = `Updated ${new Date().toLocaleString('en-GB')} · refreshes automatically`;
+
     if (error) { report.innerHTML = `<div class="loader" style="color:var(--red)">Error: ${escapeHtml(error.message)}</div>`; return; }
 
     const sessions = data || [];
