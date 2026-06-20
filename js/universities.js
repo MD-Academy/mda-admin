@@ -18,6 +18,7 @@ let reportTarget = 3;           // "target schools" threshold
 let reportAttention = false;    // show only students below target
 let ROSTER = [];                // [{id, name, courseIds:Set, courseNames:[], items:[]}]
 let COURSES_LIST = [];          // [{id, name}]
+let acceptCourse = '';          // course filter on the Acceptances tab
 
 function escapeHtml(s) { return s ? String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
 function fmtExamDate(iso) { return iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''; }
@@ -27,11 +28,12 @@ function showModalAlert(el, msg, type) { el.className = `alert ${type}`; el.text
 
 // ── TABS ──
 function showUniTab(tab) {
-    document.getElementById('tab-unis').style.display = tab === 'unis' ? 'block' : 'none';
-    document.getElementById('tab-report').style.display = tab === 'report' ? 'block' : 'none';
-    document.getElementById('tabbtn-unis').classList.toggle('active', tab === 'unis');
-    document.getElementById('tabbtn-report').classList.toggle('active', tab === 'report');
+    ['unis', 'report', 'accept'].forEach(t => {
+        document.getElementById('tab-' + t).style.display = (t === tab) ? 'block' : 'none';
+        document.getElementById('tabbtn-' + t).classList.toggle('active', t === tab);
+    });
     if (tab === 'report') loadReport();
+    if (tab === 'accept') loadAcceptances();
 }
 
 // ════════════ UNIVERSITIES ════════════
@@ -422,4 +424,105 @@ async function ovrRemove(id) {
     const { error } = await db.from('university_selections').delete().eq('id', id);
     if (error) { alert(`Couldn't remove: ${error.message}`); return; }
     loadReport();
+}
+
+// ════════════ ACCEPTANCES & OUTCOMES ════════════
+// Read-only roll-up: who was accepted where, and who chose to attend where.
+async function loadAcceptances() {
+    const box = document.getElementById('accept-content');
+    box.innerHTML = `<div class="loader">Loading acceptances…</div>`;
+    // Reuse the report's data load (builds ROSTER + SELS + COURSES_LIST + uniMap).
+    if (ROSTER.length === 0 || SELS.length === 0) await loadReport();
+
+    const sel = document.getElementById('accept-course');
+    if (sel) {
+        const cur = acceptCourse;
+        sel.innerHTML = `<option value="">All courses</option>` +
+            COURSES_LIST.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        sel.value = COURSES_LIST.some(c => c.id === cur) ? cur : '';
+        acceptCourse = sel.value;
+    }
+    renderAcceptances();
+}
+
+function onAcceptCourse() { acceptCourse = document.getElementById('accept-course').value; renderAcceptances(); }
+
+function renderAcceptances() {
+    const box = document.getElementById('accept-content');
+
+    // student -> set of courseIds (for the course filter)
+    const courseOf = {}; ROSTER.forEach(s => { courseOf[s.id] = s.courseIds; });
+    const nameOf = {}; ROSTER.forEach(s => { nameOf[s.id] = s.name; });
+
+    let sels = SELS.slice();
+    if (acceptCourse) sels = sels.filter(s => courseOf[s.student_id] && courseOf[s.student_id].has(acceptCourse));
+
+    const accepted = sels.filter(s => s.status === 'accepted');
+    const finals = sels.filter(s => s.is_final_choice);
+    const acceptedStudents = new Set(accepted.map(s => s.student_id));
+    const finalStudents = new Set(finals.map(s => s.student_id));
+
+    const studentName = s => s.student_name || nameOf[s.student_id] || 'Student';
+    const uName = id => (uniMap[id] || {}).name || 'University';
+
+    // Group accepted + finals by university.
+    const byUni = {};
+    const ensureU = id => (byUni[id] = byUni[id] || { accepted: [], finals: [] });
+    accepted.forEach(s => ensureU(s.university_id).accepted.push(s));
+    finals.forEach(s => ensureU(s.university_id).finals.push(s));
+
+    if (accepted.length === 0 && finals.length === 0) {
+        box.innerHTML = `<div class="empty-state" style="padding:36px;"><p>No acceptances recorded yet${acceptCourse ? ' for this course' : ''}. Mark a student as <strong>Accepted</strong> in “Student selections”, and set a ★ final choice once they decide where to attend.</p></div>`;
+        return;
+    }
+
+    // ── KPI cards ──
+    const kpi = (label, value, color) => `
+        <div class="panel" style="flex:1;min-width:200px;padding:18px 20px;">
+            <div style="font-size:30px;font-weight:800;color:${color};line-height:1;">${value}</div>
+            <div class="hint" style="margin-top:6px;">${label}</div>
+        </div>`;
+    const kpis = `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;">
+        ${kpi('students accepted to at least one university', acceptedStudents.size, '#15803d')}
+        ${kpi('students decided where to attend', finalStudents.size, '#92400e')}
+        ${kpi('total acceptances', accepted.length, '#1d4ed8')}
+    </div>`;
+
+    // ── "Decided to attend" list ──
+    let attendingBlock = '';
+    if (finals.length) {
+        const rows = finals
+            .sort((a, b) => uName(a.university_id).localeCompare(uName(b.university_id)))
+            .map(s => `<div class="list-row"><div class="lr-body">
+                <div class="lr-title">${escapeHtml(studentName(s))} <span class="badge" style="background:#fef3c7;color:#92400e;">★ attending</span></div>
+                <div class="lr-sub">${escapeHtml(uName(s.university_id))}${(s.degrees || []).length ? ' · ' + escapeHtml(s.degrees.join(', ')) : ''}</div>
+            </div></div>`).join('');
+        attendingBlock = `<div class="panel" style="padding:18px;margin-bottom:18px;">
+            <div class="section-title" style="margin:0 0 10px;">★ Decided to attend (${finals.length})</div>
+            <div class="list-rows">${rows}</div>
+        </div>`;
+    }
+
+    // ── Per-university breakdown (most accepted first) ──
+    const uniBlocks = Object.keys(byUni)
+        .sort((a, b) => byUni[b].accepted.length - byUni[a].accepted.length || uName(a).localeCompare(uName(b)))
+        .map(uid => {
+            const g = byUni[uid];
+            const finalIds = new Set(g.finals.map(s => s.student_id));
+            const names = g.accepted
+                .sort((a, b) => studentName(a).localeCompare(studentName(b)))
+                .map(s => `<span class="badge ${finalIds.has(s.student_id) ? '' : 'badge-green'}" style="${finalIds.has(s.student_id) ? 'background:#fef3c7;color:#92400e;' : ''}">${escapeHtml(studentName(s))}${finalIds.has(s.student_id) ? ' ★' : ''}</span>`)
+                .join(' ');
+            const attendingNote = g.finals.length ? ` · <span style="color:#92400e;font-weight:700;">${g.finals.length} attending ★</span>` : '';
+            return `<div class="panel" style="padding:16px 18px;margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:${g.accepted.length ? '10px' : '0'};">
+                    <div class="section-title" style="margin:0;">${escapeHtml(uName(uid))}</div>
+                    <div style="font-size:13px;white-space:nowrap;"><span style="color:#15803d;font-weight:700;">${g.accepted.length} accepted</span>${attendingNote}</div>
+                </div>
+                ${g.accepted.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${names}</div>` : ''}
+            </div>`;
+        }).join('');
+
+    box.innerHTML = kpis + attendingBlock +
+        `<div class="section-title" style="margin:4px 0 12px;">Accepted by university</div>` + uniBlocks;
 }

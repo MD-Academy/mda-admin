@@ -110,6 +110,7 @@
                 <div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px;">
                     <button id="tabbtn-unis" class="tab-btn active" onclick="showUniTab('unis')">Universities</button>
                     <button id="tabbtn-report" class="tab-btn" onclick="showUniTab('report')">Student selections</button>
+                    <button id="tabbtn-accept" class="tab-btn" onclick="showUniTab('accept')">Acceptances &amp; outcomes</button>
                 </div>
                 <div id="tab-unis">
                     <div class="toolbar" style="justify-content:flex-end;">
@@ -143,6 +144,14 @@
                     </div>
                     <div id="report-summary" style="margin:0 0 14px;font-size:14px;color:var(--text);"></div>
                     <div id="report-list"><div class="loader">Loading…</div></div>
+                </div>
+                <div id="tab-accept" style="display:none;">
+                    <div class="toolbar" style="flex-wrap:wrap;gap:10px;align-items:center;">
+                        <select id="accept-course" class="filter-select" onchange="onAcceptCourse()">
+                            <option value="">All courses</option>
+                        </select>
+                    </div>
+                    <div id="accept-content"><div class="loader">Loading…</div></div>
                 </div>
             `;
             loadUnis();
