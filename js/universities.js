@@ -223,11 +223,18 @@ async function loadReport() {
     box.innerHTML = `<div class="loader">Loading student selections…</div>`;
     if (UNIS.length === 0) await loadUnis();
 
-    const [enrRes, selRes, courseRes] = await Promise.all([
+    const [enrRes, selRes, courseRes, setRes] = await Promise.all([
         db.from('course_enrollments').select('student_id, course_id'),
         db.from('university_selections').select('id, student_id, student_name, university_id, status, degrees, is_final_choice'),
-        db.from('courses').select('id, name').order('name', { ascending: true })
+        db.from('courses').select('id, name').order('name', { ascending: true }),
+        db.from('app_settings').select('value').eq('key', 'university_target').limit(1)
     ]);
+    // Load the saved recommended target (students see this) into the input.
+    const savedTarget = parseInt(((setRes.data || [])[0] || {}).value, 10);
+    if (savedTarget >= 1 && savedTarget <= 20) {
+        reportTarget = savedTarget;
+        const ti = document.getElementById('report-target'); if (ti) ti.value = String(savedTarget);
+    }
     if (enrRes.error || selRes.error) {
         const msg = (enrRes.error || selRes.error).message;
         box.innerHTML = `<div class="empty-state"><h3 style="color:var(--red)">Couldn't load the report</h3><p>${escapeHtml(msg)}</p></div>`;
@@ -276,10 +283,26 @@ function onReportSearch() { reportSearch = (document.getElementById('report-sear
 function onReportCourse() { reportCourse = document.getElementById('report-course').value; renderReport(); }
 function onReportSort() { reportSort = document.getElementById('report-sort').value; renderReport(); }
 function onReportAttention() { reportAttention = document.getElementById('report-attention').checked; renderReport(); }
+let _targetSaveTimer = null;
 function onReportTarget() {
     const v = parseInt(document.getElementById('report-target').value, 10);
     reportTarget = (v >= 1 && v <= 20) ? v : 3;
     renderReport();
+    // Persist (debounced) so students see it as their recommended number.
+    clearTimeout(_targetSaveTimer);
+    _targetSaveTimer = setTimeout(saveTarget, 600);
+}
+async function saveTarget() {
+    const note = document.getElementById('target-saved');
+    const { error } = await db.from('app_settings').upsert(
+        { key: 'university_target', value: String(reportTarget), updated_at: new Date().toISOString() },
+        { onConflict: 'key' }
+    );
+    if (note) {
+        note.textContent = error ? "Couldn't save" : 'Saved ✓';
+        note.style.color = error ? 'var(--red)' : 'var(--green)';
+        if (!error) setTimeout(() => { note.textContent = ''; }, 1800);
+    }
 }
 
 function renderReport() {
