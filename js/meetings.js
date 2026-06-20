@@ -96,7 +96,10 @@ function renderMeetings() {
                         <div class="section-title" style="margin-bottom:4px;">${escapeHtml(courseName(m.course_id))} · ${fmtMtDate(m.meeting_date)}</div>
                         <p class="hint" style="margin:0;">${hhmm(m.start_time)}–${hhmm(m.end_time)} · ${m.slot_minutes}-min slots · ${bookedCount}/${slots.length} booked</p>
                     </div>
-                    <button class="btn btn-danger btn-sm" onclick="deleteMeeting('${m.id}')">Delete</button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="btn btn-ghost btn-sm" onclick="openEditModal('${m.id}')">Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteMeeting('${m.id}')">Delete</button>
+                    </div>
                 </div>
                 <div class="form-field" style="margin-top:16px;">
                     <label>Meeting link (Zoom, Google Meet, etc.) — students see this</label>
@@ -111,11 +114,19 @@ function renderMeetings() {
     }).join('');
 }
 
-// ── CREATE MEETING ──
+// ── CREATE / EDIT MEETING ──
+function todayIso() {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+}
+
 function openCreateModal() {
     document.getElementById('m-alert').style.display = 'none';
+    document.getElementById('m-id').value = '';
+    document.getElementById('m-modal-title').textContent = 'Create Meeting';
+    document.getElementById('m-save-btn').textContent = 'Create Meeting';
     document.getElementById('m-course').value = '';
-    const today = new Date(); const iso = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const iso = todayIso();
     const d = document.getElementById('m-date'); d.value = iso; d.min = iso;
     document.getElementById('m-start').value = '09:00';
     document.getElementById('m-end').value = '22:00';
@@ -124,9 +135,28 @@ function openCreateModal() {
     openModal('create-modal');
 }
 
+function openEditModal(meetingId) {
+    const m = mtMeetings.find(x => x.id === meetingId);
+    if (!m) return;
+    document.getElementById('m-alert').style.display = 'none';
+    document.getElementById('m-id').value = m.id;
+    document.getElementById('m-modal-title').textContent = 'Edit Meeting';
+    document.getElementById('m-save-btn').textContent = 'Save Changes';
+    document.getElementById('m-course').value = m.course_id;
+    const d = document.getElementById('m-date');
+    // Don't constrain the date on edit (the existing date may already be in the past).
+    d.min = ''; d.value = m.meeting_date;
+    document.getElementById('m-start').value = hhmm(m.start_time);
+    document.getElementById('m-end').value = hhmm(m.end_time);
+    document.getElementById('m-slot').value = String(m.slot_minutes);
+    document.getElementById('m-link').value = m.link || '';
+    openModal('create-modal');
+}
+
 async function submitMeeting(ev) {
     ev.preventDefault();
     const alert = document.getElementById('m-alert'); alert.style.display = 'none';
+    const id = document.getElementById('m-id').value;
     const course_id = document.getElementById('m-course').value;
     const meeting_date = document.getElementById('m-date').value;
     const start_time = document.getElementById('m-start').value;
@@ -137,14 +167,51 @@ async function submitMeeting(ev) {
     if (!course_id) { showModalAlert(alert, 'Choose a course for this meeting.', 'error'); return; }
     if (!meeting_date) { showModalAlert(alert, 'Pick a date.', 'error'); return; }
     if (!start_time || !end_time || start_time >= end_time) { showModalAlert(alert, 'End time must be after start time.', 'error'); return; }
-    if (genSlots(start_time, end_time, slot_minutes).length === 0) { showModalAlert(alert, 'That window is too short for even one slot.', 'error'); return; }
+    const newSlots = genSlots(start_time, end_time, slot_minutes);
+    if (newSlots.length === 0) { showModalAlert(alert, 'That window is too short for even one slot.', 'error'); return; }
     if (!lk.ok) { showModalAlert(alert, lk.msg, 'error'); return; }
 
+    const payload = { course_id, meeting_date, start_time, end_time, slot_minutes, link: lk.value };
+
+    // ── EDIT: warn if the new window would drop existing student bookings ──
+    if (id) {
+        const booked = mtBookings[id] || {};
+        const newSet = new Set(newSlots);
+        const dropped = Object.keys(booked).filter(s => !newSet.has(s));
+        if (dropped.length) {
+            dropped.sort();
+            const who = dropped.map(s => `• ${slotLabel(s, slot_minutes)} — ${booked[s].student_name || 'a student'}`).join('\n');
+            const ok = await confirmDialog({
+                title: 'Some bookings will be removed',
+                message: `The new time window / slot length no longer includes ${dropped.length} slot${dropped.length === 1 ? '' : 's'} a student has already booked:\n\n${who}\n\nThose booking(s) will be permanently removed and the student(s) will need to rebook. Continue?`,
+                confirmText: 'Save & remove bookings',
+                danger: true
+            });
+            if (!ok) return;
+        }
+
+        const btn = document.getElementById('m-save-btn'); btn.disabled = true; btn.textContent = 'Saving…';
+        try {
+            if (dropped.length) {
+                const del = await db.from('meeting_bookings').delete().eq('meeting_id', id).in('slot_time', dropped);
+                if (del.error) throw new Error(del.error.message);
+            }
+            const { error } = await db.from('meetings').update(payload).eq('id', id);
+            if (error) throw new Error(error.message);
+            closeModal('create-modal');
+            loadMeetings();
+        } catch (err) {
+            showModalAlert(alert, err.message, 'error');
+        } finally {
+            btn.disabled = false; btn.textContent = 'Save Changes';
+        }
+        return;
+    }
+
+    // ── CREATE ──
     const btn = document.getElementById('m-save-btn'); btn.disabled = true; btn.textContent = 'Creating…';
     try {
-        const { error } = await db.from('meetings').insert({
-            course_id, meeting_date, start_time, end_time, slot_minutes, link: lk.value, created_by: CURRENT_UID
-        });
+        const { error } = await db.from('meetings').insert({ ...payload, created_by: CURRENT_UID });
         if (error) throw new Error(error.message);
         closeModal('create-modal');
         loadMeetings();
@@ -168,8 +235,21 @@ async function saveLink(meetingId) {
 
 async function deleteMeeting(meetingId) {
     const m = mtMeetings.find(x => x.id === meetingId);
-    if (!confirm(`Delete the meeting for ${courseName(m && m.course_id)} on ${fmtMtDate(m && m.meeting_date)}?\n\nThis permanently removes the meeting and ALL student bookings for it. This cannot be undone.`)) return;
+    const bookedCount = Object.keys(mtBookings[meetingId] || {}).length;
+    const bookedNote = bookedCount
+        ? ` This includes ${bookedCount} student booking${bookedCount === 1 ? '' : 's'}.`
+        : '';
+    const ok = await confirmDialog({
+        title: 'Delete this meeting?',
+        message: `This permanently removes the meeting for ${courseName(m && m.course_id)} on ${fmtMtDate(m && m.meeting_date)} and ALL its student bookings.${bookedNote} This cannot be undone.`,
+        confirmText: 'Delete meeting',
+        danger: true
+    });
+    if (!ok) return;
     const { error } = await db.from('meetings').delete().eq('id', meetingId);
-    if (error) { alert(`Couldn't delete the meeting: ${error.message}`); return; }
+    if (error) {
+        await confirmDialog({ title: 'Could not delete', message: `Something went wrong: ${error.message}`, confirmText: 'OK', cancelText: 'Close' });
+        return;
+    }
     loadMeetings();
 }

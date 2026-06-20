@@ -16,12 +16,13 @@
     <div class="modal-overlay" id="create-modal">
         <div class="modal">
             <div class="modal-head">
-                <h3>Create Meeting</h3>
+                <h3 id="m-modal-title">Create Meeting</h3>
                 <button class="modal-close" onclick="closeModal('create-modal')">&times;</button>
             </div>
             <form onsubmit="submitMeeting(event)">
                 <div class="modal-body">
                     <div class="alert" id="m-alert" style="display:none;"></div>
+                    <input type="hidden" id="m-id">
                     <div class="form-field">
                         <label>Course</label>
                         <select id="m-course" class="filter-select" style="width:100%;"><option value="">Select a course…</option></select>
