@@ -776,3 +776,15 @@ body {
     .main { margin-left: 0; }
     .form-row { flex-direction: column; gap: 0; }
 }
+
+/* ── APPEARANCE (global card banners) ── */
+.section-intro { font-size: 13px; color: var(--text-muted); line-height: 1.7; max-width: 780px; margin-bottom: 22px; }
+.ap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.ap-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.ap-preview { height: 120px; display: flex; align-items: center; justify-content: center; }
+.ap-preview svg { width: 42px; height: 42px; color: rgba(255,255,255,0.9); }
+.ap-body { padding: 16px 18px 18px; }
+.ap-title { font-size: 16px; font-weight: 700; color: var(--navy-800); }
+.ap-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.ap-status { font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 12px 0 14px; }
+.ap-actions { display: flex; gap: 8px; flex-wrap: wrap; }

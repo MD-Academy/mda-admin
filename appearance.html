@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Appearance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/appearance.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireSuperadmin();
+            if (!auth) return;
+
+            renderLayout('appearance', 'Appearance', 'Customize what students see across the portal', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="section-intro">
+                    These banners appear at the top of the <strong>Presentations</strong>, <strong>Video Lectures</strong> and <strong>Quizzes</strong> cards
+                    inside every subject — the same image shows in <em>all subjects across all courses</em>. Upload once here; leave empty to use the default colour &amp; icon.
+                    Images: PNG, JPG, WEBP or GIF, up to 500&nbsp;KB. A wide (landscape) image works best.
+                </div>
+                <div id="banner-grid" class="ap-grid"><div class="loader">Loading…</div></div>`;
+
+            loadAppearance();
+        })();
+    </script>
+</body>
+</html>
