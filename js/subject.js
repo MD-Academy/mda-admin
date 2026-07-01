@@ -121,7 +121,10 @@ async function initRoom(roomId, profile) {
         <div class="tab-panel" id="panel-materials">
             <div class="subtoolbar">
                 <div class="st-title">Presentations</div>
-                <button class="btn btn-primary btn-sm" onclick="openUploadModal()">+ Upload Presentation</button>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-ghost btn-sm" onclick="openBulkModal()">⬆ Bulk upload</button>
+                    <button class="btn btn-primary btn-sm" onclick="openUploadModal()">+ Upload Presentation</button>
+                </div>
             </div>
             <div class="panel"><table class="data-table">
                 <thead><tr><th>Title</th><th>Type</th><th>Uploaded</th><th>Visible</th><th>Actions</th></tr></thead>
@@ -606,6 +609,135 @@ async function deleteMaterial(id) {
     const del = await db.from('materials').delete().eq('id', id);
     if (del.error) { alert(`File removed but record delete failed: ${del.error.message}`); return; }
     await loadAll();
+}
+
+// ════════════ BULK PRESENTATION UPLOAD ════════════
+let bulkItems = [];   // [{ file, title }]
+
+// Title from a file name: drop the extension and any leading order number ("01 - ", "02_", "3) ").
+function cleanBulkTitle(name) {
+    let t = name.replace(/\.[^.]+$/, '');
+    t = t.replace(/^\s*\d+\s*[-._)\]]\s*/, '');
+    t = t.replace(/[_]+/g, ' ').trim();
+    return t || name;
+}
+
+function openBulkModal() {
+    bulkItems = [];
+    document.getElementById('bulk-alert').style.display = 'none';
+    document.getElementById('bulk-files').value = '';
+    renderBulkList();
+    openModal('bulk-modal');
+}
+
+function onBulkPicked(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';   // let them pick more later
+    if (!files.length) return;
+    const alert = document.getElementById('bulk-alert');
+    alert.style.display = 'none';
+
+    const rejects = [];
+    const accepted = files.filter(f => {
+        const ext = fileExt(f.name);
+        if (!ALLOWED_EXT.material.includes(ext)) { rejects.push(`${f.name} (.${ext})`); return false; }
+        if (f.size > MAX_FILE_BYTES) { rejects.push(`${f.name} (too large)`); return false; }
+        return true;
+    });
+    // Natural sort so 1,2,…,10 order correctly.
+    accepted.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    accepted.forEach(f => {
+        if (bulkItems.some(it => it.file.name === f.name && it.file.size === f.size)) return; // dedupe
+        bulkItems.push({ file: f, title: cleanBulkTitle(f.name) });
+    });
+
+    if (rejects.length) showModalAlert(alert, `Skipped ${rejects.length} file(s): ${rejects.join(', ')}. Allowed: PDF, PNG, JPG, WEBP, GIF up to 50 MB.`, 'error');
+    renderBulkList();
+}
+
+function renderBulkList() {
+    const box = document.getElementById('bulk-list');
+    const btn = document.getElementById('bulk-upload-btn');
+    if (!bulkItems.length) {
+        box.innerHTML = `<div class="empty-state" style="padding:22px;"><p>No files chosen yet.</p></div>`;
+        btn.disabled = true; btn.textContent = 'Upload all';
+        return;
+    }
+    box.innerHTML = `
+        <div class="hint" style="margin:14px 0 8px;">${bulkItems.length} file(s) — this is the order students will see.</div>
+        <div class="list-rows">${bulkItems.map((it, i) => `
+            <div class="list-row" data-id="b${i}">
+                <div class="lr-index">${i + 1}</div>
+                <div class="lr-body">
+                    <input type="text" value="${escapeHtml(it.title)}" oninput="setBulkTitle(${i}, this.value)" style="width:100%;font-weight:600;padding:7px 9px;">
+                    <div class="lr-sub" style="margin-top:4px;">${escapeHtml(it.file.name)} · ${(it.file.size / 1024 / 1024).toFixed(1)} MB <span class="bulk-status" id="bulk-status-${i}" style="margin-left:8px;font-weight:600;"></span></div>
+                </div>
+                <div class="lr-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="moveBulk(${i}, -1)" ${i === 0 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move up">↑</button>
+                    <button class="btn btn-ghost btn-sm" onclick="moveBulk(${i}, 1)" ${i === bulkItems.length - 1 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move down">↓</button>
+                    <button class="btn btn-danger btn-sm" onclick="removeBulk(${i})">Remove</button>
+                </div>
+            </div>`).join('')}</div>`;
+    btn.disabled = false; btn.textContent = `Upload all (${bulkItems.length})`;
+}
+
+function setBulkTitle(i, v) { if (bulkItems[i]) bulkItems[i].title = v; }   // no re-render → keep input focus
+function removeBulk(i) { bulkItems.splice(i, 1); renderBulkList(); }
+function moveBulk(i, dir) {
+    const t = i + dir;
+    if (t < 0 || t >= bulkItems.length) return;
+    [bulkItems[i], bulkItems[t]] = [bulkItems[t], bulkItems[i]];
+    renderBulkList();
+}
+
+async function runBulkUpload() {
+    const alert = document.getElementById('bulk-alert');
+    alert.style.display = 'none';
+    if (!bulkItems.length) return;
+
+    for (let i = 0; i < bulkItems.length; i++) {
+        if (!bulkItems[i].title.trim()) { showModalAlert(alert, `Item ${i + 1} needs a title.`, 'error'); return; }
+    }
+    if (!ensureSafe(alert, bulkItems.map((it, i) => [`Title ${i + 1}`, it.title]))) return;
+
+    const btn = document.getElementById('bulk-upload-btn');
+    btn.disabled = true;
+    const start = nextMaterialOrder('material');   // append after existing presentations
+    const remaining = [];
+    let ok = 0;
+
+    for (let i = 0; i < bulkItems.length; i++) {
+        const it = bulkItems[i];
+        const status = document.getElementById('bulk-status-' + i);
+        if (status) { status.textContent = 'Uploading…'; status.style.color = 'var(--text-muted)'; }
+        btn.textContent = `Uploading ${i + 1}/${bulkItems.length}…`;
+
+        const ext = fileExt(it.file.name);
+        const path = `${ROOM_ID}/${Date.now()}-${sanitizeName(it.file.name)}`;
+        try {
+            const up = await db.storage.from(MATERIALS_BUCKET).upload(path, it.file, { contentType: it.file.type || undefined, upsert: false });
+            if (up.error) throw new Error(up.error.message);
+            const ins = await db.from('materials').insert({
+                room_id: ROOM_ID, title: it.title.trim(), type: ext, storage_path: path, category: 'material', order_index: start + ok
+            });
+            if (ins.error) { await db.storage.from(MATERIALS_BUCKET).remove([path]); throw new Error(ins.error.message); }
+            ok++;
+            if (status) { status.textContent = '✓ done'; status.style.color = 'var(--green)'; }
+        } catch (err) {
+            if (status) { status.textContent = '✕ ' + err.message; status.style.color = 'var(--red)'; }
+            remaining.push(it);   // keep failures so they can retry
+        }
+    }
+
+    await loadAll();
+    if (!remaining.length) {
+        closeModal('bulk-modal');
+    } else {
+        bulkItems = remaining;
+        renderBulkList();
+        showModalAlert(alert, `${ok} uploaded. ${remaining.length} failed and are still listed — fix and click Upload all again.`, 'error');
+        btn.disabled = false;
+    }
 }
 
 // ════════════ QUIZZES ════════════
