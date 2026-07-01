@@ -102,9 +102,9 @@ async function initRoom(roomId, profile) {
         <div class="tabs">
             <button class="tab active" data-tab="lecture" onclick="switchTab('lecture')">Video Lectures <span class="count-pill" id="count-lecture">0</span></button>
             <button class="tab" data-tab="materials" onclick="switchTab('materials')">Presentations <span class="count-pill" id="count-materials">0</span></button>
+            <button class="tab" data-tab="quizzes" onclick="switchTab('quizzes')">Quizzes <span class="count-pill" id="count-quizzes">0</span></button>
             <button class="tab" data-tab="notes" onclick="switchTab('notes')">Additional Notes <span class="count-pill" id="count-notes">0</span></button>
             <button class="tab" data-tab="anki" onclick="switchTab('anki')">Anki Cards</button>
-            <button class="tab" data-tab="quizzes" onclick="switchTab('quizzes')">Quizzes <span class="count-pill" id="count-quizzes">0</span></button>
         </div>
 
         <div class="tab-panel active" id="panel-lecture">
