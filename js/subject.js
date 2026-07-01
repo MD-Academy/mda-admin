@@ -101,7 +101,7 @@ async function initRoom(roomId, profile) {
         </a>
         <div class="tabs">
             <button class="tab active" data-tab="lecture" onclick="switchTab('lecture')">Video Lectures <span class="count-pill" id="count-lecture">0</span></button>
-            <button class="tab" data-tab="materials" onclick="switchTab('materials')">Materials <span class="count-pill" id="count-materials">0</span></button>
+            <button class="tab" data-tab="materials" onclick="switchTab('materials')">Presentations <span class="count-pill" id="count-materials">0</span></button>
             <button class="tab" data-tab="notes" onclick="switchTab('notes')">Additional Notes <span class="count-pill" id="count-notes">0</span></button>
             <button class="tab" data-tab="anki" onclick="switchTab('anki')">Anki Cards</button>
             <button class="tab" data-tab="quizzes" onclick="switchTab('quizzes')">Quizzes <span class="count-pill" id="count-quizzes">0</span></button>
@@ -120,8 +120,8 @@ async function initRoom(roomId, profile) {
 
         <div class="tab-panel" id="panel-materials">
             <div class="subtoolbar">
-                <div class="st-title">Study Materials</div>
-                <button class="btn btn-primary btn-sm" onclick="openUploadModal()">+ Upload Material</button>
+                <div class="st-title">Presentations</div>
+                <button class="btn btn-primary btn-sm" onclick="openUploadModal()">+ Upload Presentation</button>
             </div>
             <div class="panel"><table class="data-table">
                 <thead><tr><th>Title</th><th>Type</th><th>Uploaded</th><th>Visible</th><th>Actions</th></tr></thead>
@@ -367,7 +367,7 @@ function renderMaterials() {
     const list = materials.filter(m => matCategory(m) === 'material');
     tbody.innerHTML = list.length
         ? list.map((m, i) => materialRowHtml(m, i, list.length)).join('')
-        : `<tr><td colspan="5" class="loader">No materials yet.</td></tr>`;
+        : `<tr><td colspan="5" class="loader">No presentations yet.</td></tr>`;
 }
 
 function renderNotes() {
@@ -405,7 +405,7 @@ function nextMaterialOrder(category) {
 function openUploadModal(category = 'material') {
     pickedFile = null;
     document.getElementById('upload-category').value = category;
-    document.getElementById('upload-modal-title').textContent = category === 'note' ? 'Add Note' : 'Upload Material';
+    document.getElementById('upload-modal-title').textContent = category === 'note' ? 'Add Note' : 'Upload Presentation';
     document.getElementById('upload-allowed-hint').textContent = ALLOWED_HINT[category];
     const fileInput = document.getElementById('material-file');
     fileInput.setAttribute('accept', ACCEPT_ATTR[category]);
@@ -590,7 +590,7 @@ async function deleteMaterial(id) {
     const m = materials.find(x => x.id === id);
     if (!m) return;
     const ok = await confirmDialog({
-        title: 'Delete material?',
+        title: 'Delete presentation?',
         message: m.external_url
             ? `"${m.title}" (external link) will be permanently removed. The original file is not affected. This cannot be undone.`
             : `"${m.title}" and its file will be permanently removed. This cannot be undone.`,
