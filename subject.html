@@ -12,35 +12,6 @@
 <body>
     <div class="layout" id="app-layout"></div>
 
-    <!-- LESSON MODAL -->
-    <div class="modal-overlay" id="lesson-modal">
-        <div class="modal">
-            <div class="modal-head">
-                <h3 id="lesson-modal-title">Add Lesson</h3>
-                <button class="modal-close" onclick="closeModal('lesson-modal')">&times;</button>
-            </div>
-            <form onsubmit="saveLesson(event)">
-                <div class="modal-body">
-                    <div class="alert" id="lesson-alert" style="display:none;"></div>
-                    <input type="hidden" id="lesson-id">
-                    <div class="hint" style="margin-bottom:14px;">A lesson is just a heading + short description that organises this subject (and groups its quizzes). For files, slides or links, use <strong>Study Materials</strong>.</div>
-                    <div class="form-field">
-                        <label>Lesson Title</label>
-                        <input type="text" id="lesson-title" placeholder="e.g. Cell Structure & Function" required>
-                    </div>
-                    <div class="form-field">
-                        <label>Description <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                        <textarea id="lesson-desc" placeholder="A short summary of this lesson…"></textarea>
-                    </div>
-                </div>
-                <div class="modal-foot">
-                    <button type="button" class="btn btn-ghost" onclick="closeModal('lesson-modal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="lesson-save-btn">Save Lesson</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- RECORDING / LECTURE MODAL (shared) -->
     <div class="modal-overlay" id="rec-modal">
         <div class="modal">
@@ -56,10 +27,6 @@
                     <div class="form-field">
                         <label>Title</label>
                         <input type="text" id="rec-title" placeholder="e.g. Lecture 3 — Cell Biology" required>
-                    </div>
-                    <div class="form-field">
-                        <label>Lesson <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                        <select id="rec-lesson"><option value="">— None —</option></select>
                     </div>
                     <div class="form-row">
                         <div class="form-field">
@@ -130,10 +97,6 @@
                         <label>Title</label>
                         <input type="text" id="material-title" placeholder="e.g. Cell Structure — Slides" required>
                     </div>
-                    <div class="form-field">
-                        <label>Lesson <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                        <select id="material-lesson"><option value="">— None —</option></select>
-                    </div>
                 </div>
                 <div class="modal-foot">
                     <button type="button" class="btn btn-ghost" onclick="closeModal('upload-modal')">Cancel</button>
@@ -158,10 +121,6 @@
                         <label>Title</label>
                         <input type="text" id="medit-title" required>
                     </div>
-                    <div class="form-field">
-                        <label>Lesson <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                        <select id="medit-lesson"><option value="">— None —</option></select>
-                    </div>
                     <div class="hint">To replace the file itself, delete this material and upload a new one.</div>
                 </div>
                 <div class="modal-foot">
@@ -181,6 +140,10 @@
             </div>
             <div class="modal-body">
                 <div class="alert" id="quiz-alert" style="display:none;"></div>
+                <div class="form-field">
+                    <label>Quiz title</label>
+                    <input type="text" id="quiz-title" placeholder="e.g. Genetics Quiz" required>
+                </div>
                 <div class="form-row">
                     <div class="form-field">
                         <label>Time limit (minutes)</label>
