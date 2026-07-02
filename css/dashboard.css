@@ -528,6 +528,10 @@ body {
     font-size: 12px; font-weight: 600; color: var(--crimson);
     background: #fdeef4; padding: 5px 12px; border-radius: 20px; align-self: flex-start;
 }
+.entity-card .ec-metas { display: flex; flex-wrap: wrap; gap: 8px; align-self: flex-start; }
+.entity-card .ec-meta.m-pres { color: #7c3aed; background: #f3ecfe; }
+.entity-card .ec-meta.m-vid  { color: #1d4ed8; background: #e8f0ff; }
+.entity-card .ec-meta.m-quiz { color: #059669; background: #e7f7ef; }
 .entity-card .ec-actions { display: flex; gap: 8px; border-top: 1px solid var(--border); padding-top: 14px; }
 .entity-card .ec-actions .btn { flex: 1; justify-content: center; }
 

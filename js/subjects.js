@@ -1,7 +1,14 @@
 // Rooms list — entry point to each room's content hub (room.html).
 
 let allRooms = [];
-let lessonCounts = {}; // room_id -> count
+let presCounts = {};   // room_id -> presentations (materials, excluding notes)
+let vidCounts = {};    // room_id -> video lectures
+let quizCounts = {};   // room_id -> quizzes
+
+// Small tag icons (match the student category cards).
+const IC_PRES  = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2z"/><path d="M8 21h8M12 17v4"/></svg>';
+const IC_VID   = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
+const IC_QUIZ  = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
 
 // ── HELPERS ──
 function escapeHtml(str) {
@@ -65,9 +72,11 @@ async function loadRooms() {
     const container = document.getElementById('rooms-container');
     container.innerHTML = `<div class="loader">Loading rooms…</div>`;
 
-    const [roomsRes, lessonsRes] = await Promise.all([
+    const [roomsRes, matRes, recRes, quizRes] = await Promise.all([
         db.from('rooms').select('id, name, slug, description, order_index, is_visible, image_url').order('order_index', { ascending: true }),
-        db.from('lessons').select('id, room_id')
+        db.from('materials').select('room_id, category'),
+        db.from('recordings').select('room_id, kind'),
+        db.from('quizzes').select('room_id')
     ]);
 
     if (roomsRes.error) {
@@ -76,8 +85,10 @@ async function loadRooms() {
     }
 
     allRooms = roomsRes.data || [];
-    lessonCounts = {};
-    (lessonsRes.data || []).forEach(l => { lessonCounts[l.room_id] = (lessonCounts[l.room_id] || 0) + 1; });
+    presCounts = {}; vidCounts = {}; quizCounts = {};
+    (matRes.data || []).forEach(m => { if ((m.category || 'material') !== 'note') presCounts[m.room_id] = (presCounts[m.room_id] || 0) + 1; });
+    (recRes.data || []).forEach(r => { if (r.kind === 'lecture') vidCounts[r.room_id] = (vidCounts[r.room_id] || 0) + 1; });
+    (quizRes.data || []).forEach(q => { quizCounts[q.room_id] = (quizCounts[q.room_id] || 0) + 1; });
 
     renderRooms();
 }
@@ -96,7 +107,7 @@ function renderRooms() {
     }
 
     container.innerHTML = `<div class="card-grid">${allRooms.map(r => {
-        const count = lessonCounts[r.id] || 0;
+        const nP = presCounts[r.id] || 0, nV = vidCounts[r.id] || 0, nQ = quizCounts[r.id] || 0;
         return `
             <div class="entity-card">
                 ${r.image_url ? `<div style="height:88px;margin:-22px -22px 14px;border-radius:16px 16px 0 0;background:url('${escapeHtml(r.image_url)}') center/cover;"></div>` : ''}
@@ -105,10 +116,11 @@ function renderRooms() {
                     ${visToggleHtml(r.id, r.is_visible)}
                 </div>
                 <div class="ec-desc">${escapeHtml(r.description) || '<em style="color:var(--text-muted)">No description</em>'}</div>
-                <span class="ec-meta">
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    ${count} lesson${count === 1 ? '' : 's'}
-                </span>
+                <div class="ec-metas">
+                    <span class="ec-meta m-pres">${IC_PRES} ${nP} Presentation${nP === 1 ? '' : 's'}</span>
+                    <span class="ec-meta m-vid">${IC_VID} ${nV} Video Lecture${nV === 1 ? '' : 's'}</span>
+                    <span class="ec-meta m-quiz">${IC_QUIZ} ${nQ} Quiz${nQ === 1 ? '' : 'zes'}</span>
+                </div>
                 <div class="ec-actions">
                     <button class="btn btn-primary btn-sm" onclick="openRoom('${r.id}')">Manage</button>
                     <button class="btn btn-ghost btn-sm" onclick="openRoomModal('${r.id}')">Edit details</button>
@@ -208,9 +220,9 @@ async function saveRoom(e) {
 async function deleteRoom(id) {
     const r = allRooms.find(x => x.id === id);
     const name = r ? (r.name || 'this subject') : 'this subject';
-    const count = lessonCounts[id] || 0;
+    const count = (presCounts[id] || 0) + (vidCounts[id] || 0) + (quizCounts[id] || 0);
     let msg = 'This subject will be removed. This cannot be undone.';
-    if (count > 0) msg = `This subject has ${count} lesson(s). Deleting it will also remove those lessons and any recordings, materials, notes and quizzes attached to them. This cannot be undone.`;
+    if (count > 0) msg = `Deleting "${name}" will also remove all its presentations, video lectures, notes and quizzes. This cannot be undone.`;
     const ok = await confirmDialog({
         title: `Delete "${name}"?`,
         message: msg,

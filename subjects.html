@@ -71,7 +71,7 @@
             const auth = await requireAdmin();
             if (!auth) return;
 
-            renderLayout('subjects', 'Subjects', 'Open a subject to manage its lessons, recordings, materials and quizzes', auth.profile);
+            renderLayout('subjects', 'Subjects', 'Open a subject to manage its presentations, video lectures and quizzes', auth.profile);
 
             document.getElementById('page-content').innerHTML = `
                 <div class="toolbar">
