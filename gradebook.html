@@ -82,6 +82,85 @@
         </div>
     </div>
 
+    <!-- ORAL PRESENTATION GRADE MODAL -->
+    <div class="modal-overlay" id="oral-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Oral presentation grade</h3>
+                <button class="modal-close" onclick="closeModal('oral-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveOral(event)">
+                <div class="modal-body">
+                    <div class="alert" id="oral-alert" style="display:none;"></div>
+                    <input type="hidden" id="oral-student">
+                    <input type="hidden" id="oral-id">
+                    <p id="oral-context" style="font-size:14px;color:var(--text-muted);margin-bottom:14px;"></p>
+                    <div class="form-field">
+                        <label>Score (%) <span style="color:var(--text-muted);font-weight:400;">(0–100, or blank if not yet graded)</span></label>
+                        <input type="number" id="oral-score" min="0" max="100" step="1">
+                    </div>
+                    <div class="form-field">
+                        <label>Feedback for the student</label>
+                        <textarea id="oral-feedback" rows="6" placeholder="What went well and how they can improve…"></textarea>
+                        <div class="hint">The student sees this feedback in their portal.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('oral-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="oral-save-btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADJUSTMENT MODAL -->
+    <div class="modal-overlay" id="adjust-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Participation / attendance adjustment</h3>
+                <button class="modal-close" onclick="closeModal('adjust-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveAdjust(event)">
+                <div class="modal-body">
+                    <div class="alert" id="adjust-alert" style="display:none;"></div>
+                    <input type="hidden" id="adjust-student">
+                    <p id="adjust-context" style="font-size:14px;color:var(--text-muted);margin-bottom:14px;"></p>
+                    <div class="form-field">
+                        <label>Adjustment (± points)</label>
+                        <input type="number" id="adjust-value" min="-100" max="100" step="1" placeholder="e.g. 5 or -3">
+                        <div class="hint">Added to the academic score. The overall is capped at 0–100.</div>
+                    </div>
+                    <div class="form-field">
+                        <label>Note <span style="color:var(--text-muted);font-weight:400;">(optional — the student sees it)</span></label>
+                        <input type="text" id="adjust-note" placeholder="e.g. Excellent class participation">
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('adjust-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="adjust-save-btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MANAGE GRADING MODAL (weights + orals) -->
+    <div class="modal-overlay" id="grading-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3>Manage grading — weights &amp; oral presentations</h3>
+                <button class="modal-close" onclick="closeModal('grading-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="hint" style="margin-bottom:14px;">Set how much each item counts toward the final grade. Default: each written exam 20%, each oral 10% (3 exams + 4 orals = 100%). Editing an exam's weight affects it wherever that exam is used.</p>
+                <div id="grading-body"></div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('grading-modal')">Close</button>
+                <button type="button" class="btn btn-primary" id="grading-save-btn" onclick="saveGrading()">Save changes</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
