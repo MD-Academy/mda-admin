@@ -211,13 +211,13 @@ function renderGradebook() {
                     : inner}</td>`;
             }
             return `<td>${e.type === 'pdf'
-                ? `<button class="btn btn-ghost btn-sm gb-enter" onclick="openScoreEntry('${s.id}','${e.id}')">Enter</button>`
-                : '<span class="gb-cell pending">—</span>'}</td>`;
+                ? `<button class="btn btn-ghost btn-sm gb-enter" onclick="openScoreEntry('${s.id}','${e.id}')">+ Score</button>`
+                : '<span class="gb-cell pending">— auto —</span>'}</td>`;
         }).join('');
 
         const oralCells = gbOrals.map(o => {
             const g = gbOralGrades[`${s.id}_${o.id}`];
-            const label = (g && g.score != null) ? `${Math.round(g.score)}%${g.feedback ? ' 💬' : ''}` : 'Enter';
+            const label = (g && g.score != null) ? `${Math.round(g.score)}%${g.feedback ? ' 💬' : ''}` : '+ Grade & feedback';
             return `<td><button class="btn btn-ghost btn-sm gb-enter" onclick="openOralEntry('${s.id}','${o.id}')">${label}</button></td>`;
         }).join('');
 
