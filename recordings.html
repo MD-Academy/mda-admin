@@ -69,6 +69,44 @@
         </div>
     </div>
 
+    <!-- LIVE CLASS LINK CREATE / EDIT MODAL -->
+    <div class="modal-overlay" id="link-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3 id="link-modal-title">Add live class link</h3>
+                <button class="modal-close" onclick="closeModal('link-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveLink(event)">
+                <div class="modal-body">
+                    <div class="alert" id="link-alert" style="display:none;"></div>
+                    <input type="hidden" id="link-id">
+                    <div class="form-field">
+                        <label>Course</label>
+                        <select id="link-course" required><option value="">— Select a course —</option></select>
+                        <div class="hint">Only students enrolled in this course will see the link.</div>
+                    </div>
+                    <div class="form-field">
+                        <label>Title / class</label>
+                        <input type="text" id="link-title" placeholder="e.g. Biology — Weekly Live Class" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Host / created by</label>
+                        <input type="text" id="link-host" placeholder="e.g. Dr. Levin" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Zoom link (URL)</label>
+                        <input type="url" id="link-url" placeholder="https://zoom.us/j/…" required>
+                        <div class="hint">Students open this in a new tab or copy it. Must start with https://</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('link-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="link-save-btn">Save link</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
@@ -83,6 +121,12 @@
             renderLayout('recordings', 'Zoom Recordings', 'Upload and manage class recordings, organised by date', auth.profile);
 
             document.getElementById('page-content').innerHTML = `
+                <div class="tabs">
+                    <button class="tab active" data-tab="recordings" onclick="switchTab('recordings')">Recordings <span class="count-pill" id="count-recordings">0</span></button>
+                    <button class="tab" data-tab="links" onclick="switchTab('links')">Live Class Links <span class="count-pill" id="count-links">0</span></button>
+                </div>
+
+                <div class="tab-panel active" id="panel-recordings">
                 <div class="toolbar" style="flex-wrap:wrap;gap:10px;">
                     <div class="search-box">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -133,10 +177,26 @@
                         </div>
                     </div>
                 </div>
+                </div>
+
+                <div class="tab-panel" id="panel-links">
+                    <div class="subtoolbar">
+                        <div class="st-title">Live Class Links</div>
+                        <button class="btn btn-primary btn-sm" onclick="openLinkModal()">+ Add link</button>
+                    </div>
+                    <p class="hint" style="margin:-6px 0 16px;">Live Zoom join links students can open or copy. Choose the course so only its enrolled students see the link. These are separate from recordings.</p>
+                    <div class="panel">
+                        <table class="data-table">
+                            <thead><tr><th>Title</th><th>Course</th><th>Host</th><th>Link</th><th>Visible</th><th>Actions</th></tr></thead>
+                            <tbody id="links-tbody"><tr><td colspan="6" class="loader">Loading…</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
             `;
 
             await loadCourseOptions();
             loadRecordings();
+            loadMeetingLinks();
         })();
     </script>
 </body>

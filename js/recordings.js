@@ -126,6 +126,8 @@ async function loadRecordings() {
 function renderPager() {
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
     if (currentPage > totalPages) currentPage = totalPages;
+    const cr = document.getElementById('count-recordings');
+    if (cr) cr.textContent = totalCount;
     const info = document.getElementById('pager-info');
     if (!info) return;
     if (totalCount === 0) info.textContent = 'No recordings match.';
@@ -302,4 +304,136 @@ async function deleteRecording(id) {
     const { error } = await db.from('recordings').delete().eq('id', id);
     if (error) { alert(`Failed to delete: ${error.message}`); return; }
     loadRecordings();
+}
+
+// ════════════ LIVE CLASS LINKS (Zoom join links, per course) ════════════
+let meetingLinks = [];
+
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
+}
+
+function visLinkToggleHtml(id, isVisible) {
+    return `<button class="vis-toggle ${isVisible ? 'visible' : 'hidden'}" onclick="toggleLinkVis('${id}')" title="${isVisible ? 'Visible to students — click to hide' : 'Hidden from students — click to show'}">${isVisible ? EYE : EYE_OFF}${isVisible ? 'Visible' : 'Hidden'}</button>`;
+}
+
+async function loadMeetingLinks() {
+    const tbody = document.getElementById('links-tbody');
+    const { data, error } = await db.from('meeting_links')
+        .select('id, course_id, title, host_name, url, is_visible, created_at')
+        .order('created_at', { ascending: false });
+    if (error) {
+        console.error('[recordings] links load failed:', error);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="loader" style="color:var(--red)">Couldn't load links: ${escapeHtml(error.message)}</td></tr>`;
+        return;
+    }
+    meetingLinks = data || [];
+    renderMeetingLinks();
+}
+
+function renderMeetingLinks() {
+    const cnt = document.getElementById('count-links');
+    if (cnt) cnt.textContent = meetingLinks.length;
+    const tbody = document.getElementById('links-tbody');
+    if (!tbody) return;
+    if (!meetingLinks.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="loader">No live class links yet. Click "Add link" to create one.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = meetingLinks.map(l => `
+        <tr data-id="${l.id}">
+            <td><strong>${escapeHtml(l.title)}</strong></td>
+            <td><span class="badge badge-blue">${escapeHtml(courseName(l.course_id))}</span></td>
+            <td>${escapeHtml(l.host_name)}</td>
+            <td><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--blue-500);word-break:break-all;">${escapeHtml(l.url)}</a></td>
+            <td>${visLinkToggleHtml(l.id, l.is_visible)}</td>
+            <td class="row-actions">
+                <button class="btn btn-ghost btn-sm" onclick="openLinkModal('${l.id}')">Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteLink('${l.id}')">Delete</button>
+            </td>
+        </tr>`).join('');
+}
+
+async function toggleLinkVis(id) {
+    const l = meetingLinks.find(x => x.id === id);
+    if (!l) return;
+    const { error } = await db.from('meeting_links').update({ is_visible: !l.is_visible }).eq('id', id);
+    if (error) { alert(`Failed to update visibility: ${error.message}`); return; }
+    l.is_visible = !l.is_visible;
+    renderMeetingLinks();
+}
+
+function openLinkModal(id = null) {
+    const alert = document.getElementById('link-alert');
+    alert.style.display = 'none';
+    const sel = document.getElementById('link-course');
+    sel.innerHTML = `<option value="">— Select a course —</option>` +
+        recCourses.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+
+    if (id) {
+        const l = meetingLinks.find(x => x.id === id);
+        if (!l) return;
+        document.getElementById('link-modal-title').textContent = 'Edit live class link';
+        document.getElementById('link-id').value = l.id;
+        sel.value = l.course_id;
+        document.getElementById('link-title').value = l.title || '';
+        document.getElementById('link-host').value = l.host_name || '';
+        document.getElementById('link-url').value = l.url || '';
+    } else {
+        document.getElementById('link-modal-title').textContent = 'Add live class link';
+        document.getElementById('link-id').value = '';
+        sel.value = '';
+        document.getElementById('link-title').value = '';
+        document.getElementById('link-host').value = '';
+        document.getElementById('link-url').value = '';
+    }
+    openModal('link-modal');
+}
+
+async function saveLink(e) {
+    e.preventDefault();
+    const btn = document.getElementById('link-save-btn');
+    const alert = document.getElementById('link-alert');
+    alert.style.display = 'none';
+
+    const id = document.getElementById('link-id').value;
+    const payload = {
+        course_id: document.getElementById('link-course').value,
+        title: document.getElementById('link-title').value.trim(),
+        host_name: document.getElementById('link-host').value.trim(),
+        url: document.getElementById('link-url').value.trim()
+    };
+    if (!payload.course_id) { showModalAlert(alert, 'Please choose a course.', 'error'); return; }
+    if (!payload.title || !payload.host_name || !payload.url) { showModalAlert(alert, 'Please fill in every field.', 'error'); return; }
+    if (!/^https?:\/\//i.test(payload.url)) { showModalAlert(alert, 'The link must start with http:// or https://', 'error'); return; }
+    if (!ensureSafe(alert, [['Title', payload.title], ['Host', payload.host_name], ['Link', payload.url]])) return;
+
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+        let res;
+        if (id) res = await db.from('meeting_links').update(payload).eq('id', id);
+        else res = await db.from('meeting_links').insert(payload);
+        if (res.error) throw new Error(res.error.message);
+        closeModal('link-modal');
+        await loadMeetingLinks();
+    } catch (err) {
+        showModalAlert(alert, err.message, 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save link';
+    }
+}
+
+async function deleteLink(id) {
+    const l = meetingLinks.find(x => x.id === id);
+    const ok = await confirmDialog({
+        title: 'Delete this link?',
+        message: `"${l ? l.title : 'This link'}" will be removed for students. This cannot be undone.`,
+        confirmText: 'Delete',
+        danger: true
+    });
+    if (!ok) return;
+    const { error } = await db.from('meeting_links').delete().eq('id', id);
+    if (error) { alert(`Failed to delete: ${error.message}`); return; }
+    await loadMeetingLinks();
 }
