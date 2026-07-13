@@ -236,7 +236,8 @@ async function toggleTeacher(teacherId) {
         if (error) { alert(`Failed: ${error.message}`); return; }
         courseTeacherIds.delete(teacherId);
     } else {
-        const { error } = await db.from('course_teachers').insert({ course_id: COURSE_ID, teacher_id: teacherId });
+        const t = allTeachers.find(x => x.id === teacherId);
+        const { error } = await db.from('course_teachers').insert({ course_id: COURSE_ID, teacher_id: teacherId, teacher_name: t ? (t.full_name || null) : null });
         if (error) { alert(`Failed: ${error.message}`); return; }
         courseTeacherIds.add(teacherId);
     }
