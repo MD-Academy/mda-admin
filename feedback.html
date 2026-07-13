@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Feedback</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <style>
+        .fb-block { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
+        .fb-cat-title { font-size: 15px; font-weight: 800; color: var(--navy-800); margin: 18px 0 10px; }
+        .fb-item { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+        .fb-item-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .fb-name { font-weight: 700; color: var(--navy-800); }
+        .fb-avg { font-weight: 800; color: #d97706; white-space: nowrap; }
+        .fb-comments { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .fb-comment { background: var(--bg); border-radius: 8px; padding: 9px 11px; font-size: 13px; line-height: 1.5; }
+        .fb-comment .who { font-weight: 700; color: var(--navy-800); }
+        .fb-stars { color: #d97706; letter-spacing: 1px; }
+        @media print {
+            body * { visibility: hidden; }
+            #report-box, #report-box * { visibility: visible; }
+            #report-box { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/feedback.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireSuperadmin();
+            if (!auth) return;
+            renderLayout('feedback', 'Feedback', 'Student ratings & feedback (private to you)', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="toolbar" style="flex-wrap:wrap;gap:10px;">
+                    <select id="course-select" class="filter-select" onchange="loadReport()">
+                        <option value="">All courses</option>
+                    </select>
+                    <button class="btn btn-ghost btn-sm" onclick="exportCsv()">⬇ CSV</button>
+                    <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 Print / PDF</button>
+                </div>
+                <p class="hint" style="margin:-4px 0 14px;">Feedback is anonymous to teachers — only you see it here. Students rate the course, each teacher, the materials, and each recorded class.</p>
+                <div id="report-box"><div class="loader">Loading feedback…</div></div>`;
+
+            loadCourses().then(loadReport);
+        })();
+    </script>
+</body>
+</html>

@@ -10,6 +10,8 @@ let stuMap = {};             // id -> student object (enrolled + search results)
 let stuSearchTimer = null;
 let allExams = [];           // [{id, title, type}]
 let courseExamIds = new Set();
+let allTeachers = [];        // staff profiles [{id, full_name}]
+let courseTeacherIds = new Set();
 let courseRecordings = [];   // assigned recordings [{id, title, recorded_date}]
 let recPickMap = {};         // id -> recording object (from search results + assigned)
 let recPickTimer = null;
@@ -80,6 +82,11 @@ async function initCourse(courseId, profile) {
                     <div id="course-exams-list"><div class="loader">Loading…</div></div>
                 </div>
                 <div class="panel" style="padding:22px;">
+                    <div class="section-title">Teachers on this course</div>
+                    <p class="hint" style="margin:-8px 0 12px;">Assign the staff who teach this course — students will rate &amp; give feedback on each of them.</p>
+                    <div id="course-teachers-list"><div class="loader">Loading…</div></div>
+                </div>
+                <div class="panel" style="padding:22px;">
                     <div class="section-title">Zoom recordings in this course</div>
                     <p class="hint" style="margin:-8px 0 12px;">Assign recordings to this course — enrolled students will see them.</p>
                     <div class="pill-label">In this course</div>
@@ -118,6 +125,15 @@ async function loadData() {
     allExams = exRes.data || [];
     courseExamIds = new Set((ecRes.data || []).map(r => r.exam_id));
     renderCourseExams();
+
+    // Teachers (staff) assigned to this course.
+    const [staffRes, ctRes] = await Promise.all([
+        db.from('profiles').select('id, full_name').in('role', ['admin', 'superadmin']).order('full_name', { ascending: true }),
+        db.from('course_teachers').select('teacher_id').eq('course_id', COURSE_ID)
+    ]);
+    allTeachers = staffRes.data || [];
+    courseTeacherIds = new Set((ctRes.data || []).map(r => r.teacher_id));
+    renderCourseTeachers();
 
     // Recordings assigned to this course (search-to-add for the rest, since recordings grow large).
     const recLinks = await db.from('recording_courses').select('recording_id').eq('course_id', COURSE_ID);
@@ -188,6 +204,43 @@ async function toggleExam(examId) {
         courseExamIds.add(examId);
     }
     renderCourseExams();
+}
+
+// ── TEACHERS ON THIS COURSE (two-zone pill picker) ──
+function renderCourseTeachers() {
+    const el = document.getElementById('course-teachers-list');
+    if (!el) return;
+    if (allTeachers.length === 0) {
+        el.innerHTML = `<div class="empty-state" style="padding:18px;"><p>No staff accounts exist yet. Create teachers in the Admins section first.</p></div>`;
+        return;
+    }
+    const assigned = allTeachers.filter(t => courseTeacherIds.has(t.id));
+    const available = allTeachers.filter(t => !courseTeacherIds.has(t.id));
+    const nm = t => escapeHtml(t.full_name || '(no name)');
+    const assignedHtml = assigned.length
+        ? assigned.map(t => `<span class="pill pill-assigned" onclick="toggleTeacher('${t.id}')" title="Click to remove from this course">${nm(t)} <span class="x">✕</span></span>`).join('')
+        : `<span class="pill-empty">No teachers assigned yet — click one below to add.</span>`;
+    const availHtml = available.length
+        ? available.map(t => `<span class="pill pill-available" onclick="toggleTeacher('${t.id}')" title="Click to add to this course">${nm(t)} <span class="plus">+</span></span>`).join('')
+        : `<span class="pill-empty">All staff are already assigned.</span>`;
+    el.innerHTML = `
+        <div class="pill-label">On this course</div>
+        <div class="pill-zone pill-zone-assigned">${assignedHtml}</div>
+        <div class="pill-label" style="margin-top:14px;">Available — click to add</div>
+        <div class="pill-zone">${availHtml}</div>`;
+}
+
+async function toggleTeacher(teacherId) {
+    if (courseTeacherIds.has(teacherId)) {
+        const { error } = await db.from('course_teachers').delete().eq('course_id', COURSE_ID).eq('teacher_id', teacherId);
+        if (error) { alert(`Failed: ${error.message}`); return; }
+        courseTeacherIds.delete(teacherId);
+    } else {
+        const { error } = await db.from('course_teachers').insert({ course_id: COURSE_ID, teacher_id: teacherId });
+        if (error) { alert(`Failed: ${error.message}`); return; }
+        courseTeacherIds.add(teacherId);
+    }
+    renderCourseTeachers();
 }
 
 // ── RECORDINGS IN THIS COURSE (assigned pills + search-to-add) ──
