@@ -17,6 +17,7 @@ const NAV_ITEMS = [
     { id: 'tickets', label: 'Student Tickets', href: 'tickets.html', icon: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>' },
     { id: 'admins', label: 'Admins', href: 'admins.html', superadminOnly: true, icon: '<path d="M12 1l3 5 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L3 7l6-1z"/>' },
     { id: 'appearance', label: 'Appearance', href: 'appearance.html', superadminOnly: true, icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>' },
+    { id: 'work-hours', label: 'Work Hours', href: 'work-hours.html', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
     { id: 'profile', label: 'My Profile', href: 'profile.html', icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' }
 ];
 
