@@ -129,13 +129,13 @@ body {
     top: 0;
     z-index: 40;
 }
-/* Thin crimson→gold accent strip across the top — the student portal has none. */
+/* Thin charcoal→gold accent strip across the top — the student portal has none. */
 .topbar::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 3px;
-    background: linear-gradient(90deg, var(--crimson), var(--gold));
+    background: linear-gradient(90deg, var(--navy-800), var(--gold));
 }
 
 .topbar h1 { font-size: 22px; font-weight: 800; color: var(--navy-800); }
