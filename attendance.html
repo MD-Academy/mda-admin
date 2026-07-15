@@ -49,6 +49,8 @@
             if (!auth) return;
             CURRENT_UID = auth.session.user.id;
             ADMIN_NAME = auth.profile.full_name || '';
+            IS_SUPER = !!(auth.profile && auth.profile.role === 'superadmin');
+            await loadAttendanceMin();
             renderLayout('courses', 'Attendance', 'Mark and review class attendance by course', auth.profile);
 
             document.getElementById('page-content').innerHTML = `
@@ -71,6 +73,13 @@
                         <option value="25">25 / page</option>
                         <option value="100">100 / page</option>
                     </select>
+                    ${IS_SUPER ? `<div style="display:flex;align-items:center;gap:6px;margin-left:auto;font-size:13px;" title="Below this, students are warned in the portal and by weekly email">
+                        <span style="color:var(--text-muted);">Min attendance</span>
+                        <input type="number" id="att-min-input" min="1" max="100" style="width:66px;height:38px;border:1.5px solid var(--border);border-radius:8px;padding:0 8px;font-family:inherit;">
+                        <span style="color:var(--text-muted);">%</span>
+                        <button class="btn btn-ghost btn-sm" onclick="saveAttendanceMin()">Save</button>
+                        <span id="att-min-saved" style="font-size:12px;"></span>
+                    </div>` : ''}
                 </div>
                 <div id="attendance-container"><div class="loader">Choose a course to see its attendance sheet.</div></div>
                 <div id="pager" style="display:none;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;flex-wrap:wrap;">
@@ -82,6 +91,7 @@
                     </div>
                 </div>
             `;
+            if (IS_SUPER) { const i = document.getElementById('att-min-input'); if (i) i.value = atMin; }
             const preselect = new URLSearchParams(location.search).get('course');
             loadCourses(preselect);
         })();

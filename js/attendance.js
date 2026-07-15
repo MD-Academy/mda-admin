@@ -10,6 +10,8 @@ let atSessions = [];        // [{id, session_date, opened_by_name}] for the cour
 let atMarks = {};           // `${studentId}_${sessionId}` -> present(bool)
 let atStudentIds = [];      // ALL enrolled student ids for the course
 let atPage = 1, atPageSize = 50, atTotal = 0, atSearch = '', atSearchTimer = null;
+let IS_SUPER = false;
+let atMin = 80;             // office minimum attendance % (global setting)
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -19,7 +21,26 @@ function openModal(id) { document.getElementById(id).style.display = 'flex'; }
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 function showModalAlert(el, msg, type) { el.className = `alert ${type}`; el.textContent = msg; el.style.display = 'block'; }
 function fmtSession(d) { return d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''; }
-function pctColor(p) { return p >= 100 ? 'att-green' : (p >= 75 ? 'att-amber' : 'att-red'); }
+function pctColor(p) { return p >= atMin ? 'att-green' : (p >= atMin - 10 ? 'att-amber' : 'att-red'); }
+
+async function loadAttendanceMin() {
+    try {
+        const { data } = await db.from('app_settings').select('value').eq('key', 'attendance_min').limit(1);
+        if (data && data[0] && data[0].value != null) atMin = Number(data[0].value) || 80;
+    } catch (e) { /* keep default */ }
+}
+
+async function saveAttendanceMin() {
+    const saved = document.getElementById('att-min-saved');
+    const raw = parseInt(document.getElementById('att-min-input').value, 10);
+    if (isNaN(raw) || raw < 1 || raw > 100) { saved.style.color = 'var(--red)'; saved.textContent = 'Enter 1–100'; return; }
+    const { error } = await db.from('app_settings').upsert({ key: 'attendance_min', value: String(raw), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (error) { saved.style.color = 'var(--red)'; saved.textContent = "Couldn't save"; return; }
+    atMin = raw;
+    saved.style.color = 'var(--green)'; saved.textContent = 'Saved ✓';
+    setTimeout(() => { saved.textContent = ''; }, 1800);
+    if (atCourseId) loadAtPage();   // refresh the % colours
+}
 
 async function loadCourses(preselect) {
     const { data, error } = await db.from('courses').select('id, name').order('created_at', { ascending: false });
