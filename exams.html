@@ -23,7 +23,16 @@
                 <div class="modal-body">
                     <div class="alert" id="exam-alert" style="display:none;"></div>
                     <div id="import-mode-banner" style="display:none;background:#eef4ff;border:1px solid #d6e4ff;border-radius:9px;padding:11px 13px;margin-bottom:16px;font-size:13px;line-height:1.6;color:#1e3a5f;">
-                        <strong>📄 Import from PDF</strong> — first give this exam a title and settings below, click <strong>Save Exam</strong>, and you'll go straight to uploading your PDF so we can read its questions &amp; answers.
+                        <strong>📄 Import from PDF</strong> — choose your exam PDF below and set a title, then click <strong>Save Exam</strong>. We'll read the questions &amp; answers and let you review them before anything is saved.
+                    </div>
+                    <div id="import-mode-file-wrap" class="form-field" style="display:none;">
+                        <label>Exam PDF</label>
+                        <label class="upload-zone" for="import-mode-file" style="padding:18px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            <p id="import-mode-file-text">Click to choose a PDF</p>
+                            <span>PDF only — up to 25&nbsp;MB</span>
+                            <input type="file" id="import-mode-file" accept="application/pdf,.pdf" onchange="onImportModeFilePicked(event)">
+                        </label>
                     </div>
                     <input type="hidden" id="exam-id">
                     <div class="form-field">

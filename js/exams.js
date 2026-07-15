@@ -12,6 +12,14 @@ let pickedFile = null;
 let currentExam = null;        // exam open in questions modal
 let currentQuestions = [];
 let importAfterCreate = false; // when set, jump straight to PDF import after creating the exam
+let pickedImportFile = null;   // the PDF chosen in the "Create exam from PDF" modal
+
+function onImportModeFilePicked(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    pickedImportFile = f;
+    document.getElementById('import-mode-file-text').textContent = f.name;
+}
 
 // ── HELPERS ──
 function escapeHtml(str) {
@@ -128,6 +136,7 @@ function openExamModalForImport() {
     openExamModal();
     importAfterCreate = true;
     document.getElementById('import-mode-banner').style.display = 'block';
+    document.getElementById('import-mode-file-wrap').style.display = 'block';
     document.getElementById('exam-modal-title').textContent = 'Create exam from PDF';
     document.getElementById('exam-type').value = 'manual';
     onTypeChange();
@@ -136,6 +145,10 @@ function openExamModalForImport() {
 function openExamModal(id = null) {
     pickedFile = null;
     importAfterCreate = false;
+    pickedImportFile = null;
+    document.getElementById('import-mode-file').value = '';
+    document.getElementById('import-mode-file-text').textContent = 'Click to choose a PDF';
+    document.getElementById('import-mode-file-wrap').style.display = 'none';
     document.getElementById('import-mode-banner').style.display = 'none';
     document.getElementById('exam-alert').style.display = 'none';
     document.getElementById('exam-file').value = '';
@@ -204,6 +217,9 @@ async function saveExam(ev) {
     if (pickedFile && pickedFile.size > MAX_FILE_BYTES) {
         showModalAlert(alert, 'PDF is too large. Maximum is 50 MB.', 'error'); return;
     }
+    if (importAfterCreate && !id && !pickedImportFile) {
+        showModalAlert(alert, 'Please choose a PDF to import.', 'error'); return;
+    }
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
@@ -226,17 +242,19 @@ async function saveExam(ev) {
         }
 
         const chainImport = importAfterCreate && !id && type === 'manual';
-        importAfterCreate = false;
+        const importFile = pickedImportFile;
+        importAfterCreate = false; pickedImportFile = null;
         closeModal('exam-modal');
         loadExams();
 
-        // Import-from-PDF flow: jump straight into the new exam's Questions → Import.
+        // Import-from-PDF flow: open the new exam's Questions → Import and read the chosen PDF right away.
         if (chainImport) {
             currentExam = { id: examId, title: payload.title, type: 'manual' };
             document.getElementById('questions-modal-title').textContent = `Questions — ${currentExam.title}`;
             openModal('questions-modal');
             await refreshQuestions();
             openImport();
+            if (importFile) await _extract(importFile);
         }
     } catch (err) {
         showModalAlert(alert, err.message, 'error');
@@ -446,10 +464,15 @@ function _fileToBase64(file) {
     });
 }
 
-async function extractPdf() {
+function extractPdf() {
     const alert = document.getElementById('import-alert'); alert.style.display = 'none';
     const file = document.getElementById('import-file').files[0];
     if (!file) { showModalAlert(alert, 'Please choose a PDF first.', 'error'); return; }
+    return _extract(file);
+}
+
+async function _extract(file) {
+    const alert = document.getElementById('import-alert'); alert.style.display = 'none';
     if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { showModalAlert(alert, 'Please upload a PDF file.', 'error'); return; }
     if (file.size > 25 * 1024 * 1024) { showModalAlert(alert, 'That PDF is too large (max 25 MB).', 'error'); return; }
 
