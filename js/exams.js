@@ -11,6 +11,7 @@ let pickedFile = null;
 
 let currentExam = null;        // exam open in questions modal
 let currentQuestions = [];
+let importAfterCreate = false; // when set, jump straight to PDF import after creating the exam
 
 // ── HELPERS ──
 function escapeHtml(str) {
@@ -123,8 +124,19 @@ function onExamFilePicked(e) {
 }
 
 // ── CREATE / EDIT ──
+function openExamModalForImport() {
+    openExamModal();
+    importAfterCreate = true;
+    document.getElementById('import-mode-banner').style.display = 'block';
+    document.getElementById('exam-modal-title').textContent = 'Create exam from PDF';
+    document.getElementById('exam-type').value = 'manual';
+    onTypeChange();
+}
+
 function openExamModal(id = null) {
     pickedFile = null;
+    importAfterCreate = false;
+    document.getElementById('import-mode-banner').style.display = 'none';
     document.getElementById('exam-alert').style.display = 'none';
     document.getElementById('exam-file').value = '';
     document.getElementById('exam-file-text').textContent = 'Click to choose a PDF';
@@ -213,8 +225,19 @@ async function saveExam(ev) {
             examId = res.data.id;
         }
 
+        const chainImport = importAfterCreate && !id && type === 'manual';
+        importAfterCreate = false;
         closeModal('exam-modal');
         loadExams();
+
+        // Import-from-PDF flow: jump straight into the new exam's Questions → Import.
+        if (chainImport) {
+            currentExam = { id: examId, title: payload.title, type: 'manual' };
+            document.getElementById('questions-modal-title').textContent = `Questions — ${currentExam.title}`;
+            openModal('questions-modal');
+            await refreshQuestions();
+            openImport();
+        }
     } catch (err) {
         showModalAlert(alert, err.message, 'error');
     } finally {

@@ -22,6 +22,9 @@
             <form onsubmit="saveExam(event)">
                 <div class="modal-body">
                     <div class="alert" id="exam-alert" style="display:none;"></div>
+                    <div id="import-mode-banner" style="display:none;background:#eef4ff;border:1px solid #d6e4ff;border-radius:9px;padding:11px 13px;margin-bottom:16px;font-size:13px;line-height:1.6;color:#1e3a5f;">
+                        <strong>📄 Import from PDF</strong> — first give this exam a title and settings below, click <strong>Save Exam</strong>, and you'll go straight to uploading your PDF so we can read its questions &amp; answers.
+                    </div>
                     <input type="hidden" id="exam-id">
                     <div class="form-field">
                         <label>Title</label>
@@ -177,7 +180,10 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input type="text" id="search-input" placeholder="Search exams by title…" oninput="applyFilters()">
                     </div>
-                    <div class="toolbar-actions">
+                    <div class="toolbar-actions" style="display:flex;gap:8px;">
+                        <button class="btn btn-ghost" onclick="openExamModalForImport()">
+                            📄 Import from PDF
+                        </button>
                         <button class="btn btn-primary" onclick="openExamModal()">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             Add Exam
