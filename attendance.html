@@ -51,7 +51,7 @@
             ADMIN_NAME = auth.profile.full_name || '';
             IS_SUPER = !!(auth.profile && auth.profile.role === 'superadmin');
             await loadAttendanceMin();
-            renderLayout('courses', 'Attendance', 'Mark and review class attendance by course', auth.profile);
+            renderLayout('attendance', 'Attendance', 'Mark and review class attendance by course', auth.profile);
 
             document.getElementById('page-content').innerHTML = `
                 <a class="back-link" id="back-link" href="courses.html">
