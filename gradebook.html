@@ -128,7 +128,7 @@
                     <div class="form-field">
                         <label>Adjustment (± points)</label>
                         <input type="number" id="adjust-value" min="-100" max="100" step="1" placeholder="e.g. 5 or -3">
-                        <div class="hint">Added to the academic score. The overall is capped at 0–100.</div>
+                        <div class="hint">Added to the academic score. The overall is capped at 0–100. <span id="adjust-cap-hint"></span></div>
                     </div>
                     <div class="form-field">
                         <label>Note <span style="color:var(--text-muted);font-weight:400;">(optional — the student sees it)</span></label>
@@ -172,6 +172,7 @@
             const auth = await requireAdmin();
             if (!auth) return;
             CURRENT_UID = auth.session.user.id;
+            IS_SUPER = !!(auth.profile && auth.profile.role === 'superadmin');
             renderLayout('gradebook', 'Gradebook', 'Exam & quiz scores by course', auth.profile);
 
             document.getElementById('page-content').innerHTML = `

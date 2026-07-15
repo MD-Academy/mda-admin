@@ -10,6 +10,12 @@ let gbAttempts = {};          // `${studentId}_${examId}` -> {id, score, passed}
 let gbOralGrades = {};        // `${studentId}_${oralId}` -> {id, score, feedback}
 let gbAdjust = {};            // studentId -> {id, adjustment, note}
 let gbDiplomas = {};          // studentId -> {issued_at} for the current course
+let IS_SUPER = false;         // only super-admin edits the grade setup (weights)
+let quizWeight = 10;          // global: weight of "pass all quizzes"
+let bonusCap = 10;            // global: max ± teacher bonus
+let courseQuizIds = [];       // quiz ids belonging to this course's subjects
+let gbQuizPass = {};          // studentId -> bool (passed every quiz in the course)
+let allExamsForPicker = [];   // [{id, title, type, weight_percent}] for the "+ Add exam" picker
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -61,6 +67,24 @@ async function onCourseChange() {
         : { data: [] };
     gbExams = exRes.data || [];
 
+    // Global grade settings, all exams (for the "+ Add exam" picker), and this course's quizzes.
+    const [gsRes, allExRes, csRes] = await Promise.all([
+        db.from('app_settings').select('key, value').in('key', ['grade_quizzes_weight', 'grade_bonus_cap']),
+        db.from('exams').select('id, title, type, pass_threshold, weight_percent').order('created_at', { ascending: false }),
+        db.from('course_subjects').select('room_id').eq('course_id', currentCourseId)
+    ]);
+    (gsRes.data || []).forEach(r => {
+        if (r.key === 'grade_quizzes_weight') quizWeight = Number(r.value) || 0;
+        if (r.key === 'grade_bonus_cap') bonusCap = Number(r.value) || 0;
+    });
+    allExamsForPicker = allExRes.data || [];
+    const roomIds = [...new Set((csRes.data || []).map(r => r.room_id))];
+    courseQuizIds = [];
+    if (roomIds.length) {
+        const { data: qz } = await db.from('quizzes').select('id').in('room_id', roomIds).eq('is_visible', true);
+        courseQuizIds = (qz || []).map(q => q.id);
+    }
+
     loadGbPage();
 }
 
@@ -108,8 +132,17 @@ async function loadGbPage() {
     gbOralGrades = {};
     gbAdjust = {};
     gbDiplomas = {};
+    gbQuizPass = {};
     const pageIds = gbStudents.map(s => s.id);
     if (pageIds.length) {
+        // "Pass all quizzes" status for the quizzes slice.
+        if (courseQuizIds.length) {
+            const qaRes = await db.from('quiz_attempts').select('quiz_id, student_id')
+                .in('quiz_id', courseQuizIds).in('student_id', pageIds).eq('passed', true);
+            const passedBy = {};
+            (qaRes.data || []).forEach(a => { (passedBy[a.student_id] = passedBy[a.student_id] || new Set()).add(a.quiz_id); });
+            pageIds.forEach(sid => { const set = passedBy[sid] || new Set(); gbQuizPass[sid] = courseQuizIds.every(qid => set.has(qid)); });
+        }
         if (gbExamIds.length) {
             const atRes = await db.from('exam_attempts').select('id, exam_id, student_id, score, passed')
                 .in('exam_id', gbExamIds).in('student_id', pageIds);
@@ -155,16 +188,20 @@ function renderGbPager() {
 
 const clampPct = n => Math.max(0, Math.min(100, n));
 
-// Total weight configured for the course (exams + orals). Ideally 100.
+// Total weight configured for the course (exams + orals + quizzes). Must be 100.
 function totalCourseWeight() {
     return gbExams.reduce((t, e) => t + Number(e.weight_percent || 0), 0)
-         + gbOrals.reduce((t, o) => t + Number(o.weight_percent || 0), 0);
+         + gbOrals.reduce((t, o) => t + Number(o.weight_percent || 0), 0)
+         + (courseQuizIds.length ? Number(quizWeight || 0) : 0);
 }
 
-// Current standing: weighted average across GRADED items only, plus the ± adjustment.
+// Current standing: weighted average across GRADED items only, plus the capped ± bonus.
+// Quizzes are all-or-nothing: the slice counts (full weight, score 100) only once every
+// quiz in the course is passed; until then it's pending (not counted).
 function computeStanding(sid) {
     let earned = 0, wsum = 0, graded = 0;
-    const total = gbExams.length + gbOrals.length;
+    const hasQuizzes = courseQuizIds.length > 0 && quizWeight > 0;
+    const total = gbExams.length + gbOrals.length + (hasQuizzes ? 1 : 0);
     gbExams.forEach(e => {
         const a = gbAttempts[`${sid}_${e.id}`];
         if (a && a.score != null) { earned += Number(a.score) * Number(e.weight_percent || 0); wsum += Number(e.weight_percent || 0); graded++; }
@@ -173,8 +210,10 @@ function computeStanding(sid) {
         const g = gbOralGrades[`${sid}_${o.id}`];
         if (g && g.score != null) { earned += Number(g.score) * Number(o.weight_percent || 0); wsum += Number(o.weight_percent || 0); graded++; }
     });
+    if (hasQuizzes && gbQuizPass[sid]) { earned += 100 * quizWeight; wsum += quizWeight; graded++; }
     const net = wsum > 0 ? earned / wsum : null;
-    const adj = gbAdjust[sid] ? Number(gbAdjust[sid].adjustment || 0) : 0;
+    const rawAdj = gbAdjust[sid] ? Number(gbAdjust[sid].adjustment || 0) : 0;
+    const adj = Math.max(-bonusCap, Math.min(bonusCap, rawAdj));
     const overall = net != null ? clampPct(net + adj) : null;
     return { net, adj, overall, graded, total };
 }
@@ -246,13 +285,14 @@ function renderGradebook() {
 }
 
 function gradingToolbar() {
+    if (!IS_SUPER) return '';   // only super-admin manages the grade setup (weights)
     const tw = totalCourseWeight();
     const warn = Math.abs(tw - 100) > 0.01
-        ? `<span style="color:#b45309;font-weight:600;">Weights total ${tw}% (aim for 100%)</span>`
+        ? `<span style="color:#b45309;font-weight:600;">Weights total ${tw}% (must be 100%)</span>`
         : `<span style="color:var(--green);font-weight:600;">Weights total 100% ✓</span>`;
     return `<div class="subtoolbar" style="margin-bottom:12px;">
         <div style="font-size:13px;">${warn}</div>
-        <button class="btn btn-ghost btn-sm" onclick="openGradingSetup()">⚙ Manage grading (weights &amp; orals)</button>
+        <button class="btn btn-ghost btn-sm" onclick="openGradingSetup()">⚙ Manage grading (weights, exams &amp; orals)</button>
     </div>`;
 }
 
@@ -375,6 +415,10 @@ function openAdjust(studentId) {
     const a = gbAdjust[studentId];
     document.getElementById('adjust-value').value = a ? Number(a.adjustment) : '';
     document.getElementById('adjust-note').value = (a && a.note) ? a.note : '';
+    const vi = document.getElementById('adjust-value');
+    vi.min = String(-bonusCap); vi.max = String(bonusCap);
+    const hint = document.getElementById('adjust-cap-hint');
+    if (hint) hint.textContent = `Allowed range: −${bonusCap} to +${bonusCap} (set in Manage grading).`;
     openModal('adjust-modal');
 }
 
@@ -387,7 +431,7 @@ async function saveAdjust(ev) {
     const raw = document.getElementById('adjust-value').value;
     const note = document.getElementById('adjust-note').value.trim();
     const adjustment = raw === '' ? 0 : parseFloat(raw);
-    if (isNaN(adjustment) || adjustment < -100 || adjustment > 100) { showModalAlert(alert, 'Enter an adjustment between -100 and 100.', 'error'); return; }
+    if (isNaN(adjustment) || adjustment < -bonusCap || adjustment > bonusCap) { showModalAlert(alert, `Enter an adjustment between −${bonusCap} and +${bonusCap}.`, 'error'); return; }
     if (!ensureSafe(alert, [['Note', note]])) return;
 
     const existing = gbAdjust[studentId];
@@ -426,31 +470,98 @@ function renderGradingSetup() {
     const examRows = gbExams.length ? gbExams.map(e => `
         <div class="list-row">
             <div class="lr-body"><div class="lr-title">${escapeHtml(e.title)}</div><div class="lr-sub">${e.type === 'pdf' ? 'PDF' : 'MCQ'} exam</div></div>
-            <div class="lr-actions"><label style="font-size:12px;color:var(--text-muted);">Weight %</label><input type="number" min="0" max="100" step="1" value="${Number(e.weight_percent)}" data-exam="${e.id}" class="gs-exam-w" style="width:80px;"></div>
-        </div>`).join('') : `<p class="hint">No exams assigned to this course (assign them in the Exams section).</p>`;
+            <div class="lr-actions"><label style="font-size:12px;color:var(--text-muted);">Weight %</label><input type="number" min="0" max="100" step="1" value="${Number(e.weight_percent)}" data-exam="${e.id}" class="gs-exam-w" style="width:74px;" oninput="recalcGradingTotal()"><button class="btn btn-danger btn-sm" onclick="removeExamFromCourse('${e.id}')">Remove</button></div>
+        </div>`).join('') : `<p class="hint">No exams on this course yet — add one below.</p>`;
+
+    const available = allExamsForPicker.filter(e => !gbExams.some(x => x.id === e.id));
+    const examPicker = `
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:flex-end;flex-wrap:wrap;">
+            <div class="form-field" style="flex:1;min-width:200px;margin:0;"><label>Add an exam</label>
+                <select id="gs-add-exam">${available.length ? `<option value="">— choose an exam —</option>` + available.map(e => `<option value="${e.id}">${escapeHtml(e.title)}</option>`).join('') : `<option value="">All exams already added</option>`}</select>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="addExamToCourse()" ${available.length ? '' : 'disabled'}>+ Add exam</button>
+        </div>
+        <div class="hint" style="margin-top:6px;">Create new exams in the <strong>Exams</strong> section, then add them here and set the weight.</div>`;
 
     const oralRows = gbOrals.length ? gbOrals.map(o => `
         <div class="list-row" data-oral="${o.id}">
             <div class="lr-body"><input type="text" value="${escapeHtml(o.title)}" class="gs-oral-title" data-oral="${o.id}" style="width:100%;font-weight:600;padding:7px 9px;"></div>
             <div class="lr-actions">
                 <label style="font-size:12px;color:var(--text-muted);">Weight %</label>
-                <input type="number" min="0" max="100" step="1" value="${Number(o.weight_percent)}" class="gs-oral-w" data-oral="${o.id}" style="width:80px;">
+                <input type="number" min="0" max="100" step="1" value="${Number(o.weight_percent)}" class="gs-oral-w" data-oral="${o.id}" style="width:74px;" oninput="recalcGradingTotal()">
                 <button class="btn btn-danger btn-sm" onclick="deleteOral('${o.id}')">Delete</button>
             </div>
         </div>`).join('') : `<p class="hint">No oral presentations yet — add one below.</p>`;
+
+    const quizNote = courseQuizIds.length
+        ? `${courseQuizIds.length} quiz${courseQuizIds.length === 1 ? '' : 'zes'} in this course · full weight only when a student passes them all`
+        : `No quizzes in this course yet — this slice won't count until quizzes exist (add them in Subjects).`;
 
     body.innerHTML = `
         <div class="alert" id="grading-alert" style="display:none;"></div>
         <div class="section-title" style="font-size:15px;">Written exams</div>
         <div class="list-rows">${examRows}</div>
-        <div class="section-title" style="font-size:15px;margin-top:20px;">Oral presentations</div>
+        ${examPicker}
+        <div class="section-title" style="font-size:15px;margin-top:22px;">Oral presentations</div>
         <div class="list-rows">${oralRows}</div>
         <div style="display:flex;gap:8px;margin-top:14px;align-items:flex-end;flex-wrap:wrap;">
-            <div class="form-field" style="flex:1;min-width:180px;margin:0;"><label>New oral title</label><input type="text" id="new-oral-title" placeholder="e.g. Oral Presentation 1"></div>
-            <div class="form-field" style="margin:0;"><label>Weight %</label><input type="number" id="new-oral-weight" min="0" max="100" step="1" value="10" style="width:90px;"></div>
+            <div class="form-field" style="flex:1;min-width:180px;margin:0;"><label>New oral title</label><input type="text" id="new-oral-title" placeholder="e.g. Final Oral Test"></div>
+            <div class="form-field" style="margin:0;"><label>Weight %</label><input type="number" id="new-oral-weight" min="0" max="100" step="1" value="5" style="width:90px;"></div>
             <button type="button" class="btn btn-ghost btn-sm" onclick="addOral()">+ Add oral</button>
         </div>
-        <div style="margin-top:14px;font-size:13px;">Current total weight: <strong>${totalCourseWeight()}%</strong> <span style="color:var(--text-muted);">(aim for 100%)</span></div>`;
+        <div class="section-title" style="font-size:15px;margin-top:22px;">Quizzes (global)</div>
+        <div class="list-row">
+            <div class="lr-body"><div class="lr-title">Pass all quizzes</div><div class="lr-sub">${quizNote}</div></div>
+            <div class="lr-actions"><label style="font-size:12px;color:var(--text-muted);">Weight %</label><input type="number" id="gs-quiz-w" min="0" max="100" step="1" value="${Number(quizWeight)}" style="width:74px;" oninput="recalcGradingTotal()"></div>
+        </div>
+        <div class="section-title" style="font-size:15px;margin-top:22px;">Extra points (global)</div>
+        <div class="list-row">
+            <div class="lr-body"><div class="lr-title">Teacher bonus cap</div><div class="lr-sub">Max ± points a teacher may add for participation. Not part of the 100%.</div></div>
+            <div class="lr-actions"><label style="font-size:12px;color:var(--text-muted);">Max ±</label><input type="number" id="gs-bonus-cap" min="0" max="100" step="1" value="${Number(bonusCap)}" style="width:74px;"></div>
+        </div>
+        <div style="margin-top:16px;font-size:14px;" id="gs-total"></div>`;
+    recalcGradingTotal();
+}
+
+// Live weight total (exams + orals + quizzes). Must be exactly 100%.
+function recalcGradingTotal() {
+    let t = 0;
+    document.querySelectorAll('.gs-exam-w').forEach(i => { const v = parseFloat(i.value); if (!isNaN(v)) t += v; });
+    document.querySelectorAll('.gs-oral-w').forEach(i => { const v = parseFloat(i.value); if (!isNaN(v)) t += v; });
+    const qi = document.getElementById('gs-quiz-w');
+    if (qi && courseQuizIds.length) { const v = parseFloat(qi.value); if (!isNaN(v)) t += v; }
+    const el = document.getElementById('gs-total');
+    if (!el) return;
+    const ok = Math.abs(t - 100) < 0.01;
+    el.innerHTML = `Total weight: <strong style="color:${ok ? 'var(--green)' : 'var(--red)'};">${t}%</strong> ${ok ? '✓' : '— must be exactly 100% to save'}`;
+}
+
+async function addExamToCourse() {
+    const sel = document.getElementById('gs-add-exam');
+    const examId = sel ? sel.value : '';
+    if (!examId) return;
+    const { error } = await db.from('exam_courses').insert({ course_id: currentCourseId, exam_id: examId });
+    if (error) { alert('Failed to add exam: ' + error.message); return; }
+    const ex = allExamsForPicker.find(e => e.id === examId);
+    if (ex && !gbExams.some(x => x.id === examId)) { gbExams.push({ ...ex, pass_threshold: ex.pass_threshold ?? 70 }); gbExamIds.push(examId); }
+    renderGradingSetup();
+    await loadGbPage();
+}
+
+async function removeExamFromCourse(examId) {
+    const e = gbExams.find(x => x.id === examId);
+    const ok = await confirmDialog({
+        title: 'Remove exam from grade?',
+        message: `"${e ? e.title : 'This exam'}" will no longer count toward this course's grade. The exam and any scores are kept — you can add it back later.`,
+        confirmText: 'Remove'
+    });
+    if (!ok) return;
+    const { error } = await db.from('exam_courses').delete().eq('course_id', currentCourseId).eq('exam_id', examId);
+    if (error) { alert('Failed: ' + error.message); return; }
+    gbExams = gbExams.filter(x => x.id !== examId);
+    gbExamIds = gbExamIds.filter(x => x !== examId);
+    renderGradingSetup();
+    await loadGbPage();
 }
 
 async function addOral() {
@@ -490,10 +601,23 @@ async function saveGrading() {
     const alert = document.getElementById('grading-alert');
     alert.style.display = 'none';
     const btn = document.getElementById('grading-save-btn');
-    // Validate oral titles first.
+
+    // Validate oral titles.
     const titleChecks = [];
     document.querySelectorAll('.gs-oral-title').forEach((inp, i) => titleChecks.push([`Oral title ${i + 1}`, inp.value.trim()]));
     if (!ensureSafe(alert, titleChecks)) return;
+
+    // Enforce total = 100%.
+    let total = 0;
+    document.querySelectorAll('.gs-exam-w').forEach(i => { const v = parseFloat(i.value); if (!isNaN(v)) total += v; });
+    document.querySelectorAll('.gs-oral-w').forEach(i => { const v = parseFloat(i.value); if (!isNaN(v)) total += v; });
+    const newQuizW = parseFloat(document.getElementById('gs-quiz-w').value);
+    if (courseQuizIds.length && !isNaN(newQuizW)) total += newQuizW;
+    if (Math.abs(total - 100) > 0.01) {
+        showModalAlert(alert, `Weights must total exactly 100% — they currently total ${total}%. Adjust and try again.`, 'error');
+        return;
+    }
+    const newBonusCap = parseFloat(document.getElementById('gs-bonus-cap').value);
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
@@ -508,6 +632,10 @@ async function saveGrading() {
             const payload = {}; if (title) payload.title = title; if (!isNaN(w)) payload.weight_percent = w;
             if (Object.keys(payload).length) ops.push(db.from('oral_presentations').update(payload).eq('id', id).then(r => { if (r.error) throw new Error(r.error.message); const o = gbOrals.find(x => x.id === id); if (o) Object.assign(o, payload); }));
         });
+        // Global settings (quizzes weight + bonus cap) — apply everywhere.
+        if (!isNaN(newQuizW)) { quizWeight = newQuizW; ops.push(db.from('app_settings').upsert({ key: 'grade_quizzes_weight', value: String(newQuizW), updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(r => { if (r.error) throw new Error(r.error.message); })); }
+        if (!isNaN(newBonusCap)) { bonusCap = newBonusCap; ops.push(db.from('app_settings').upsert({ key: 'grade_bonus_cap', value: String(newBonusCap), updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(r => { if (r.error) throw new Error(r.error.message); })); }
+
         await Promise.all(ops);
         closeModal('grading-modal');
         await loadGbPage();
