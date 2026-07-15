@@ -20,6 +20,7 @@ const NAV_ITEMS = [
     { id: 'feedback', label: 'Feedback', href: 'feedback.html', superadminOnly: true, icon: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
     { id: 'appearance', label: 'Appearance', href: 'appearance.html', superadminOnly: true, icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>' },
     { id: 'work-hours', label: 'Work Hours', href: 'work-hours.html', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+    { id: 'guide', label: 'User Guide', href: 'guide.html', icon: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>' },
     { id: 'profile', label: 'My Profile', href: 'profile.html', icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' }
 ];
 

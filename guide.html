@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <style>
+        .guide { max-width: 860px; }
+        .guide-intro { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; font-size: 14px; line-height: 1.6; color: var(--text-muted); }
+        .guide details { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+        .guide summary { cursor: pointer; padding: 14px 18px; font-weight: 700; color: var(--navy-800); font-size: 15px; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .guide summary::-webkit-details-marker { display: none; }
+        .guide summary::after { content: '▸'; color: var(--text-muted); transition: transform .2s; flex-shrink: 0; }
+        .guide details[open] summary::after { transform: rotate(90deg); }
+        .guide details[open] summary { border-bottom: 1px solid var(--border); }
+        .guide-body { padding: 14px 18px 16px; font-size: 14px; line-height: 1.65; color: var(--text); }
+        .guide-body p { margin: 0 0 10px; }
+        .guide-body ul { margin: 0 0 10px; padding-left: 20px; }
+        .guide-body li { margin: 5px 0; }
+        .guide-body strong { color: var(--navy-800); }
+    </style>
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+            renderLayout('guide', 'User Guide', 'What each section does and how to use it', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+            <div class="guide">
+                <div class="guide-intro">A quick reference for the admin portal. Click any section to expand it. A general rule everywhere: the <strong>eye/visibility toggle</strong> controls whether students can see an item, and <strong>deletes always ask you to confirm first</strong> and are permanent.</div>
+
+                <details open><summary>🏠 Dashboard</summary><div class="guide-body">
+                    <p>Your landing page — a quick overview of the academy (student counts, recent activity). Nothing to manage here; it's a snapshot.</p>
+                </div></details>
+
+                <details><summary>👩‍🎓 Students <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(super-admin)</span></summary><div class="guide-body">
+                    <p>Create and manage student accounts.</p>
+                    <ul>
+                        <li><strong>Add student</strong> — creates the account and enrols them in one or more courses. Login details can be emailed automatically.</li>
+                        <li><strong>Bulk add</strong> — paste a list to create many at once.</li>
+                        <li><strong>Reset password</strong>, set an <strong>expiry date</strong> (access auto-cuts after it), suspend/activate.</li>
+                        <li><strong>Activity</strong> — a login report per student (daily totals, printable).</li>
+                    </ul>
+                </div></details>
+
+                <details><summary>💳 Program Tuition</summary><div class="guide-body">
+                    <p>Track each student's tuition — total, payments made, and balance. Students see their own tuition status in their portal.</p>
+                </div></details>
+
+                <details><summary>🎓 Courses</summary><div class="guide-body">
+                    <p>A course groups <strong>subjects</strong> and <strong>enrolled students</strong>. Open a course ("Manage") to set it up:</p>
+                    <ul>
+                        <li><strong>Subjects</strong> — toggle which subjects belong to the course.</li>
+                        <li><strong>Exams</strong> — assign exams so enrolled students can take them.</li>
+                        <li><strong>Teachers on this course</strong> — assign the staff who teach it (students rate them in feedback).</li>
+                        <li><strong>Zoom recordings</strong> — attach recordings to the course.</li>
+                        <li><strong>Attendance</strong> — opens the attendance sheet for the course.</li>
+                        <li><strong>Enrolled students</strong> (super-admin) — search to enrol/remove.</li>
+                    </ul>
+                    <p>Courses can have an <strong>expiry date</strong> — after it, the course and its content disappear for students.</p>
+                </div></details>
+
+                <details><summary>📚 Subjects</summary><div class="guide-body">
+                    <p>Each subject holds its teaching content, in tabs: <strong>Video Lectures</strong>, <strong>Presentations</strong> (PDFs/slides/links), <strong>Quizzes</strong> (10 questions, must pass all), <strong>Additional Notes</strong>, and Anki Cards.</p>
+                    <ul>
+                        <li><strong>Bulk upload</strong> presentations at once — titles come from file names; number your files (01, 02…) to control order.</li>
+                        <li>Each item has a visibility toggle — hidden items show to students as "Not released yet".</li>
+                        <li>The subject cards show live counts of Presentations / Video Lectures / Quizzes.</li>
+                    </ul>
+                </div></details>
+
+                <details><summary>🎥 Zoom Recordings</summary><div class="guide-body">
+                    <p>Two tabs:</p>
+                    <ul>
+                        <li><strong>Recordings</strong> — past class recordings (AWS links), organised by date and assigned to courses.</li>
+                        <li><strong>Live Class Links</strong> — live Zoom join links per course (title, host, URL). Students open or copy them; only their course's links show.</li>
+                    </ul>
+                </div></details>
+
+                <details><summary>📖 Digital Booklets</summary><div class="guide-body">
+                    <p>Global reading booklets available to students (read-only viewer). Manage titles, files and visibility here.</p>
+                </div></details>
+
+                <details><summary>📝 Exams</summary><div class="guide-body">
+                    <p>Create exams and assign them to courses (in the course editor).</p>
+                    <ul>
+                        <li><strong>Multiple-choice (auto-scored)</strong> — students take it online, graded automatically.</li>
+                        <li><strong>PDF paper</strong> — you upload the paper; teachers enter scores in the Gradebook.</li>
+                        <li><strong>📄 Import from PDF</strong> — upload an existing exam PDF and the system reads its questions (and answer key) into a multiple-choice exam for you to review.</li>
+                    </ul>
+                </div></details>
+
+                <details><summary>📊 Gradebook</summary><div class="guide-body">
+                    <p>Per course: a grid of students × exams/orals with each student's <strong>Overall</strong> score.</p>
+                    <ul>
+                        <li>Click a cell to enter a <strong>PDF-exam score</strong> or an <strong>oral presentation score + feedback</strong> (MCQ exams fill in automatically).</li>
+                        <li><strong>⚙ Manage grading</strong> (super-admin) — set each exam/oral weight, add/remove exams, add oral presentations, the <strong>quizzes</strong> slice (pass-all) and the <strong>bonus cap</strong>. The total must equal <strong>100%</strong> to save.</li>
+                        <li><strong>Adj.</strong> — the teacher's ± participation bonus (capped).</li>
+                        <li><strong>Issue diploma</strong> — generate + email a diploma and recommendation letter.</li>
+                    </ul>
+                </div></details>
+
+                <details><summary>🗓️ Attendance</summary><div class="guide-body">
+                    <p>Pick a course → <strong>Open attendance for today</strong> creates the class with everyone marked present; click a mark to flip a student to absent. Percentages update automatically.</p>
+                    <p><strong>Min attendance %</strong> (super-admin, top-right) sets the office threshold — below it, students get a portal warning and a weekly email.</p>
+                </div></details>
+
+                <details><summary>🏛️ University Selection</summary><div class="guide-body">
+                    <p>Review the universities each student has selected, with a recommended target number you can set. Useful for advising.</p>
+                </div></details>
+
+                <details><summary>📅 Personal Meetings · Calendar · Announcements</summary><div class="guide-body">
+                    <ul>
+                        <li><strong>Personal Meetings</strong> — 1:1 appointment slots students can book.</li>
+                        <li><strong>Calendar</strong> — schedule class sessions/topics students see.</li>
+                        <li><strong>Announcements</strong> — post news to students (optionally emailed).</li>
+                    </ul>
+                </div></details>
+
+                <details><summary>🎫 Student Tickets</summary><div class="guide-body">
+                    <p>Support requests from students. Reply and set status (open / in progress / completed) — the student is emailed on updates.</p>
+                </div></details>
+
+                <details><summary>⭐ Feedback <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(super-admin)</span></summary><div class="guide-body">
+                    <p>Private ratings students leave on the course, each teacher, materials and recorded classes — averages + comments, exportable. Anonymous to teachers.</p>
+                </div></details>
+
+                <details><summary>🕑 Work Hours</summary><div class="guide-body">
+                    <p><strong>Clock In</strong> when you start a class/work, <strong>Clock Out</strong> when you finish — times are server-stamped and can't be edited afterwards. See your own totals below.</p>
+                    <p>Super-admins also get an <strong>all-teachers report</strong> by date range with CSV/print.</p>
+                </div></details>
+
+                <details><summary>🖼️ Appearance · 🛡️ Admins <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(super-admin)</span></summary><div class="guide-body">
+                    <ul>
+                        <li><strong>Appearance</strong> — upload the banner images for the Presentations / Video Lectures / Quizzes cards (shown in every subject).</li>
+                        <li><strong>Admins</strong> — create teacher (admin) and super-admin accounts.</li>
+                    </ul>
+                </div></details>
+
+                <details><summary>👤 Profile</summary><div class="guide-body">
+                    <p>Your own account — change your password and upload a photo.</p>
+                </div></details>
+            </div>`;
+        })();
+    </script>
+</body>
+</html>
