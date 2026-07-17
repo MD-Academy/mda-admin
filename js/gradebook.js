@@ -139,10 +139,10 @@ async function loadGbPage() {
     if (pageIds.length) {
         // "Pass all quizzes" status for the quizzes slice.
         if (courseQuizIds.length) {
-            const qaRes = await db.from('quiz_attempts').select('quiz_id, student_id')
-                .in('quiz_id', courseQuizIds).in('student_id', pageIds).eq('passed', true);
+            const qaRes = await db.from('quiz_attempts').select('quiz_id, student_id, score')
+                .in('quiz_id', courseQuizIds).in('student_id', pageIds);
             const passedBy = {};
-            (qaRes.data || []).forEach(a => { (passedBy[a.student_id] = passedBy[a.student_id] || new Set()).add(a.quiz_id); });
+            (qaRes.data || []).forEach(a => { if (a.score != null && Number(a.score) >= 100) (passedBy[a.student_id] = passedBy[a.student_id] || new Set()).add(a.quiz_id); });
             pageIds.forEach(sid => { const set = passedBy[sid] || new Set(); gbQuizPass[sid] = courseQuizIds.every(qid => set.has(qid)); });
         }
         if (gbExamIds.length) {

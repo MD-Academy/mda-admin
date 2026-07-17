@@ -550,7 +550,7 @@ async function runWarningsNow() {
     });
     if (!ok) return;
     try {
-        const res = await apiRequest('POST', '/admin/run-reminders', { force: true });
+        const res = await apiRequest('POST', '/admin/run-reminders', { force: false });
         const msg = `Checked ${res.active_students ?? '?'} active students. `
             + `Attendance warnings: ${res.attendance_sent ?? 0}, grade warnings: ${res.grade_sent ?? 0}. `
             + `Records built: ${res.warnings_built ?? 0}, saved: ${res.warnings_recorded ?? 0}.`
