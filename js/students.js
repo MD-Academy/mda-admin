@@ -193,6 +193,7 @@ function renderStudents(students) {
                 <td>${expiryText}</td>
                 <td class="row-actions">
                     <button class="btn btn-ghost btn-sm" onclick="openActivity('${s.id}')">Activity</button>
+                    <button class="btn btn-ghost btn-sm" onclick="openNotices('${s.id}')">Notices</button>
                     <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
                     <button class="btn btn-ghost btn-sm" onclick="toggleStatus('${s.id}')">${s.status === 'suspended' ? 'Activate' : 'Block'}</button>
                     <button class="btn btn-ghost btn-sm" onclick="resetPw('${s.id}')">Reset PW</button>
@@ -536,6 +537,9 @@ async function saveEdit(e) {
 }
 
 // ── LOGIN ACTIVITY REPORT ──
+function openNotices(id) {
+    window.location.href = `warnings.html?id=${encodeURIComponent(id)}`;
+}
 function openActivity(id) {
     window.location.href = `activity.html?id=${encodeURIComponent(id)}`;
 }

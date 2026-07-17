@@ -13,6 +13,7 @@ let gbDiplomas = {};          // studentId -> {issued_at} for the current course
 let IS_SUPER = false;         // only super-admin edits the grade setup (weights)
 let quizWeight = 10;          // global: weight of "pass all quizzes"
 let bonusCap = 10;            // global: max ± teacher bonus
+let passMin = 60;            // global: overall grade below this → student gets a weekly warning
 let courseQuizIds = [];       // quiz ids belonging to this course's subjects
 let gbQuizPass = {};          // studentId -> bool (passed every quiz in the course)
 let allExamsForPicker = [];   // [{id, title, type, weight_percent}] for the "+ Add exam" picker
@@ -69,13 +70,14 @@ async function onCourseChange() {
 
     // Global grade settings, all exams (for the "+ Add exam" picker), and this course's quizzes.
     const [gsRes, allExRes, csRes] = await Promise.all([
-        db.from('app_settings').select('key, value').in('key', ['grade_quizzes_weight', 'grade_bonus_cap']),
+        db.from('app_settings').select('key, value').in('key', ['grade_quizzes_weight', 'grade_bonus_cap', 'grade_pass_min']),
         db.from('exams').select('id, title, type, pass_threshold, weight_percent').order('created_at', { ascending: false }),
         db.from('course_subjects').select('room_id').eq('course_id', currentCourseId)
     ]);
     (gsRes.data || []).forEach(r => {
         if (r.key === 'grade_quizzes_weight') quizWeight = Number(r.value) || 0;
         if (r.key === 'grade_bonus_cap') bonusCap = Number(r.value) || 0;
+        if (r.key === 'grade_pass_min') passMin = Number(r.value) || 0;
     });
     allExamsForPicker = allExRes.data || [];
     const roomIds = [...new Set((csRes.data || []).map(r => r.room_id))];
@@ -519,6 +521,11 @@ function renderGradingSetup() {
             <div class="lr-body"><div class="lr-title">Teacher bonus cap</div><div class="lr-sub">Max ± points a teacher may add for participation. Not part of the 100%.</div></div>
             <div class="lr-actions"><label style="font-size:12px;color:var(--text-muted);">Max ±</label><input type="number" id="gs-bonus-cap" min="0" max="100" step="1" value="${Number(bonusCap)}" style="width:74px;"></div>
         </div>
+        <div class="section-title" style="font-size:15px;margin-top:22px;">Passing minimum (global)</div>
+        <div class="list-row">
+            <div class="lr-body"><div class="lr-title">Warn below</div><div class="lr-sub">Students whose overall grade falls below this get a portal note and a weekly warning email (recorded for the office). Not part of the 100%.</div></div>
+            <div class="lr-actions"><label style="font-size:12px;color:var(--text-muted);">Min %</label><input type="number" id="gs-pass-min" min="0" max="100" step="1" value="${Number(passMin)}" style="width:74px;"></div>
+        </div>
         <div style="margin-top:16px;font-size:14px;" id="gs-total"></div>`;
     recalcGradingTotal();
 }
@@ -618,6 +625,7 @@ async function saveGrading() {
         return;
     }
     const newBonusCap = parseFloat(document.getElementById('gs-bonus-cap').value);
+    const newPassMin = parseFloat(document.getElementById('gs-pass-min').value);
 
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
@@ -635,6 +643,7 @@ async function saveGrading() {
         // Global settings (quizzes weight + bonus cap) — apply everywhere.
         if (!isNaN(newQuizW)) { quizWeight = newQuizW; ops.push(db.from('app_settings').upsert({ key: 'grade_quizzes_weight', value: String(newQuizW), updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(r => { if (r.error) throw new Error(r.error.message); })); }
         if (!isNaN(newBonusCap)) { bonusCap = newBonusCap; ops.push(db.from('app_settings').upsert({ key: 'grade_bonus_cap', value: String(newBonusCap), updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(r => { if (r.error) throw new Error(r.error.message); })); }
+        if (!isNaN(newPassMin)) { passMin = newPassMin; ops.push(db.from('app_settings').upsert({ key: 'grade_pass_min', value: String(newPassMin), updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(r => { if (r.error) throw new Error(r.error.message); })); }
 
         await Promise.all(ops);
         closeModal('grading-modal');
