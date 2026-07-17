@@ -554,7 +554,8 @@ async function runWarningsNow() {
         const msg = `Checked ${res.active_students ?? '?'} active students. `
             + `Attendance warnings: ${res.attendance_sent ?? 0}, grade warnings: ${res.grade_sent ?? 0}. `
             + `Records built: ${res.warnings_built ?? 0}, saved: ${res.warnings_recorded ?? 0}.`
-            + (res.warnings_error ? ` ⚠️ INSERT ERROR: ${res.warnings_error}` : '');
+            + (res.warnings_error ? ` ⚠️ INSERT ERROR: ${res.warnings_error}` : '')
+            + (res.grade_error ? ` ⚠️ GRADE ERROR: ${res.grade_error}` : '');
         await confirmDialog({ title: 'Warnings run', message: msg, confirmText: 'OK', cancelText: 'Close' });
     } catch (err) {
         await confirmDialog({ title: "Couldn't run", message: err.message, confirmText: 'OK', cancelText: 'Close', danger: true });
