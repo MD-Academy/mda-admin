@@ -551,11 +551,11 @@ async function runWarningsNow() {
     if (!ok) return;
     try {
         const res = await apiRequest('POST', '/admin/run-reminders', { force: true });
-        await confirmDialog({
-            title: 'Done',
-            message: `Warnings sent — attendance: ${res.attendance_sent ?? 0}, grades: ${res.grade_sent ?? 0}. Open a student's "Notices" to see the record.`,
-            confirmText: 'OK', cancelText: 'Close'
-        });
+        const msg = `Checked ${res.active_students ?? '?'} active students. `
+            + `Attendance warnings: ${res.attendance_sent ?? 0}, grade warnings: ${res.grade_sent ?? 0}. `
+            + `Records built: ${res.warnings_built ?? 0}, saved: ${res.warnings_recorded ?? 0}.`
+            + (res.warnings_error ? ` ⚠️ INSERT ERROR: ${res.warnings_error}` : '');
+        await confirmDialog({ title: 'Warnings run', message: msg, confirmText: 'OK', cancelText: 'Close' });
     } catch (err) {
         await confirmDialog({ title: "Couldn't run", message: err.message, confirmText: 'OK', cancelText: 'Close', danger: true });
     }
