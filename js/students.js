@@ -540,6 +540,26 @@ async function saveEdit(e) {
 function openNotices(id) {
     window.location.href = `warnings.html?id=${encodeURIComponent(id)}`;
 }
+
+// Manually run the attendance/grade warning check now (emails + records those below the thresholds).
+async function runWarningsNow() {
+    const ok = await confirmDialog({
+        title: 'Run warnings now?',
+        message: 'This checks every student against the attendance and grade minimums, emails those below them, and records each warning (viewable via "Notices"). Continue?',
+        confirmText: 'Run now'
+    });
+    if (!ok) return;
+    try {
+        const res = await apiRequest('POST', '/admin/run-reminders', { force: true });
+        await confirmDialog({
+            title: 'Done',
+            message: `Warnings sent — attendance: ${res.attendance_sent ?? 0}, grades: ${res.grade_sent ?? 0}. Open a student's "Notices" to see the record.`,
+            confirmText: 'OK', cancelText: 'Close'
+        });
+    } catch (err) {
+        await confirmDialog({ title: "Couldn't run", message: err.message, confirmText: 'OK', cancelText: 'Close', danger: true });
+    }
+}
 function openActivity(id) {
     window.location.href = `activity.html?id=${encodeURIComponent(id)}`;
 }
