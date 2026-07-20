@@ -3,10 +3,11 @@
 // whenever they notice something worth telling the student.
 
 let SF_STUDENT = null;      // {id, full_name, email}
-let SF_NOTES = [];          // newest first
+let SF_NOTES = [];          // the CURRENT page only, newest first
 let SF_COURSES = [];        // courses this student is enrolled in (optional tagging)
 let SF_EDITING = null;      // note id being corrected
 let SF_UID = null, SF_NAME = '', SF_SUPER = false;
+let SF_PAGE = 1, SF_PAGE_SIZE = 25, SF_TOTAL = 0;   // only one page is ever fetched
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -79,32 +80,86 @@ async function initStudentFeedback(studentId, profile) {
                     <h2 style="margin:4px 0 2px;font-size:21px;color:var(--navy-800);">${escapeHtml(SF_STUDENT.full_name || 'Student')}</h2>
                     <p style="margin:0;font-size:13px;color:var(--text-muted);" id="sf-count"></p>
                 </div>
-                <button class="btn btn-ghost no-print" onclick="window.print()">🖨 Print / Save as PDF</button>
+                <div style="display:flex;gap:8px;align-items:center;" class="no-print">
+                    <select id="sf-page-size" class="filter-select" onchange="onSfPageSize()">
+                        <option value="25">25 / page</option>
+                        <option value="50">50 / page</option>
+                        <option value="100">100 / page</option>
+                    </select>
+                    <button class="btn btn-ghost" onclick="window.print()">🖨 Print / Save as PDF</button>
+                </div>
             </div>
             <div id="sf-list"><div class="loader">Loading feedback…</div></div>
+            <div id="sf-pager" class="no-print" style="display:none;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;flex-wrap:wrap;">
+                <div id="sf-pager-info" style="font-size:13px;color:var(--text-muted);"></div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <button class="btn btn-ghost btn-sm" id="sf-prev" onclick="changeSfPage(-1)">← Newer</button>
+                    <span id="sf-page-label" style="font-size:13px;color:var(--text);"></span>
+                    <button class="btn btn-ghost btn-sm" id="sf-next" onclick="changeSfPage(1)">Older →</button>
+                </div>
+            </div>
         </div>`;
 
     await loadFeedbackNotes();
 }
 
+// Fetches ONE page. The record can grow for years, so we never pull it all.
 async function loadFeedbackNotes() {
-    const { data, error } = await db.from('student_notes')
-        .select('id, body, course_id, visible_to_student, author_id, author_name, created_at, edited_at, emailed_at')
-        .eq('student_id', SF_STUDENT.id).order('created_at', { ascending: false });
+    const from = (SF_PAGE - 1) * SF_PAGE_SIZE, to = from + SF_PAGE_SIZE - 1;
+    const { data, count, error } = await db.from('student_notes')
+        .select('id, body, course_id, visible_to_student, author_id, author_name, created_at, edited_at, emailed_at',
+                { count: 'exact' })
+        .eq('student_id', SF_STUDENT.id)
+        .order('created_at', { ascending: false })
+        .range(from, to);
     if (error) {
         document.getElementById('sf-list').innerHTML =
             `<div class="empty-state"><h3 style="color:var(--red)">Couldn't load the feedback</h3><p>${escapeHtml(error.message)}</p></div>`;
         return;
     }
     SF_NOTES = data || [];
+    SF_TOTAL = count || 0;
+    // Deleting the last entry on a page leaves it empty — step back a page.
+    if (SF_NOTES.length === 0 && SF_PAGE > 1) { SF_PAGE--; return loadFeedbackNotes(); }
     renderFeedbackNotes();
+    renderSfPager();
+}
+
+function renderSfPager() {
+    const pager = document.getElementById('sf-pager');
+    if (!pager) return;
+    const totalPages = Math.max(1, Math.ceil(SF_TOTAL / SF_PAGE_SIZE));
+    if (SF_TOTAL <= SF_PAGE_SIZE) { pager.style.display = 'none'; return; }
+    pager.style.display = 'flex';
+    const start = (SF_PAGE - 1) * SF_PAGE_SIZE + 1, end = Math.min(SF_PAGE * SF_PAGE_SIZE, SF_TOTAL);
+    document.getElementById('sf-pager-info').textContent = `Showing ${start}–${end} of ${SF_TOTAL} entries — newest first`;
+    document.getElementById('sf-page-label').textContent = `Page ${SF_PAGE} of ${totalPages}`;
+    const prev = document.getElementById('sf-prev'), next = document.getElementById('sf-next');
+    prev.disabled = SF_PAGE <= 1; next.disabled = SF_PAGE >= totalPages;
+    prev.style.opacity = prev.disabled ? '.4' : '1';
+    next.style.opacity = next.disabled ? '.4' : '1';
+}
+
+function onSfPageSize() {
+    SF_PAGE_SIZE = parseInt(document.getElementById('sf-page-size').value, 10) || 25;
+    SF_PAGE = 1;
+    loadFeedbackNotes();
+}
+
+function changeSfPage(delta) {
+    const totalPages = Math.max(1, Math.ceil(SF_TOTAL / SF_PAGE_SIZE));
+    const n = SF_PAGE + delta;
+    if (n < 1 || n > totalPages) return;
+    SF_PAGE = n;
+    loadFeedbackNotes();
+    document.getElementById('sf-report').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderFeedbackNotes() {
     const el = document.getElementById('sf-list');
-    const shared = SF_NOTES.filter(n => n.visible_to_student).length;
+    const shown = SF_TOTAL > SF_PAGE_SIZE ? ` · showing ${SF_NOTES.length} of them` : '';
     document.getElementById('sf-count').textContent =
-        `${escapeHtml(SF_STUDENT.email || '')} · ${SF_NOTES.length} entr${SF_NOTES.length === 1 ? 'y' : 'ies'} on record${SF_NOTES.length ? ` (${shared} sent to the student)` : ''} · generated ${fmtStamp(new Date().toISOString())}`;
+        `${SF_STUDENT.email || ''} · ${SF_TOTAL} entr${SF_TOTAL === 1 ? 'y' : 'ies'} on record${shown} · generated ${fmtStamp(new Date().toISOString())}`;
 
     if (!SF_NOTES.length) {
         el.innerHTML = `<div class="empty-state"><h3>No feedback yet</h3><p>Nothing has been written for this student. Use the box above — the first entry appears here, stamped with the date and time.</p></div>`;
@@ -136,7 +191,7 @@ function renderFeedbackNotes() {
             ${actions ? `<div class="no-print" style="display:flex;gap:8px;">${actions}</div>` : ''}
         </div>`;
     }).join('') + `</div>
-    <p style="margin-top:14px;font-size:12px;color:var(--text-muted);line-height:1.6;">Feedback written by teaching staff for this student. Each entry keeps the date and time it was written; corrections are marked as such. Entries sent to the student appear in their portal and raise a notification.</p>`;
+    <p style="margin-top:14px;font-size:12px;color:var(--text-muted);line-height:1.6;">Feedback written by teaching staff for this student. Each entry keeps the date and time it was written; corrections are marked as such. Entries sent to the student appear in their portal and raise a notification.${SF_TOTAL > SF_PAGE_SIZE ? ` <span class="no-print">Printing produces the entries shown on this page — switch to 100 / page first if you need more of the record in one document.</span>` : ''}</p>`;
 }
 
 function startFeedbackEdit(id) {
@@ -199,7 +254,7 @@ async function saveFeedbackNote(ev) {
                 author_name: SF_NAME
             }).select('id, body, course_id, visible_to_student, author_id, author_name, created_at, edited_at, emailed_at').single();
             if (res.error) throw new Error(res.error.message);
-            SF_NOTES.unshift(res.data);
+            SF_PAGE = 1;   // a new entry is the newest — always land back on page 1
             document.getElementById('sf-body').value = '';
             document.getElementById('sf-course').value = '';
             document.getElementById('sf-visible').checked = true;
@@ -213,7 +268,6 @@ async function saveFeedbackNote(ev) {
                 try {
                     const r = await apiRequest('POST', '/admin/notify/feedback', { note_id: res.data.id });
                     if (r.emailed) {
-                        res.data.emailed_at = new Date().toISOString();
                         showAlert(alert, `Saved and emailed to ${r.to}. ${who} will also see it in their portal and in their notifications.`, 'success');
                     } else {
                         showAlert(alert, `Saved — ${who} will see it in their portal and in their notifications. ${r.reason || 'No email was sent.'}`, 'warn');
@@ -223,7 +277,7 @@ async function saveFeedbackNote(ev) {
                 }
             }
         }
-        renderFeedbackNotes();
+        await loadFeedbackNotes();
         setTimeout(() => { alert.style.display = 'none'; }, 8000);
     } catch (err) {
         showAlert(alert, err.message, 'error');
@@ -244,9 +298,8 @@ async function deleteFeedbackNote(id) {
     if (!ok) return;
     const { error } = await db.from('student_notes').delete().eq('id', id);
     if (error) { showAlert(document.getElementById('sf-alert'), error.message, 'error'); return; }
-    SF_NOTES = SF_NOTES.filter(x => x.id !== id);
     if (SF_EDITING === id) cancelFeedbackEdit();
-    renderFeedbackNotes();
+    await loadFeedbackNotes();   // refill the page from the server
 }
 
 function showAlert(el, msg, type) {
