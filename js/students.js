@@ -192,6 +192,7 @@ function renderStudents(students) {
                 <td>${statusBadge}</td>
                 <td>${expiryText}</td>
                 <td class="row-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="openFeedback('${s.id}')" style="color:var(--navy-800);border-color:#c7d2e4;">💬 Feedback</button>
                     <button class="btn btn-ghost btn-sm" onclick="openActivity('${s.id}')">Activity</button>
                     <button class="btn btn-ghost btn-sm" onclick="openNotices('${s.id}')">Notices</button>
                     <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
@@ -539,6 +540,11 @@ async function saveEdit(e) {
 // ── LOGIN ACTIVITY REPORT ──
 function openNotices(id) {
     window.location.href = `warnings.html?id=${encodeURIComponent(id)}`;
+}
+
+// Teacher feedback — a running, dated log for this student.
+function openFeedback(id) {
+    window.location.href = `student-feedback.html?id=${encodeURIComponent(id)}`;
 }
 
 // Manually run the attendance/grade warning check now (emails + records those below the thresholds).

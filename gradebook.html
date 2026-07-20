@@ -143,6 +143,44 @@
         </div>
     </div>
 
+    <!-- OVERALL FEEDBACK MODAL (running, dated notes per student) -->
+    <div class="modal-overlay" id="notes-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3>Overall feedback</h3>
+                <button class="modal-close" onclick="closeModal('notes-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert" id="notes-alert" style="display:none;"></div>
+                <p id="notes-context" style="font-size:14px;color:var(--text-muted);margin-bottom:6px;"></p>
+                <p class="hint" style="margin-bottom:16px;">General feedback on how the student is doing — not tied to any exam or oral presentation. Each entry is stamped with the date and time and stays on record; add a new one whenever you have something to say.</p>
+
+                <form onsubmit="saveNote(event)">
+                    <div class="form-field">
+                        <label id="note-composer-title">New feedback entry</label>
+                        <textarea id="note-body" rows="5" placeholder="e.g. Your difficulty in Physics comes from the mechanics section — the formulas are being applied before the problem is set up. I recommend working through the exercises at the end of chapters 3 and 4 this week, and bringing your attempts to the next class."></textarea>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:-4px;">
+                        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;font-weight:500;">
+                            <input type="checkbox" id="note-visible" checked style="width:16px;height:16px;">
+                            Share with the student <span style="color:var(--text-muted);font-weight:400;">(emails them too — untick to keep it internal)</span>
+                        </label>
+                        <div style="display:flex;gap:8px;">
+                            <button type="button" class="btn btn-ghost btn-sm" id="note-cancel-edit" onclick="cancelEditNote()" style="display:none;">Cancel edit</button>
+                            <button type="submit" class="btn btn-primary" id="note-save-btn">Add entry</button>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="section-title" style="font-size:15px;margin-top:26px;">Feedback record</div>
+                <div class="list-rows" id="notes-list"></div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('notes-modal')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MANAGE GRADING MODAL (weights + orals) -->
     <div class="modal-overlay" id="grading-modal">
         <div class="modal wide">
@@ -172,6 +210,7 @@
             const auth = await requireAdmin();
             if (!auth) return;
             CURRENT_UID = auth.session.user.id;
+            CURRENT_NAME = (auth.profile && auth.profile.full_name) || 'Staff';
             IS_SUPER = !!(auth.profile && auth.profile.role === 'superadmin');
             renderLayout('gradebook', 'Gradebook', 'Exam & quiz scores by course', auth.profile);
 

@@ -10,6 +10,8 @@ let gbAttempts = {};          // `${studentId}_${examId}` -> {id, score, passed}
 let gbOralGrades = {};        // `${studentId}_${oralId}` -> {id, score, feedback}
 let gbAdjust = {};            // studentId -> {id, adjustment, note}
 let gbDiplomas = {};          // studentId -> {issued_at} for the current course
+let gbNotes = {};             // studentId -> [{id, body, visible_to_student, author_name, created_at, edited_at}] newest first
+let CURRENT_NAME = '';        // signed-in staff name — stamped on each feedback entry
 let IS_SUPER = false;         // only super-admin edits the grade setup (weights)
 let quizWeight = 10;          // global: weight of "pass all quizzes"
 let bonusCap = 10;            // global: max ± teacher bonus
@@ -111,7 +113,8 @@ function changeGbPage(delta) {
 // Load one page of student rows + their attempts for this course's exams.
 async function loadGbPage() {
     const container = document.getElementById('gradebook-container');
-    if (gbStudentIds.length === 0 || (gbExams.length === 0 && gbOrals.length === 0)) {
+    // Note: a course with no exams/orals still lists its students — overall feedback works regardless.
+    if (gbStudentIds.length === 0) {
         gbStudents = []; gbTotal = 0;
         renderGradebook();
         document.getElementById('pager').style.display = 'none';
@@ -135,6 +138,7 @@ async function loadGbPage() {
     gbAdjust = {};
     gbDiplomas = {};
     gbQuizPass = {};
+    gbNotes = {};
     const pageIds = gbStudents.map(s => s.id);
     if (pageIds.length) {
         // "Pass all quizzes" status for the quizzes slice.
@@ -164,6 +168,13 @@ async function loadGbPage() {
         const dipRes = await db.from('diplomas').select('student_id, issued_at')
             .eq('course_id', currentCourseId).in('student_id', pageIds);
         (dipRes.data || []).forEach(d => { gbDiplomas[d.student_id] = d; });
+
+        // Overall feedback log (newest first) — independent of any exam or oral.
+        const nRes = await db.from('student_notes')
+            .select('id, student_id, body, visible_to_student, author_id, author_name, created_at, edited_at, emailed_at')
+            .eq('course_id', currentCourseId).in('student_id', pageIds)
+            .order('created_at', { ascending: false });
+        (nRes.data || []).forEach(n => { (gbNotes[n.student_id] = gbNotes[n.student_id] || []).push(n); });
     }
 
     renderGradebook();
@@ -226,10 +237,6 @@ function renderGradebook() {
         container.innerHTML = `${gradingToolbar()}<div class="empty-state"><h3>No students enrolled</h3><p>Enrol students in this course (Courses → open the course) to see them here.</p></div>`;
         return;
     }
-    if (gbExams.length === 0 && gbOrals.length === 0) {
-        container.innerHTML = `${gradingToolbar()}<div class="empty-state"><h3>No exams or oral presentations yet</h3><p>Assign exams to this course (Exams section), or add oral presentations via <strong>Manage grading</strong> above.</p></div>`;
-        return;
-    }
     if (gbStudents.length === 0) {
         container.innerHTML = `${gradingToolbar()}<div class="empty-state"><h3>No students match</h3><p>No enrolled student matches "${escapeHtml(gbSearch)}".</p></div>`;
         return;
@@ -239,7 +246,7 @@ function renderGradebook() {
         `<th>${escapeHtml(e.title)}<br><span style="font-weight:400;color:var(--text-muted);">${e.type === 'pdf' ? 'PDF' : 'MCQ'} · ${Number(e.weight_percent)}%</span></th>`).join('');
     const oralHeads = gbOrals.map(o =>
         `<th>${escapeHtml(o.title)}<br><span style="font-weight:400;color:var(--text-muted);">Oral · ${Number(o.weight_percent)}%</span></th>`).join('');
-    const head = `<tr><th>Student</th>${examHeads}${oralHeads}<th>Overall</th><th>Adj.</th><th>Diploma</th></tr>`;
+    const head = `<tr><th>Student</th>${examHeads}${oralHeads}<th>Overall</th><th>Adj.</th><th>Overall feedback</th><th>Diploma</th></tr>`;
 
     const rows = gbStudents.map(s => {
         const examCells = gbExams.map(e => {
@@ -271,16 +278,28 @@ function renderGradebook() {
         const adjLabel = av > 0 ? `+${av}` : (av < 0 ? `${av}` : '±0');
         const adjCell = `<button class="btn btn-ghost btn-sm" onclick="openAdjust('${s.id}')" title="Participation / attendance adjustment">${adjLabel}</button>`;
 
+        // Running feedback log — a note the teacher writes whenever they choose.
+        const notes = gbNotes[s.id] || [];
+        const last = notes[0];
+        const notesCell = notes.length
+            ? `<button class="btn btn-ghost btn-sm gb-enter" onclick="openNotes('${s.id}')" title="Last entry ${escapeHtml(fmtStamp(last.created_at))}">💬 ${notes.length} note${notes.length === 1 ? '' : 's'}<br><span style="font-size:10px;color:var(--text-muted);font-weight:400;">${escapeHtml(fmtDay(last.created_at))}</span></button>`
+            : `<button class="btn btn-ghost btn-sm gb-enter" onclick="openNotes('${s.id}')">+ Write feedback</button>`;
+
         const issued = gbDiplomas[s.id];
         const dipBtn = issued
             ? `<button class="btn btn-ghost btn-sm" style="color:var(--green);border-color:var(--green);" onclick="openDiploma('${s.id}')" title="Issued ${escapeHtml((issued.issued_at || '').slice(0,10))}">🎓 Issued · re-send</button>`
             : `<button class="btn btn-primary btn-sm" onclick="openDiploma('${s.id}')">Issue diploma</button>`;
-        return `<tr><td><strong>${escapeHtml(s.full_name || '—')}</strong></td>${examCells}${oralCells}<td>${gpa}</td><td>${adjCell}</td><td>${dipBtn}</td></tr>`;
+        return `<tr><td><strong>${escapeHtml(s.full_name || '—')}</strong></td>${examCells}${oralCells}<td>${gpa}</td><td>${adjCell}</td><td>${notesCell}</td><td>${dipBtn}</td></tr>`;
     }).join('');
+
+    const noItems = (gbExams.length === 0 && gbOrals.length === 0)
+        ? `<div class="alert warn" style="display:block;margin-bottom:12px;">No exams or oral presentations on this course yet — assign exams in the <strong>Exams</strong> section, or add orals via <strong>Manage grading</strong>. You can still write overall feedback below.</div>`
+        : '';
 
     container.innerHTML = `
         ${gradingToolbar()}
-        <p class="hint" style="margin-bottom:12px;">Click a score cell to set a mark. <strong>PDF exams</strong> &amp; <strong>oral presentations</strong> are graded here (orals also take feedback); multiple-choice exams fill in automatically. <strong>Overall</strong> = weighted average of graded items + adjustment (current standing).</p>
+        ${noItems}
+        <p class="hint" style="margin-bottom:12px;">Click a score cell to set a mark. <strong>PDF exams</strong> &amp; <strong>oral presentations</strong> are graded here (orals also take feedback); multiple-choice exams fill in automatically. <strong>Overall</strong> = weighted average of graded items + adjustment (current standing).<br><strong>Overall feedback</strong> is separate from any exam — write a dated note to the student whenever you like; every entry is kept on record.</p>
         <div class="panel" style="overflow-x:auto;">
             <table class="data-table"><thead>${head}</thead><tbody>${rows}</tbody></table>
         </div>`;
@@ -458,6 +477,167 @@ async function saveAdjust(ev) {
     } finally {
         btn.disabled = false; btn.textContent = 'Save';
     }
+}
+
+// ── OVERALL FEEDBACK (running, dated notes — independent of any exam or oral) ──
+function fmtStamp(iso) {
+    return iso ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+}
+function fmtDay(iso) {
+    return iso ? new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+}
+
+let notesStudentId = null;
+let notesEditingId = null;   // set while correcting an existing entry
+
+function openNotes(studentId) {
+    const s = gbStudents.find(x => x.id === studentId);
+    if (!s) return;
+    notesStudentId = studentId;
+    notesEditingId = null;
+    document.getElementById('notes-alert').style.display = 'none';
+    document.getElementById('notes-context').textContent = `${s.full_name || 'Student'} — running feedback record`;
+    document.getElementById('note-body').value = '';
+    document.getElementById('note-visible').checked = true;
+    renderNoteComposer();
+    renderNotesList();
+    openModal('notes-modal');
+}
+
+function renderNoteComposer() {
+    const editing = notesEditingId
+        ? (gbNotes[notesStudentId] || []).find(n => n.id === notesEditingId)
+        : null;
+    document.getElementById('note-composer-title').textContent = editing
+        ? `Correcting the entry of ${fmtStamp(editing.created_at)}`
+        : 'New feedback entry';
+    document.getElementById('note-save-btn').textContent = editing ? 'Save correction' : 'Add entry';
+    document.getElementById('note-cancel-edit').style.display = editing ? 'inline-flex' : 'none';
+}
+
+function renderNotesList() {
+    const list = gbNotes[notesStudentId] || [];
+    const el = document.getElementById('notes-list');
+    if (!list.length) {
+        el.innerHTML = `<p class="hint">No feedback written yet. The first entry you add appears here, stamped with today's date and time.</p>`;
+        return;
+    }
+    el.innerHTML = list.map(n => {
+        const mine = n.author_id === CURRENT_UID;
+        const canEdit = mine || IS_SUPER;
+        const badge = n.visible_to_student
+            ? `<span style="font-size:11px;font-weight:700;color:var(--green);">Shared with student${n.emailed_at ? ' · emailed' : ''}</span>`
+            : `<span style="font-size:11px;font-weight:700;color:#b45309;">Internal — student can't see this</span>`;
+        const edited = n.edited_at ? ` · <em style="color:var(--text-muted);">corrected ${escapeHtml(fmtStamp(n.edited_at))}</em>` : '';
+        const actions = [
+            canEdit ? `<button class="btn btn-ghost btn-sm" onclick="startEditNote('${n.id}')">Edit</button>` : '',
+            IS_SUPER ? `<button class="btn btn-danger btn-sm" onclick="deleteNote('${n.id}')">Delete</button>` : ''
+        ].join('');
+        return `<div class="list-row" style="align-items:flex-start;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;gap:10px;width:100%;flex-wrap:wrap;align-items:baseline;">
+                <div style="font-size:12px;color:var(--text-muted);">
+                    <strong style="color:var(--navy-800);">${escapeHtml(fmtStamp(n.created_at))}</strong>
+                    · ${escapeHtml(n.author_name || 'Staff')}${edited}
+                </div>
+                ${badge}
+            </div>
+            <div style="font-size:14px;line-height:1.6;color:var(--text);white-space:pre-wrap;">${escapeHtml(n.body)}</div>
+            ${actions ? `<div style="display:flex;gap:8px;">${actions}</div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function startEditNote(id) {
+    const n = (gbNotes[notesStudentId] || []).find(x => x.id === id);
+    if (!n) return;
+    notesEditingId = id;
+    document.getElementById('note-body').value = n.body || '';
+    document.getElementById('note-visible').checked = !!n.visible_to_student;
+    renderNoteComposer();
+    document.getElementById('note-body').focus();
+}
+
+function cancelEditNote() {
+    notesEditingId = null;
+    document.getElementById('note-body').value = '';
+    document.getElementById('note-visible').checked = true;
+    renderNoteComposer();
+}
+
+async function saveNote(ev) {
+    ev.preventDefault();
+    const alert = document.getElementById('notes-alert');
+    const btn = document.getElementById('note-save-btn');
+    alert.style.display = 'none';
+
+    const body = document.getElementById('note-body').value.trim();
+    const visible = document.getElementById('note-visible').checked;
+    if (!body) { showModalAlert(alert, 'Write the feedback before saving.', 'error'); return; }
+    if (!ensureSafe(alert, [['Feedback', body]])) return;
+
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+        const arr = gbNotes[notesStudentId] = gbNotes[notesStudentId] || [];
+        if (notesEditingId) {
+            const edited_at = new Date().toISOString();
+            const res = await db.from('student_notes')
+                .update({ body, visible_to_student: visible, edited_at }).eq('id', notesEditingId);
+            if (res.error) throw new Error(res.error.message);
+            const n = arr.find(x => x.id === notesEditingId);
+            if (n) Object.assign(n, { body, visible_to_student: visible, edited_at });
+            notesEditingId = null;
+        } else {
+            const res = await db.from('student_notes').insert({
+                student_id: notesStudentId,
+                course_id: currentCourseId,
+                body,
+                visible_to_student: visible,
+                author_id: CURRENT_UID,
+                author_name: CURRENT_NAME || 'Staff'
+            }).select('id, student_id, body, visible_to_student, author_id, author_name, created_at, edited_at, emailed_at').single();
+            if (res.error) throw new Error(res.error.message);
+            arr.unshift(res.data);   // newest first
+
+            // Email the student. Already saved above — a mail failure must not undo it.
+            if (visible) {
+                try {
+                    const r = await apiRequest('POST', '/admin/notify/feedback', { note_id: res.data.id });
+                    if (r.emailed) res.data.emailed_at = new Date().toISOString();
+                    else showModalAlert(alert, `Saved and shown in the student's portal, but no email was sent: ${r.reason || 'unknown reason'}`, 'warn');
+                } catch (e) {
+                    showModalAlert(alert, `Saved and shown in the student's portal, but the email failed: ${e.message}`, 'warn');
+                }
+            }
+        }
+        document.getElementById('note-body').value = '';
+        document.getElementById('note-visible').checked = true;
+        renderNoteComposer();
+        renderNotesList();
+        renderGradebook();
+    } catch (err) {
+        showModalAlert(alert, err.message, 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = label;
+    }
+}
+
+async function deleteNote(id) {
+    const n = (gbNotes[notesStudentId] || []).find(x => x.id === id);
+    if (!n) return;
+    const ok = await confirmDialog({
+        title: 'Delete this feedback entry?',
+        message: `The entry written on ${fmtStamp(n.created_at)} will be permanently removed from the student's record and can't be recovered. Feedback is normally kept as a record — delete only if it was written in error.`,
+        confirmText: 'Delete permanently',
+        danger: true
+    });
+    if (!ok) return;
+    const { error } = await db.from('student_notes').delete().eq('id', id);
+    if (error) { showModalAlert(document.getElementById('notes-alert'), error.message, 'error'); return; }
+    gbNotes[notesStudentId] = (gbNotes[notesStudentId] || []).filter(x => x.id !== id);
+    if (notesEditingId === id) cancelEditNote();
+    renderNotesList();
+    renderGradebook();
 }
 
 // ── MANAGE GRADING (exam weights + oral presentations) ──
