@@ -129,7 +129,7 @@ function renderSfPager() {
     const pager = document.getElementById('sf-pager');
     if (!pager) return;
     const totalPages = Math.max(1, Math.ceil(SF_TOTAL / SF_PAGE_SIZE));
-    if (SF_TOTAL <= SF_PAGE_SIZE) { pager.style.display = 'none'; return; }
+    if (SF_TOTAL === 0) { pager.style.display = 'none'; return; }
     pager.style.display = 'flex';
     const start = (SF_PAGE - 1) * SF_PAGE_SIZE + 1, end = Math.min(SF_PAGE * SF_PAGE_SIZE, SF_TOTAL);
     document.getElementById('sf-pager-info').textContent = `Showing ${start}–${end} of ${SF_TOTAL} entries — newest first`;
