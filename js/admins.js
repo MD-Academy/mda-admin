@@ -25,12 +25,12 @@ async function loadAdmins() {
 
     const { data, error } = await db
         .from('profiles')
-        .select('id, full_name, role, status, created_at')
+        .select('id, full_name, role, job_title, status, created_at')
         .in('role', ['admin', 'superadmin'])
         .order('created_at', { ascending: true });
 
     if (error) {
-        tbody.innerHTML = `<tr><td colspan="5" class="loader" style="color:var(--red)">Error loading admins: ${escapeHtml(error.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="loader" style="color:var(--red)">Error loading admins: ${escapeHtml(error.message)}</td></tr>`;
         return;
     }
     allAdmins = data || [];
@@ -40,7 +40,7 @@ async function loadAdmins() {
 function renderAdmins() {
     const tbody = document.getElementById('admins-tbody');
     if (allAdmins.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="loader">No admins yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="loader">No admins yet.</td></tr>`;
         return;
     }
     tbody.innerHTML = allAdmins.map(a => {
@@ -48,10 +48,14 @@ function renderAdmins() {
         const roleBadge = a.role === 'superadmin'
             ? `<span class="badge badge-amber">Superadmin</span>`
             : `<span class="badge badge-blue">Admin</span>`;
+        const jobCell = a.job_title
+            ? `<span style="font-size:13px;color:var(--text);">${escapeHtml(a.job_title)}</span>`
+            : `<span style="font-size:13px;color:var(--text-muted);font-style:italic;">Not set</span>`;
         return `
             <tr>
                 <td><strong>${escapeHtml(a.full_name || '—')}</strong>${isSelf ? ' <span class="badge badge-green" style="margin-left:6px;">You</span>' : ''}</td>
                 <td>${roleBadge}</td>
+                <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${jobCell}<button class="btn btn-ghost btn-sm" onclick="openRoleModal('${a.id}')">Edit</button></div></td>
                 <td>${a.status === 'suspended' ? '<span class="badge badge-red">Suspended</span>' : '<span class="badge badge-green">Active</span>'}</td>
                 <td>${formatDate(a.created_at)}</td>
                 <td class="row-actions">
@@ -66,6 +70,41 @@ function renderAdmins() {
                 </td>
             </tr>`;
     }).join('');
+}
+
+// ── EDIT A STAFF MEMBER'S DESCRIPTIVE ROLE (job_title) — super-admin only ──
+function openRoleModal(id) {
+    const a = allAdmins.find(x => x.id === id);
+    if (!a) return;
+    document.getElementById('role-alert').style.display = 'none';
+    document.getElementById('role-user-id').value = id;
+    document.getElementById('role-context').textContent = a.full_name || 'This staff member';
+    document.getElementById('role-input').value = a.job_title || '';
+    openModal('role-modal');
+    setTimeout(() => document.getElementById('role-input').focus(), 50);
+}
+
+async function saveRole(e) {
+    e.preventDefault();
+    const btn = document.getElementById('role-save-btn');
+    const alert = document.getElementById('role-alert');
+    alert.style.display = 'none';
+    const id = document.getElementById('role-user-id').value;
+    const job_title = document.getElementById('role-input').value.trim();
+    if (!ensureSafe(alert, [['Role', job_title]])) return;
+
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+        await apiRequest('POST', `/admin/set-staff-role/${id}`, { job_title });
+        const a = allAdmins.find(x => x.id === id);
+        if (a) a.job_title = job_title || null;
+        renderAdmins();
+        closeModal('role-modal');
+    } catch (err) {
+        showModalAlert(alert, err.message || 'Could not save the role.', 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save Role';
+    }
 }
 
 function openAdminModal() {

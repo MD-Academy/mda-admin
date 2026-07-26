@@ -50,6 +50,32 @@
         </div>
     </div>
 
+    <!-- EDIT STAFF ROLE MODAL -->
+    <div class="modal-overlay" id="role-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Edit role</h3>
+                <button class="modal-close" onclick="closeModal('role-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveRole(event)">
+                <div class="modal-body">
+                    <div class="alert" id="role-alert" style="display:none;"></div>
+                    <input type="hidden" id="role-user-id">
+                    <p id="role-context" style="font-size:14px;color:var(--text-muted);margin-bottom:14px;"></p>
+                    <div class="form-field">
+                        <label>Role <span style="color:var(--text-muted);font-weight:400;">(shown to students)</span></label>
+                        <input type="text" id="role-input" maxlength="80" placeholder='e.g. "Biology &amp; Physiology Teacher", "Technology &amp; Support"'>
+                        <div class="hint">This is the descriptive role students see under the staff member's name — separate from their Admin/Superadmin permission level. Leave empty to clear it.</div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('role-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="role-save-btn">Save Role</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- CREDENTIALS MODAL -->
     <div class="modal-overlay" id="creds-modal">
         <div class="modal wide">
@@ -93,14 +119,15 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th>Role</th>
+                                <th>Permission</th>
+                                <th>Role (shown to students)</th>
                                 <th>Status</th>
                                 <th>Created</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="admins-tbody">
-                            <tr><td colspan="5" class="loader">Loading admins…</td></tr>
+                            <tr><td colspan="6" class="loader">Loading admins…</td></tr>
                         </tbody>
                     </table>
                 </div>
