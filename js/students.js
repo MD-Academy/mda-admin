@@ -18,10 +18,31 @@ function studentAvatar(s) {
     const initials = escapeHtml(studentInitials(s.full_name));
     if (s.avatar_url) {
         // If the image fails to load, fall back to initials via the parent's ::after.
-        return `<span class="row-avatar" data-initials="${initials}"><img src="${escapeHtml(s.avatar_url)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('is-fallback');this.remove();"></span>`;
+        return `<span class="row-avatar has-photo" data-name="${escapeHtml(s.full_name || 'Student')}" data-full="${escapeHtml(s.avatar_url)}"><img src="${escapeHtml(s.avatar_url)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('is-fallback');this.remove();"></span>`;
     }
     return `<span class="row-avatar is-fallback" data-initials="${initials}"></span>`;
 }
+
+// Click a student photo to see it enlarged.
+document.addEventListener('click', e => {
+    const ava = e.target.closest('.row-avatar.has-photo');
+    if (ava && ava.dataset.full) openPhotoLightbox(ava.dataset.full, ava.dataset.name);
+});
+function openPhotoLightbox(src, name) {
+    let ov = document.getElementById('photo-lightbox');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'photo-lightbox';
+        ov.className = 'photo-lightbox';
+        ov.innerHTML = `<div class="pl-inner"><img id="pl-img" alt=""><div id="pl-name" class="pl-name"></div></div>`;
+        ov.addEventListener('click', () => ov.classList.remove('open'));
+        document.body.appendChild(ov);
+    }
+    document.getElementById('pl-img').src = src;
+    document.getElementById('pl-name').textContent = name || '';
+    ov.classList.add('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const ov = document.getElementById('photo-lightbox'); if (ov) ov.classList.remove('open'); } });
 function studentInitials(name) {
     return (name || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 }
