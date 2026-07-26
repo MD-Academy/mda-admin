@@ -44,7 +44,7 @@
 
             const uid = auth.session.user.id;
             const email = auth.session.user.email || '—';
-            const { data: prof } = await db.from('profiles').select('full_name, title, avatar_url').eq('id', uid).single();
+            const { data: prof } = await db.from('profiles').select('full_name, title, job_title, avatar_url').eq('id', uid).single();
             const p = prof || {};
             const initials = (p.full_name || 'A').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
 
@@ -72,6 +72,10 @@
                                     <label>Full Name</label>
                                     <input type="text" id="f-name" value="${esc(p.full_name||'')}" required>
                                 </div>
+                            </div>
+                            <div class="form-field">
+                                <label>Role <span style="color:var(--text-muted);font-weight:400;">(shown to students — e.g. "Biology &amp; Physiology Teacher", "Technology &amp; Support")</span></label>
+                                <input type="text" id="f-job" value="${esc(p.job_title||'')}" maxlength="80" placeholder="Your role at the Academy">
                             </div>
                             <div class="form-field">
                                 <label>Email <span style="color:var(--text-muted);font-weight:400;">(read-only — contact the office to change)</span></label>
@@ -134,12 +138,13 @@
                 pAlert.style.display = 'none';
                 const title = document.getElementById('f-title').value;
                 const full_name = document.getElementById('f-name').value.trim();
+                const job_title = document.getElementById('f-job').value.trim();
                 const btn = document.getElementById('prof-btn');
                 if (!full_name) { pAlert.className='alert error'; pAlert.textContent='Full name is required.'; pAlert.style.display='block'; return; }
-                if (!ensureSafe(pAlert, [['Full Name', full_name], ['Title', title]])) return;
+                if (!ensureSafe(pAlert, [['Full Name', full_name], ['Title', title], ['Role', job_title]])) return;
                 btn.disabled = true; btn.textContent = 'Saving…';
                 try {
-                    const { error } = await db.from('profiles').update({ full_name, title: title || null }).eq('id', uid);
+                    const { error } = await db.from('profiles').update({ full_name, title: title || null, job_title: job_title || null }).eq('id', uid);
                     if (error) throw new Error(error.message);
                     refreshCache({ full_name });
                     pAlert.className='alert success'; pAlert.textContent='Profile updated.'; pAlert.style.display='block';
