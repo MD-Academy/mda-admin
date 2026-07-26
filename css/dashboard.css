@@ -86,7 +86,7 @@ body {
 }
 
 .nav-item svg { width: 19px; height: 19px; flex-shrink: 0; }
-.nav-divider { flex: 0 0 auto; height: 1px; min-height: 1px; background: #9aa7bd; margin: 12px 16px; border: 0; }
+.nav-divider { flex: 0 0 auto; height: 1px; min-height: 1px; background: rgba(255,255,255,0.16); margin: 12px 16px; border: 0; }
 .nav-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
 .nav-item.active {
     background: linear-gradient(135deg, #2b333f 0%, #b91c5c 145%);
