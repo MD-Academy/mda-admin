@@ -44,7 +44,7 @@
 
             const uid = auth.session.user.id;
             const email = auth.session.user.email || '—';
-            const { data: prof } = await db.from('profiles').select('full_name, title, job_title, avatar_url').eq('id', uid).single();
+            const { data: prof } = await db.from('profiles').select('full_name, title, job_title, specialty, bio, education, avatar_url').eq('id', uid).single();
             const p = prof || {};
             const initials = (p.full_name || 'A').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
 
@@ -76,6 +76,18 @@
                             <div class="form-field">
                                 <label>Role <span style="color:var(--text-muted);font-weight:400;">(shown to students — e.g. "Biology &amp; Physiology Teacher", "Technology &amp; Support")</span></label>
                                 <input type="text" id="f-job" value="${esc(p.job_title||'')}" maxlength="80" placeholder="Your role at the Academy">
+                            </div>
+                            <div class="form-field">
+                                <label>Specialty <span style="color:var(--text-muted);font-weight:400;">(e.g. "Physics &amp; Chemistry", "Human Physiology")</span></label>
+                                <input type="text" id="f-specialty" value="${esc(p.specialty||'')}" maxlength="120" placeholder="What you specialise in">
+                            </div>
+                            <div class="form-field">
+                                <label>About you <span style="color:var(--text-muted);font-weight:400;">(a short paragraph students &amp; staff can read)</span></label>
+                                <textarea id="f-bio" rows="4" maxlength="800" placeholder="A few sentences about who you are, your experience, and how you help students.">${esc(p.bio||'')}</textarea>
+                            </div>
+                            <div class="form-field">
+                                <label>Education <span style="color:var(--text-muted);font-weight:400;">(e.g. "MD, Tel Aviv University · MSc Biochemistry")</span></label>
+                                <input type="text" id="f-education" value="${esc(p.education||'')}" maxlength="200" placeholder="Your degrees / qualifications">
                             </div>
                             <div class="form-field">
                                 <label>Email <span style="color:var(--text-muted);font-weight:400;">(read-only — contact the office to change)</span></label>
@@ -139,12 +151,15 @@
                 const title = document.getElementById('f-title').value;
                 const full_name = document.getElementById('f-name').value.trim();
                 const job_title = document.getElementById('f-job').value.trim();
+                const specialty = document.getElementById('f-specialty').value.trim();
+                const bio = document.getElementById('f-bio').value.trim();
+                const education = document.getElementById('f-education').value.trim();
                 const btn = document.getElementById('prof-btn');
                 if (!full_name) { pAlert.className='alert error'; pAlert.textContent='Full name is required.'; pAlert.style.display='block'; return; }
-                if (!ensureSafe(pAlert, [['Full Name', full_name], ['Title', title], ['Role', job_title]])) return;
+                if (!ensureSafe(pAlert, [['Full Name', full_name], ['Title', title], ['Role', job_title], ['Specialty', specialty], ['About you', bio], ['Education', education]])) return;
                 btn.disabled = true; btn.textContent = 'Saving…';
                 try {
-                    const { error } = await db.from('profiles').update({ full_name, title: title || null, job_title: job_title || null }).eq('id', uid);
+                    const { error } = await db.from('profiles').update({ full_name, title: title || null, job_title: job_title || null, specialty: specialty || null, bio: bio || null, education: education || null }).eq('id', uid);
                     if (error) throw new Error(error.message);
                     refreshCache({ full_name });
                     pAlert.className='alert success'; pAlert.textContent='Profile updated.'; pAlert.style.display='block';
