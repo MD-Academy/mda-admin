@@ -365,7 +365,7 @@ body {
 }
 
 /* One line; scroll sideways inside the cell to reach the last (Delete) button. */
-.row-actions { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; max-width: 580px; padding-bottom: 2px; scrollbar-width: thin; }
+.row-actions { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; max-width: 640px; padding-bottom: 2px; scrollbar-width: thin; }
 .row-actions > * { flex-shrink: 0; white-space: nowrap; }
 .row-actions::-webkit-scrollbar { height: 6px; }
 .row-actions::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
