@@ -8,6 +8,7 @@ let SF_COURSES = [];        // courses this student is enrolled in (optional tag
 let SF_EDITING = null;      // note id being corrected
 let SF_UID = null, SF_NAME = '', SF_SUPER = false;
 let SF_PAGE = 1, SF_PAGE_SIZE = 25, SF_TOTAL = 0;   // only one page is ever fetched
+let SF_REPLIES = {};        // note_id -> [replies], both sides
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -121,6 +122,19 @@ async function loadFeedbackNotes() {
     SF_TOTAL = count || 0;
     // Deleting the last entry on a page leaves it empty — step back a page.
     if (SF_NOTES.length === 0 && SF_PAGE > 1) { SF_PAGE--; return loadFeedbackNotes(); }
+
+    // Reply threads for the notes on this page (both sides of the conversation).
+    SF_REPLIES = {};
+    const noteIds = SF_NOTES.map(n => n.id);
+    if (noteIds.length) {
+        const { data: reps } = await db.from('student_note_replies')
+            .select('id, note_id, author_role, author_name, body, created_at, read_by_staff')
+            .in('note_id', noteIds).order('created_at', { ascending: true });
+        (reps || []).forEach(r => { (SF_REPLIES[r.note_id] = SF_REPLIES[r.note_id] || []).push(r); });
+        // Mark any unread student replies now on screen as seen by staff.
+        markStudentRepliesRead(reps || []);
+    }
+
     renderFeedbackNotes();
     renderSfPager();
 }
@@ -189,9 +203,95 @@ function renderFeedbackNotes() {
             </div>
             <div style="font-size:14px;line-height:1.65;color:var(--text);white-space:pre-wrap;">${escapeHtml(n.body)}</div>
             ${actions ? `<div class="no-print" style="display:flex;gap:8px;">${actions}</div>` : ''}
+            ${threadHtml(n)}
         </div>`;
     }).join('') + `</div>
     <p style="margin-top:14px;font-size:12px;color:var(--text-muted);line-height:1.6;">Feedback written by teaching staff for this student. Each entry keeps the date and time it was written; corrections are marked as such. Entries sent to the student appear in their portal and raise a notification.${SF_TOTAL > SF_PAGE_SIZE ? ` <span class="no-print">Printing produces the entries shown on this page — switch to 100 / page first if you need more of the record in one document.</span>` : ''}</p>`;
+}
+
+// The conversation under one feedback entry + a staff reply box.
+// Only shared entries can have a conversation (internal notes never reach the student).
+function threadHtml(n) {
+    const replies = SF_REPLIES[n.id] || [];
+    const unread = replies.filter(r => r.author_role === 'student' && !r.read_by_staff).length;
+
+    const bubbles = replies.map(r => {
+        const staff = r.author_role === 'staff';
+        return `<div style="margin-top:9px;padding:10px 12px;border-radius:10px;
+                background:${staff ? '#fdf0f6' : '#eef4ff'};
+                border:1px solid ${staff ? '#f4d3e4' : '#d6e4ff'};
+                ${staff ? 'margin-right:22px;' : 'margin-left:22px;'}">
+            <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:3px;">
+                <strong style="color:var(--navy-800);">${staff ? escapeHtml(r.author_name || 'Staff') : escapeHtml(r.author_name || 'Student') + ' (student)'}</strong>
+                · ${escapeHtml(fmtStamp(r.created_at))}
+            </div>
+            <div style="font-size:13.5px;line-height:1.6;color:var(--text);white-space:pre-wrap;">${escapeHtml(r.body)}</div>
+        </div>`;
+    }).join('');
+
+    // No reply box on internal notes — the student can't see or answer those.
+    const box = n.visible_to_student ? `
+        <div class="no-print" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+            <textarea id="sf-reply-${n.id}" rows="2" placeholder="Reply to the student…"
+                style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:13.5px;resize:vertical;"></textarea>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <button class="btn btn-primary btn-sm" onclick="sendStaffReply('${n.id}', this)">Send reply</button>
+                <span id="sf-reply-msg-${n.id}" style="font-size:12px;"></span>
+            </div>
+        </div>` : '';
+
+    if (!replies.length && !n.visible_to_student) return '';
+
+    const header = replies.length
+        ? `<div style="font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--text-muted);margin-top:6px;">
+             Conversation${unread ? ` <span style="color:var(--crimson);">· ${unread} new from the student</span>` : ''}
+           </div>`
+        : '';
+
+    return `<div style="width:100%;border-top:1px dashed var(--border);margin-top:6px;padding-top:8px;">${header}${bubbles}${box}</div>`;
+}
+
+async function sendStaffReply(noteId, btn) {
+    const ta = document.getElementById('sf-reply-' + noteId);
+    const msg = document.getElementById('sf-reply-msg-' + noteId);
+    const text = (ta.value || '').trim();
+    msg.textContent = '';
+    if (!text) { msg.style.color = 'var(--red)'; msg.textContent = 'Write your reply first.'; return; }
+    if (!ensureSafe(null, [['Reply', text]])) { msg.style.color = 'var(--red)'; msg.textContent = 'Scripts or code are not allowed in a reply.'; return; }
+    btn.disabled = true; const label = btn.textContent; btn.textContent = 'Sending…';
+    try {
+        const ins = await db.from('student_note_replies').insert({
+            note_id: noteId, author_role: 'staff', author_id: SF_UID,
+            author_name: SF_NAME, body: text
+        }).select('id, note_id, author_role, author_name, body, created_at, read_by_staff').single();
+        if (ins.error) throw new Error(ins.error.message);
+        (SF_REPLIES[noteId] = SF_REPLIES[noteId] || []).push(ins.data);
+
+        // Email the student (best-effort; the reply is already saved).
+        let emailed = false;
+        try {
+            const r = await apiRequest('POST', '/admin/notify/feedback-reply', { reply_id: ins.data.id });
+            emailed = !!(r && r.emailed);
+        } catch (e) { /* saved anyway */ }
+
+        ta.value = '';
+        renderFeedbackNotes();
+        const m2 = document.getElementById('sf-reply-msg-' + noteId);
+        if (m2) { m2.style.color = 'var(--green)'; m2.textContent = emailed ? 'Sent — the student was emailed ✓' : 'Sent ✓'; setTimeout(() => { m2.textContent = ''; }, 4000); }
+    } catch (err) {
+        msg.style.color = 'var(--red)'; msg.textContent = err.message || 'Could not send.';
+        btn.disabled = false; btn.textContent = label;
+    }
+}
+
+// Once staff have seen student replies on screen, stop them counting as new.
+async function markStudentRepliesRead(reps) {
+    const unread = reps.filter(r => r.author_role === 'student' && !r.read_by_staff).map(r => r.id);
+    if (!unread.length) return;
+    try { await db.from('student_note_replies').update({ read_by_staff: true }).in('id', unread); } catch (e) { /* non-critical */ }
+    unread.forEach(id => {
+        for (const arr of Object.values(SF_REPLIES)) { const r = arr.find(x => x.id === id); if (r) r.read_by_staff = true; }
+    });
 }
 
 function startFeedbackEdit(id) {
