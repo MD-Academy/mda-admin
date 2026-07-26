@@ -61,6 +61,10 @@ function renderLayout(activeId, pageTitle, pageSub, profile) {
                     ${pageSub ? `<div class="page-sub">${pageSub}</div>` : ''}
                 </div>
                 <div class="topbar-user">
+                    <button class="topbar-bell" id="admin-bell" title="Notifications" onclick="openAdminNotifs()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        <span class="notif-badge" id="admin-notif-badge" style="display:none;">0</span>
+                    </button>
                     <div class="user-info">
                         <strong style="display:inline-flex;align-items:center;gap:7px;align-self:flex-start;margin-bottom:5px;background:linear-gradient(135deg,#b91c5c 0%,#7a2747 50%,#20262f 100%);color:#fff;font-weight:700;font-size:13.5px;padding:6px 13px;border-radius:10px;text-shadow:0 1px 2px rgba(0,0,0,.3);box-shadow:0 4px 12px rgba(185,28,92,.3),0 2px 4px rgba(32,38,47,.35),inset 0 1px 0 rgba(255,255,255,.28),inset 0 -2px 4px rgba(0,0,0,.25);">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -93,6 +97,133 @@ function renderLayout(activeId, pageTitle, pageSub, profile) {
     document.getElementById('logout-btn').addEventListener('click', signOut);
     _setupAvatarUpload();
     _startAccountWatch();
+    _initAdminNotifs(isSuper);
+}
+
+// ── NOTIFICATION BELL (student replies to feedback) ──────────
+// Surfaces replies students post to feedback. A regular teacher sees replies
+// to their OWN feedback; a super-admin sees them all. Read state is per-admin,
+// tracked in notification_reads (its student_id column is really "who saw it").
+let _adminNotifs = [];      // [{id, title, sub, student_id, date}]
+let _adminUid = null;
+
+function _adminNotifEsc(s) {
+    if (!s) return '';
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function _adminNotifDate(d) { try { return new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+
+async function _initAdminNotifs(isSuper) {
+    try {
+        const { data: { session } } = await db.auth.getSession();
+        if (!session) return;
+        _adminUid = session.user.id;
+
+        // Unread student replies. Join to the parent note for author (whose feedback)
+        // and student (who to open). Regular admins only see replies to their own feedback.
+        let q = db.from('student_note_replies')
+            .select('id, author_name, body, created_at, student_notes!inner(author_id, student_id)')
+            .eq('author_role', 'student')
+            .order('created_at', { ascending: false })
+            .limit(100);
+        if (!isSuper) q = q.eq('student_notes.author_id', _adminUid);
+
+        const [repRes, readRes] = await Promise.all([
+            q,
+            db.from('notification_reads').select('ref_id').eq('student_id', _adminUid).eq('kind', 'reply')
+        ]);
+        const readSet = new Set((readRes.data || []).map(r => r.ref_id));
+
+        _adminNotifs = [];
+        (repRes.data || []).forEach(r => {
+            if (readSet.has(r.id)) return;
+            const note = r.student_notes || {};
+            const snip = String(r.body || '').replace(/\s+/g, ' ').trim();
+            _adminNotifs.push({
+                id: r.id,
+                student_id: note.student_id,
+                title: snip.length > 110 ? snip.slice(0, 110) + '…' : snip,
+                sub: `${r.author_name || 'A student'} replied · ` + _adminNotifDate(r.created_at),
+                date: r.created_at
+            });
+        });
+        _renderAdminBell();
+    } catch (e) { /* notifications must never block the page */ }
+}
+
+function _renderAdminBell() {
+    const badge = document.getElementById('admin-notif-badge');
+    if (!badge) return;
+    const n = _adminNotifs.length;
+    badge.textContent = n > 9 ? '9+' : String(n);
+    badge.style.display = n ? 'flex' : 'none';
+    const ov = document.getElementById('admin-notif-overlay');
+    if (ov && ov.classList.contains('open')) _renderAdminNotifList();
+}
+
+function _ensureAdminNotifModal() {
+    if (document.getElementById('admin-notif-overlay')) return;
+    const ov = document.createElement('div');
+    ov.className = 'notif-overlay';
+    ov.id = 'admin-notif-overlay';
+    ov.innerHTML = `
+        <div class="notif-box" role="dialog" aria-modal="true">
+            <div class="notif-head"><h3>Notifications</h3>
+                <button class="notif-close" onclick="closeAdminNotifs()" title="Close">&times;</button></div>
+            <div class="notif-list" id="admin-notif-list"></div>
+            <div class="notif-foot" id="admin-notif-foot"></div>
+        </div>`;
+    ov.addEventListener('click', e => { if (e.target === ov) closeAdminNotifs(); });
+    document.body.appendChild(ov);
+}
+
+function openAdminNotifs() { _ensureAdminNotifModal(); _renderAdminNotifList(); document.getElementById('admin-notif-overlay').classList.add('open'); }
+function closeAdminNotifs() { const ov = document.getElementById('admin-notif-overlay'); if (ov) ov.classList.remove('open'); }
+
+function _renderAdminNotifList() {
+    const list = document.getElementById('admin-notif-list');
+    const foot = document.getElementById('admin-notif-foot');
+    if (!list) return;
+    if (_adminNotifs.length === 0) {
+        list.innerHTML = `<div class="notif-empty">🎉 You're all caught up — no new replies.</div>`;
+        foot.innerHTML = '';
+        return;
+    }
+    const icon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    list.innerHTML = `<div class="notif-group-label">↩️ Replies from students</div>` + _adminNotifs.map(n => `
+        <div class="notif-item fb" style="cursor:pointer;" onclick="openAdminReply('${n.id}','${n.student_id || ''}')">
+            <span class="ni-icon">${icon}</span>
+            <div class="ni-body"><div class="ni-title">${_adminNotifEsc(n.title)}</div><div class="ni-sub">${_adminNotifEsc(n.sub)}</div></div>
+            <button class="ni-x" title="Dismiss" onclick="event.stopPropagation();dismissAdminNotif('${n.id}')">&times;</button>
+        </div>`).join('');
+    foot.innerHTML = `<span style="font-size:13px;color:var(--text-muted);">${_adminNotifs.length} new</span>
+        <button class="btn btn-ghost btn-sm" onclick="markAllAdminNotifsRead()">Mark all as read</button>`;
+}
+
+async function _writeAdminReads(ids) {
+    if (!_adminUid || !ids.length) return;
+    const rows = ids.map(id => ({ student_id: _adminUid, kind: 'reply', ref_id: id }));
+    try { await db.from('notification_reads').upsert(rows, { onConflict: 'student_id,kind,ref_id' }); } catch (e) { /* ignore */ }
+}
+
+function openAdminReply(replyId, studentId) {
+    _writeAdminReads([replyId]);   // opening it counts as read
+    if (studentId) window.location.href = `student-feedback.html?id=${encodeURIComponent(studentId)}`;
+}
+
+async function dismissAdminNotif(id) {
+    _adminNotifs = _adminNotifs.filter(n => n.id !== id);
+    _renderAdminBell();
+    _renderAdminNotifList();
+    await _writeAdminReads([id]);
+}
+
+async function markAllAdminNotifsRead() {
+    const ids = _adminNotifs.map(n => n.id);
+    _adminNotifs = [];
+    _renderAdminBell();
+    _renderAdminNotifList();
+    await _writeAdminReads(ids);
 }
 
 // Poll every 60s: if this admin gets suspended or loses admin rights while

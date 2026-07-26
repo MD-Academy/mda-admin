@@ -189,6 +189,32 @@ body {
 .topbar-user .user-info strong { font-size: 14px; color: var(--text); }
 .topbar-user .user-info span { font-size: 12px; color: var(--text-muted); }
 
+/* ── NOTIFICATION BELL ── */
+.topbar-bell { position: relative; border: none; background: #f1f5f9; width: 38px; height: 38px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--navy-800); flex-shrink: 0; transition: background .15s; }
+.topbar-bell:hover { background: #e2e8f0; }
+.topbar-bell svg { width: 19px; height: 19px; }
+.notif-badge { position: absolute; top: -7px; right: -7px; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 999px; background: var(--crimson); color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 5px rgba(185,28,92,.45); }
+.notif-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.5); display: none; align-items: flex-start; justify-content: center; z-index: 2100; padding: 80px 20px 20px; }
+.notif-overlay.open { display: flex; }
+.notif-box { background: #fff; border-radius: 16px; width: 100%; max-width: 460px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 50px rgba(15,23,42,.3); }
+.notif-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.notif-head h3 { margin: 0; font-size: 17px; color: var(--navy-800); }
+.notif-close { border: none; background: none; font-size: 24px; line-height: 1; color: var(--text-muted); cursor: pointer; padding: 0 4px; border-radius: 6px; }
+.notif-close:hover { background: #f1f5f9; }
+.notif-list { padding: 12px 16px; overflow-y: auto; }
+.notif-group-label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; margin: 10px 4px 8px; }
+.notif-item { display: flex; gap: 10px; align-items: flex-start; padding: 11px 12px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; }
+.notif-item .ni-icon { flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: #fdf0f6; color: #b01455; }
+.notif-item.fb { transition: border-color .15s, background .15s; }
+.notif-item.fb:hover { border-color: #f0c2d8; background: #fffafc; }
+.notif-item .ni-body { flex: 1; min-width: 0; }
+.notif-item .ni-title { font-weight: 500; font-size: 14px; color: var(--text); line-height: 1.5; }
+.notif-item .ni-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.notif-item .ni-x { flex-shrink: 0; border: none; background: none; color: var(--text-muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px; border-radius: 6px; }
+.notif-item .ni-x:hover { background: #fee2e2; color: #dc2626; }
+.notif-foot { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.notif-empty { text-align: center; padding: 30px 16px; color: var(--text-muted); }
+
 .content { padding: 32px; flex: 1; }
 
 /* ── STAT CARDS ── */

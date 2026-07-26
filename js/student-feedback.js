@@ -286,7 +286,19 @@ async function sendStaffReply(noteId, btn) {
 
 // Once staff have seen student replies on screen, stop them counting as new.
 async function markStudentRepliesRead(reps) {
+    const studentReplyIds = reps.filter(r => r.author_role === 'student').map(r => r.id);
     const unread = reps.filter(r => r.author_role === 'student' && !r.read_by_staff).map(r => r.id);
+
+    // Clear this admin's bell for every student reply now on screen (per-admin read).
+    if (studentReplyIds.length && typeof _writeAdminReads === 'function') {
+        _writeAdminReads(studentReplyIds);
+        if (typeof _adminNotifs !== 'undefined') {
+            const seen = new Set(studentReplyIds);
+            _adminNotifs = _adminNotifs.filter(n => !seen.has(n.id));
+            if (typeof _renderAdminBell === 'function') _renderAdminBell();
+        }
+    }
+
     if (!unread.length) return;
     try { await db.from('student_note_replies').update({ read_by_staff: true }).in('id', unread); } catch (e) { /* non-critical */ }
     unread.forEach(id => {
