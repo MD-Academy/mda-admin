@@ -9,6 +9,7 @@ let SF_EDITING = null;      // note id being corrected
 let SF_UID = null, SF_NAME = '', SF_SUPER = false;
 let SF_PAGE = 1, SF_PAGE_SIZE = 25, SF_TOTAL = 0;   // only one page is ever fetched
 let SF_REPLIES = {};        // note_id -> [replies], both sides
+let SF_NEW_REPLIES = new Set();   // student-reply ids unread at load (highlight this view)
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -125,13 +126,16 @@ async function loadFeedbackNotes() {
 
     // Reply threads for the notes on this page (both sides of the conversation).
     SF_REPLIES = {};
+    SF_NEW_REPLIES = new Set();
     const noteIds = SF_NOTES.map(n => n.id);
     if (noteIds.length) {
         const { data: reps } = await db.from('student_note_replies')
             .select('id, note_id, author_role, author_name, body, created_at, read_by_staff')
             .in('note_id', noteIds).order('created_at', { ascending: true });
         (reps || []).forEach(r => { (SF_REPLIES[r.note_id] = SF_REPLIES[r.note_id] || []).push(r); });
-        // Mark any unread student replies now on screen as seen by staff.
+        // Which student replies are new (unread) — captured before we mark them read,
+        // so the highlight survives this page view.
+        (reps || []).forEach(r => { if (r.author_role === 'student' && !r.read_by_staff) SF_NEW_REPLIES.add(r.id); });
         markStudentRepliesRead(reps || []);
     }
 
@@ -217,15 +221,15 @@ function threadHtml(n) {
 
     const bubbles = replies.map(r => {
         const staff = r.author_role === 'staff';
-        return `<div style="margin-top:9px;padding:10px 12px;border-radius:10px;
-                background:${staff ? '#fdf0f6' : '#eef4ff'};
-                border:1px solid ${staff ? '#f4d3e4' : '#d6e4ff'};
-                ${staff ? 'margin-right:22px;' : 'margin-left:22px;'}">
-            <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:3px;">
-                <strong style="color:var(--navy-800);">${staff ? escapeHtml(r.author_name || 'Staff') : escapeHtml(r.author_name || 'Student') + ' (student)'}</strong>
-                · ${escapeHtml(fmtStamp(r.created_at))}
+        const isNew = !staff && SF_NEW_REPLIES.has(r.id);
+        const cls = staff ? 'reply-mine' : ('reply-in' + (isNew ? ' reply-new' : ''));
+        return `<div class="reply-row ${cls}">
+            <div class="reply-head">
+                <strong>${staff ? escapeHtml(r.author_name || 'Staff') : escapeHtml(r.author_name || 'Student') + ' (student)'}</strong>
+                <span>· ${escapeHtml(fmtStamp(r.created_at))}</span>
+                ${isNew ? '<span class="reply-new-pill">New</span>' : ''}
             </div>
-            <div style="font-size:13.5px;line-height:1.6;color:var(--text);white-space:pre-wrap;">${escapeHtml(r.body)}</div>
+            <div class="reply-body">${escapeHtml(r.body)}</div>
         </div>`;
     }).join('');
 
@@ -243,8 +247,8 @@ function threadHtml(n) {
     if (!replies.length && !n.visible_to_student) return '';
 
     const header = replies.length
-        ? `<div style="font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--text-muted);margin-top:6px;">
-             Conversation${unread ? ` <span style="color:var(--crimson);">· ${unread} new from the student</span>` : ''}
+        ? `<div style="font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--text-muted);margin-top:6px;display:flex;align-items:center;gap:8px;">
+             <span>Conversation</span>${unread ? `<span class="reply-new-pill">${unread} new</span>` : ''}
            </div>`
         : '';
 
