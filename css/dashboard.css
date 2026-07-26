@@ -346,6 +346,11 @@ body {
     vertical-align: middle;
 }
 .data-table tbody tr:hover { background: var(--bg); }
+
+/* Round student avatar in the Students list (profile photo, or initials). */
+.row-avatar { flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; background: #eef2f8; border: 1px solid var(--border); }
+.row-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.row-avatar.is-fallback::after { content: attr(data-initials); font-size: 12.5px; font-weight: 700; color: #64748b; letter-spacing: .3px; }
 /* Highlight a row/item right after it's reordered (move up/down). */
 @keyframes rowMoved { 0% { background-color: rgba(37,99,235,.20); } 100% { background-color: transparent; } }
 .row-just-moved, .row-just-moved > td { animation: rowMoved 0.9s ease-out; }

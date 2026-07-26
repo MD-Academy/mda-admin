@@ -13,6 +13,19 @@ let courseFilter = '';
 let searchTimer = null;
 let EMAIL_COL = true;          // falls back to false if the profiles.email migration isn't applied yet
 
+// A round avatar for a student: their profile photo, or their initials if none.
+function studentAvatar(s) {
+    const initials = escapeHtml(studentInitials(s.full_name));
+    if (s.avatar_url) {
+        // If the image fails to load, fall back to initials via the parent's ::after.
+        return `<span class="row-avatar" data-initials="${initials}"><img src="${escapeHtml(s.avatar_url)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('is-fallback');this.remove();"></span>`;
+    }
+    return `<span class="row-avatar is-fallback" data-initials="${initials}"></span>`;
+}
+function studentInitials(name) {
+    return (name || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+}
+
 // Populate the course-filter dropdown once.
 async function loadCourseOptions() {
     const { data, error } = await db.from('courses').select('id, name, expires_at').order('name', { ascending: true });
@@ -94,8 +107,8 @@ async function loadStudents() {
     const to = from + pageSize - 1;
 
     const cols = EMAIL_COL
-        ? 'id, full_name, email, status, expiry_date, created_at'
-        : 'id, full_name, status, expiry_date, created_at';
+        ? 'id, full_name, email, avatar_url, status, expiry_date, created_at'
+        : 'id, full_name, avatar_url, status, expiry_date, created_at';
     let q = db.from('profiles').select(cols, { count: 'exact' }).eq('role', 'student');
     if (idFilter) q = q.in('id', idFilter);
     const term = searchQuery.replace(/[%,()]/g, ' ').trim();   // keep the .or() filter syntax safe
@@ -186,7 +199,7 @@ function renderStudents(students) {
         return `
             <tr>
                 <td><input type="checkbox" class="row-check" ${selectedIds.has(s.id) ? 'checked' : ''} onclick="toggleSelect('${s.id}', this)"></td>
-                <td><strong>${escapeHtml(s.full_name || '—')}</strong></td>
+                <td><div style="display:flex;align-items:center;gap:10px;">${studentAvatar(s)}<strong>${escapeHtml(s.full_name || '—')}</strong></div></td>
                 <td>${escapeHtml(s.email || '—')}</td>
                 <td>${courseCell}</td>
                 <td>${statusBadge}</td>
