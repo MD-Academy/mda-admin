@@ -19,10 +19,10 @@ const NAV_ITEMS = [
     { id: 'admins', label: 'Admins', href: 'admins.html', superadminOnly: true, icon: '<path d="M12 1l3 5 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L3 7l6-1z"/>' },
     { id: 'feedback', label: 'Feedback', href: 'feedback.html', superadminOnly: true, icon: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
     { id: 'appearance', label: 'Appearance', href: 'appearance.html', superadminOnly: true, icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>' },
+    { id: 'staff', label: 'Staff', href: 'staff.html', dividerBefore: true, icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
     { id: 'work-hours', label: 'Work Hours', href: 'work-hours.html', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
-    { id: 'staff', label: 'Staff', href: 'staff.html', icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
-    { id: 'guide', label: 'User Guide', href: 'guide.html', icon: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>' },
-    { id: 'profile', label: 'My Profile', href: 'profile.html', icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' }
+    { id: 'profile', label: 'My Profile', href: 'profile.html', icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
+    { id: 'guide', label: 'User Guide', href: 'guide.html', icon: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>' }
 ];
 
 function renderLayout(activeId, pageTitle, pageSub, profile) {
@@ -30,6 +30,7 @@ function renderLayout(activeId, pageTitle, pageSub, profile) {
 
     const isSuper = profile.role === 'superadmin';
     const navHtml = NAV_ITEMS.filter(item => !item.superadminOnly || isSuper).map(item => `
+        ${item.dividerBefore ? '<div class="nav-divider"></div>' : ''}
         <a href="${item.href}" class="nav-item ${item.id === activeId ? 'active' : ''}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${item.icon}</svg>
             ${item.label}
