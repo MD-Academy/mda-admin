@@ -227,7 +227,7 @@ function renderStudents(students) {
                 <td>${expiryText}</td>
                 <td>
                     <div class="row-actions">
-                        <button class="btn btn-ghost btn-sm" onclick="openFeedback('${s.id}')" style="color:var(--navy-800);border-color:#c7d2e4;">💬 Messages</button>
+                        <button class="btn btn-ghost btn-sm" onclick="openFeedback('${s.id}')" style="color:var(--navy-800);border-color:#c7d2e4;">💬 Messages<span class="msg-badge" id="msgbadge-${s.id}" style="display:none;">0</span></button>
                         <button class="btn btn-ghost btn-sm" onclick="openActivity('${s.id}')">Activity</button>
                         <button class="btn btn-ghost btn-sm" onclick="openNotices('${s.id}')">Notices</button>
                         <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
@@ -241,6 +241,55 @@ function renderStudents(students) {
         `;
     }).join('');
     updateBulkBar();
+    updateMessageBadges(students.map(s => s.id));
+}
+
+// Unread student → staff items (messages + replies) per student, on the Messages button.
+async function updateMessageBadges(studentIds) {
+    if (!studentIds || !studentIds.length) return;
+    try {
+        const { data: { session } } = await db.auth.getSession();
+        if (!session) return;
+        const uid = session.user.id;
+
+        // All notes for these students (id → student), plus which are student-initiated.
+        const { data: notes } = await db.from('student_notes')
+            .select('id, student_id, initiated_by').in('student_id', studentIds);
+        const noteStudent = {};
+        const msgNoteIds = [];
+        (notes || []).forEach(n => { noteStudent[n.id] = n.student_id; if (n.initiated_by === 'student') msgNoteIds.push(n.id); });
+        const noteIds = (notes || []).map(n => n.id);
+
+        // Student replies in those threads.
+        let replies = [];
+        if (noteIds.length) {
+            const r = await db.from('student_note_replies')
+                .select('id, note_id').eq('author_role', 'student').in('note_id', noteIds);
+            replies = r.data || [];
+        }
+
+        // What this admin has already read.
+        const refIds = msgNoteIds.concat(replies.map(r => r.id));
+        let readSet = new Set();
+        if (refIds.length) {
+            const rd = await db.from('notification_reads')
+                .select('ref_id').eq('student_id', uid).in('kind', ['feedback', 'reply']).in('ref_id', refIds);
+            readSet = new Set((rd.data || []).map(x => x.ref_id));
+        }
+
+        // Tally per student.
+        const count = {};
+        msgNoteIds.forEach(id => { if (!readSet.has(id)) count[noteStudent[id]] = (count[noteStudent[id]] || 0) + 1; });
+        replies.forEach(r => { if (!readSet.has(r.id)) { const sid = noteStudent[r.note_id]; if (sid) count[sid] = (count[sid] || 0) + 1; } });
+
+        studentIds.forEach(sid => {
+            const el = document.getElementById('msgbadge-' + sid);
+            if (!el) return;
+            const n = count[sid] || 0;
+            el.textContent = n > 9 ? '9+' : String(n);
+            el.style.display = n ? 'inline-flex' : 'none';
+        });
+    } catch (e) { /* badges are non-critical */ }
 }
 
 // ── BULK SELECTION ──
