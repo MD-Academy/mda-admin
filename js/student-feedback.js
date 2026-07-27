@@ -223,7 +223,7 @@ function renderFeedbackNotes() {
                         <strong style="color:var(--navy-800);">${escapeHtml(fmtStamp(n.created_at))}</strong>
                         · Message from ${escapeHtml(SF_STUDENT.full_name || 'the student')}
                     </div>
-                    <span style="font-size:11px;font-weight:700;color:${isNew ? 'var(--crimson)' : 'var(--text-muted)'};">${isNew ? 'New message' : 'Message to you'}</span>
+                    <span class="sf-msg-badge">${isNew ? '● New message' : 'Message to you'}</span>
                 </div>
                 <div style="font-size:14px;line-height:1.65;color:var(--text);white-space:pre-wrap;">${escapeHtml(n.body)}</div>
                 ${del}

@@ -362,12 +362,15 @@ body {
 .photo-lightbox img { width: 300px; height: 300px; max-width: 80vw; max-height: 70vh; object-fit: cover; border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); border: 3px solid #fff; }
 .photo-lightbox .pl-name { color: #fff; font-size: 16px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
 
-/* A student-initiated message: resting card stands off the page… */
-.sf-msg { background: #e9eef7; border-color: #cdd9ec; box-shadow: 0 1px 5px rgba(15,23,42,.07); }
-/* …and pops green with a pulse when it's new. */
-.sf-msg.sf-msg-new { background: #dcfce7; border-color: #86efac; box-shadow: 0 0 0 3px rgba(74,222,128,.45); animation: sfMsgPulse 1.5s ease-in-out 3; }
-@keyframes sfMsgPulse { 0%,100% { box-shadow: 0 0 0 3px rgba(74,222,128,.28); } 50% { box-shadow: 0 0 0 7px rgba(74,222,128,.5); } }
+/* A student-initiated message: clearly blue so it stands off the page… */
+.sf-msg { background: #dbeafe; border-color: #93c5fd; border-left-width: 6px !important; box-shadow: 0 3px 12px rgba(37,99,235,.18); }
+/* …and turns green + pulses when it's new. */
+.sf-msg.sf-msg-new { background: #dcfce7; border-color: #4ade80; box-shadow: 0 0 0 3px rgba(74,222,128,.5); animation: sfMsgPulse 1.5s ease-in-out 4; }
+@keyframes sfMsgPulse { 0%,100% { box-shadow: 0 0 0 3px rgba(74,222,128,.3); } 50% { box-shadow: 0 0 0 8px rgba(74,222,128,.55); } }
 @media (prefers-reduced-motion: reduce) { .sf-msg.sf-msg-new { animation: none; } }
+/* Bold pill label on a message */
+.sf-msg-badge { font-size: 10px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: #fff; background: #2563eb; padding: 3px 10px; border-radius: 999px; }
+.sf-msg-new .sf-msg-badge { background: #16a34a; }
 
 /* ── Staff directory cards ── */
 .staff-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); grid-auto-rows: 1fr; gap: 18px; }
