@@ -121,34 +121,41 @@ async function _initAdminNotifs(isSuper) {
         if (!session) return;
         _adminUid = session.user.id;
 
-        // Unread student replies. Join to the parent note for author (whose feedback)
-        // and student (who to open). Regular admins only see replies to their own feedback.
-        let q = db.from('student_note_replies')
-            .select('id, author_name, body, created_at, student_notes!inner(author_id, student_id)')
+        // Two kinds of inbound-from-students, addressed to me (or all, for super):
+        //   1) student replies in any thread that's with me
+        //   2) new messages a student started with me (initiated_by = 'student')
+        let repQ = db.from('student_note_replies')
+            .select('id, author_name, body, created_at, student_notes!inner(staff_id, student_id)')
             .eq('author_role', 'student')
-            .order('created_at', { ascending: false })
-            .limit(100);
-        if (!isSuper) q = q.eq('student_notes.author_id', _adminUid);
+            .order('created_at', { ascending: false }).limit(100);
+        let msgQ = db.from('student_notes')
+            .select('id, author_name, body, created_at, student_id, staff_id')
+            .eq('initiated_by', 'student')
+            .order('created_at', { ascending: false }).limit(100);
+        if (!isSuper) { repQ = repQ.eq('student_notes.staff_id', _adminUid); msgQ = msgQ.eq('staff_id', _adminUid); }
 
-        const [repRes, readRes] = await Promise.all([
-            q,
-            db.from('notification_reads').select('ref_id').eq('student_id', _adminUid).eq('kind', 'reply')
+        const [repRes, msgRes, readRepRes, readMsgRes] = await Promise.all([
+            repQ, msgQ,
+            db.from('notification_reads').select('ref_id').eq('student_id', _adminUid).eq('kind', 'reply'),
+            db.from('notification_reads').select('ref_id').eq('student_id', _adminUid).eq('kind', 'feedback')
         ]);
-        const readSet = new Set((readRes.data || []).map(r => r.ref_id));
+        const readReplies = new Set((readRepRes.data || []).map(r => r.ref_id));
+        const readMsgs = new Set((readMsgRes.data || []).map(r => r.ref_id));
+        const snip = t => { const s = String(t || '').replace(/\s+/g, ' ').trim(); return s.length > 110 ? s.slice(0, 110) + '…' : s; };
 
         _adminNotifs = [];
-        (repRes.data || []).forEach(r => {
-            if (readSet.has(r.id)) return;
-            const note = r.student_notes || {};
-            const snip = String(r.body || '').replace(/\s+/g, ' ').trim();
-            _adminNotifs.push({
-                id: r.id,
-                student_id: note.student_id,
-                title: snip.length > 110 ? snip.slice(0, 110) + '…' : snip,
-                sub: `${r.author_name || 'A student'} replied · ` + _adminNotifDate(r.created_at),
-                date: r.created_at
-            });
+        (msgRes.data || []).forEach(m => {
+            if (readMsgs.has(m.id)) return;
+            _adminNotifs.push({ kind: 'feedback', id: m.id, student_id: m.student_id,
+                title: snip(m.body), sub: `${m.author_name || 'A student'} messaged you · ` + _adminNotifDate(m.created_at), date: m.created_at });
         });
+        (repRes.data || []).forEach(r => {
+            if (readReplies.has(r.id)) return;
+            const note = r.student_notes || {};
+            _adminNotifs.push({ kind: 'reply', id: r.id, student_id: note.student_id,
+                title: snip(r.body), sub: `${r.author_name || 'A student'} replied · ` + _adminNotifDate(r.created_at), date: r.created_at });
+        });
+        _adminNotifs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         _renderAdminBell();
     } catch (e) { /* notifications must never block the page */ }
 }
@@ -192,40 +199,40 @@ function _renderAdminNotifList() {
         return;
     }
     const icon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-    list.innerHTML = `<div class="notif-group-label">↩️ Replies from students</div>` + _adminNotifs.map(n => `
-        <div class="notif-item fb" style="cursor:pointer;" onclick="openAdminReply('${n.id}','${n.student_id || ''}')">
+    list.innerHTML = `<div class="notif-group-label">💬 Messages from students</div>` + _adminNotifs.map(n => `
+        <div class="notif-item fb" style="cursor:pointer;" onclick="openAdminNotif('${n.kind}','${n.id}','${n.student_id || ''}')">
             <span class="ni-icon">${icon}</span>
             <div class="ni-body"><div class="ni-title">${_adminNotifEsc(n.title)}</div><div class="ni-sub">${_adminNotifEsc(n.sub)}</div></div>
-            <button class="ni-x" title="Dismiss" onclick="event.stopPropagation();dismissAdminNotif('${n.id}')">&times;</button>
+            <button class="ni-x" title="Dismiss" onclick="event.stopPropagation();dismissAdminNotif('${n.kind}','${n.id}')">&times;</button>
         </div>`).join('');
     foot.innerHTML = `<span style="font-size:13px;color:var(--text-muted);">${_adminNotifs.length} new</span>
         <button class="btn btn-ghost btn-sm" onclick="markAllAdminNotifsRead()">Mark all as read</button>`;
 }
 
-async function _writeAdminReads(ids) {
-    if (!_adminUid || !ids.length) return;
-    const rows = ids.map(id => ({ student_id: _adminUid, kind: 'reply', ref_id: id }));
+async function _writeAdminReads(items) {
+    if (!_adminUid || !items.length) return;
+    const rows = items.map(it => ({ student_id: _adminUid, kind: it.kind, ref_id: it.id }));
     try { await db.from('notification_reads').upsert(rows, { onConflict: 'student_id,kind,ref_id' }); } catch (e) { /* ignore */ }
 }
 
-function openAdminReply(replyId, studentId) {
-    _writeAdminReads([replyId]);   // opening it counts as read
+function openAdminNotif(kind, id, studentId) {
+    _writeAdminReads([{ kind, id }]);   // opening it counts as read
     if (studentId) window.location.href = `student-feedback.html?id=${encodeURIComponent(studentId)}`;
 }
 
-async function dismissAdminNotif(id) {
-    _adminNotifs = _adminNotifs.filter(n => n.id !== id);
+async function dismissAdminNotif(kind, id) {
+    _adminNotifs = _adminNotifs.filter(n => !(n.kind === kind && n.id === id));
     _renderAdminBell();
     _renderAdminNotifList();
-    await _writeAdminReads([id]);
+    await _writeAdminReads([{ kind, id }]);
 }
 
 async function markAllAdminNotifsRead() {
-    const ids = _adminNotifs.map(n => n.id);
+    const items = _adminNotifs.map(n => ({ kind: n.kind, id: n.id }));
     _adminNotifs = [];
     _renderAdminBell();
     _renderAdminNotifList();
-    await _writeAdminReads(ids);
+    await _writeAdminReads(items);
 }
 
 // Poll every 60s: if this admin gets suspended or loses admin rights while

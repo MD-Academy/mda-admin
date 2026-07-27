@@ -10,6 +10,21 @@ let SF_UID = null, SF_NAME = '', SF_SUPER = false;
 let SF_PAGE = 1, SF_PAGE_SIZE = 25, SF_TOTAL = 0;   // only one page is ever fetched
 let SF_REPLIES = {};        // note_id -> [replies], both sides
 let SF_NEW_REPLIES = new Set();   // student-reply ids unread at load (highlight this view)
+let SF_NEW_MSGS = new Set();      // student-initiated note ids unread by me at load
+
+// Mark student-initiated messages read for THIS admin's bell, and drop them from it.
+async function _markAdminMsgsRead(ids) {
+    if (!ids.length || !SF_UID) return;
+    try {
+        const rows = ids.map(id => ({ student_id: SF_UID, kind: 'feedback', ref_id: id }));
+        await db.from('notification_reads').upsert(rows, { onConflict: 'student_id,kind,ref_id' });
+    } catch (e) { /* non-critical */ }
+    if (typeof _adminNotifs !== 'undefined') {
+        const seen = new Set(ids);
+        _adminNotifs = _adminNotifs.filter(n => !(n.kind === 'feedback' && seen.has(n.id)));
+        if (typeof _renderAdminBell === 'function') _renderAdminBell();
+    }
+}
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -26,7 +41,7 @@ async function initStudentFeedback(studentId, profile) {
 
     const { data: p } = await db.from('profiles').select('id, full_name, email').eq('id', studentId).single();
     SF_STUDENT = p || { id: studentId, full_name: 'Student', email: '' };
-    renderLayout('students', 'Teacher Feedback', SF_STUDENT.full_name || 'Student', profile);
+    renderLayout('students', 'Feedback & Messages', SF_STUDENT.full_name || 'Student', profile);
 
     // Courses the student is on — lets a note optionally be tagged to one.
     const { data: enr } = await db.from('course_enrollments').select('course_id').eq('student_id', studentId);
@@ -109,7 +124,7 @@ async function initStudentFeedback(studentId, profile) {
 async function loadFeedbackNotes() {
     const from = (SF_PAGE - 1) * SF_PAGE_SIZE, to = from + SF_PAGE_SIZE - 1;
     const { data, count, error } = await db.from('student_notes')
-        .select('id, body, course_id, visible_to_student, author_id, author_name, created_at, edited_at, emailed_at',
+        .select('id, body, course_id, visible_to_student, author_id, author_name, initiated_by, staff_id, staff_name, created_at, edited_at, emailed_at',
                 { count: 'exact' })
         .eq('student_id', SF_STUDENT.id)
         .order('created_at', { ascending: false })
@@ -123,6 +138,18 @@ async function loadFeedbackNotes() {
     SF_TOTAL = count || 0;
     // Deleting the last entry on a page leaves it empty — step back a page.
     if (SF_NOTES.length === 0 && SF_PAGE > 1) { SF_PAGE--; return loadFeedbackNotes(); }
+
+    // Student-initiated messages that are new to me (unread on my bell) → highlight.
+    SF_NEW_MSGS = new Set();
+    const msgIds = SF_NOTES.filter(n => n.initiated_by === 'student').map(n => n.id);
+    if (msgIds.length && SF_UID) {
+        const { data: readMsgs } = await db.from('notification_reads')
+            .select('ref_id').eq('student_id', SF_UID).eq('kind', 'feedback').in('ref_id', msgIds);
+        const readSet = new Set((readMsgs || []).map(r => r.ref_id));
+        msgIds.forEach(id => { if (!readSet.has(id)) SF_NEW_MSGS.add(id); });
+        // Opening the page clears these from my bell.
+        _markAdminMsgsRead(msgIds);
+    }
 
     // Reply threads for the notes on this page (both sides of the conversation).
     SF_REPLIES = {};
@@ -186,6 +213,23 @@ function renderFeedbackNotes() {
 
     const courseName = id => (SF_COURSES.find(c => c.id === id) || {}).name || 'a course';
     el.innerHTML = `<div class="list-rows">` + SF_NOTES.map(n => {
+        // A message the STUDENT sent a staff member (not feedback the staff wrote).
+        if (n.initiated_by === 'student') {
+            const isNew = SF_NEW_MSGS.has(n.id);
+            const del = SF_SUPER ? `<div class="no-print" style="display:flex;gap:8px;"><button class="btn btn-danger btn-sm" onclick="deleteFeedbackNote('${n.id}')">Delete</button></div>` : '';
+            return `<div class="list-row ${isNew ? 'sf-msg-new' : ''}" style="align-items:flex-start;flex-direction:column;gap:8px;border-left:4px solid var(--blue-500, #2563eb);">
+                <div style="display:flex;justify-content:space-between;gap:10px;width:100%;flex-wrap:wrap;align-items:baseline;">
+                    <div style="font-size:12px;color:var(--text-muted);">
+                        <strong style="color:var(--navy-800);">${escapeHtml(fmtStamp(n.created_at))}</strong>
+                        · Message from ${escapeHtml(SF_STUDENT.full_name || 'the student')}
+                    </div>
+                    <span style="font-size:11px;font-weight:700;color:${isNew ? 'var(--crimson)' : 'var(--text-muted)'};">${isNew ? 'New message' : 'Message to you'}</span>
+                </div>
+                <div style="font-size:14px;line-height:1.65;color:var(--text);white-space:pre-wrap;">${escapeHtml(n.body)}</div>
+                ${del}
+                ${threadHtml(n)}
+            </div>`;
+        }
         const canEdit = n.author_id === SF_UID || SF_SUPER;
         const badge = n.visible_to_student
             ? `<span style="font-size:11px;font-weight:700;color:var(--green);">Sent to the student${n.emailed_at ? ` · emailed ${escapeHtml(fmtStamp(n.emailed_at))}` : ' · not emailed'}</span>`
