@@ -315,17 +315,11 @@ async function sendStaffReply(noteId, btn) {
         if (ins.error) throw new Error(ins.error.message);
         (SF_REPLIES[noteId] = SF_REPLIES[noteId] || []).push(ins.data);
 
-        // Email the student (best-effort; the reply is already saved).
-        let emailed = false;
-        try {
-            const r = await apiRequest('POST', '/admin/notify/feedback-reply', { reply_id: ins.data.id });
-            emailed = !!(r && r.emailed);
-        } catch (e) { /* saved anyway */ }
-
+        // The reply is saved — show it straight away. Email the student in the
+        // background so a cold backend never leaves the button on "Sending…".
         ta.value = '';
         renderFeedbackNotes();
-        const m2 = document.getElementById('sf-reply-msg-' + noteId);
-        if (m2) { m2.style.color = 'var(--green)'; m2.textContent = emailed ? 'Sent — the student was emailed ✓' : 'Sent ✓'; setTimeout(() => { m2.textContent = ''; }, 4000); }
+        apiRequest('POST', '/admin/notify/feedback-reply', { reply_id: ins.data.id }).catch(() => {});
     } catch (err) {
         msg.style.color = 'var(--red)'; msg.textContent = err.message || 'Could not send.';
         btn.disabled = false; btn.textContent = label;
