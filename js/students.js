@@ -227,7 +227,7 @@ function renderStudents(students) {
                 <td>${expiryText}</td>
                 <td>
                     <div class="row-actions">
-                        <button class="btn btn-ghost btn-sm" onclick="openFeedback('${s.id}')" style="color:var(--navy-800);border-color:#c7d2e4;">💬 Feedback</button>
+                        <button class="btn btn-ghost btn-sm" onclick="openFeedback('${s.id}')" style="color:var(--navy-800);border-color:#c7d2e4;">💬 Messages</button>
                         <button class="btn btn-ghost btn-sm" onclick="openActivity('${s.id}')">Activity</button>
                         <button class="btn btn-ghost btn-sm" onclick="openNotices('${s.id}')">Notices</button>
                         <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
