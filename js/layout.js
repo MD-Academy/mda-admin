@@ -216,7 +216,8 @@ async function _writeAdminReads(items) {
 }
 
 function openAdminNotif(kind, id, studentId) {
-    _writeAdminReads([{ kind, id }]);   // opening it counts as read
+    // Don't mark read here — the student's record marks it read once it has
+    // shown the green "new" highlight, so arriving from the bell still pops.
     if (studentId) window.location.href = `student-feedback.html?id=${encodeURIComponent(studentId)}`;
 }
 

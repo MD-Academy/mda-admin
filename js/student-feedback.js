@@ -339,10 +339,10 @@ async function markStudentRepliesRead(reps) {
 
     // Clear this admin's bell for every student reply now on screen (per-admin read).
     if (studentReplyIds.length && typeof _writeAdminReads === 'function') {
-        _writeAdminReads(studentReplyIds);
+        _writeAdminReads(studentReplyIds.map(id => ({ kind: 'reply', id })));
         if (typeof _adminNotifs !== 'undefined') {
             const seen = new Set(studentReplyIds);
-            _adminNotifs = _adminNotifs.filter(n => !seen.has(n.id));
+            _adminNotifs = _adminNotifs.filter(n => !(n.kind === 'reply' && seen.has(n.id)));
             if (typeof _renderAdminBell === 'function') _renderAdminBell();
         }
     }
