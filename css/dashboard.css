@@ -362,10 +362,11 @@ body {
 .photo-lightbox img { width: 300px; height: 300px; max-width: 80vw; max-height: 70vh; object-fit: cover; border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); border: 3px solid #fff; }
 .photo-lightbox .pl-name { color: #fff; font-size: 16px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
 
-/* A student-initiated message: clearly blue so it stands off the page… */
-.sf-msg { background: #dbeafe; border-color: #93c5fd; border-left-width: 6px !important; box-shadow: 0 3px 12px rgba(37,99,235,.18); }
+/* A student-initiated message: subtle light-blue fill, distinct from the page…
+   (.list-row.sf-msg beats .list-row's own background regardless of order) */
+.list-row.sf-msg { background: #e6eefb; border-color: #c3d5f5; border-left-width: 6px; box-shadow: 0 3px 12px rgba(37,99,235,.15); }
 /* …and turns green + pulses when it's new. */
-.sf-msg.sf-msg-new { background: #dcfce7; border-color: #4ade80; box-shadow: 0 0 0 3px rgba(74,222,128,.5); animation: sfMsgPulse 1.5s ease-in-out 4; }
+.list-row.sf-msg.sf-msg-new { background: #dcfce7; border-color: #4ade80; box-shadow: 0 0 0 3px rgba(74,222,128,.5); animation: sfMsgPulse 1.5s ease-in-out 4; }
 @keyframes sfMsgPulse { 0%,100% { box-shadow: 0 0 0 3px rgba(74,222,128,.3); } 50% { box-shadow: 0 0 0 8px rgba(74,222,128,.55); } }
 @media (prefers-reduced-motion: reduce) { .sf-msg.sf-msg-new { animation: none; } }
 /* Bold pill label on a message */
