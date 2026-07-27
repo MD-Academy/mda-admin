@@ -7,7 +7,7 @@
     <title>MDA Admin — My Profile</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/dashboard.css?v=5">
+    <link rel="stylesheet" href="css/dashboard.css?v=6">
     <style>
         .avatar-big { width: 84px; height: 84px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
             background: linear-gradient(135deg, #20262f, #b91c5c); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 28px; }
@@ -31,6 +31,14 @@
     <script src="js/mfa.js"></script>
     <script>
         function esc(s){ return s ? String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
+        // Live character counter for the profile fields (keeps cards a uniform size).
+        function cc(el, targetId){
+            const t = document.getElementById(targetId); if (!t) return;
+            const max = el.getAttribute('maxlength'); const len = el.value.length;
+            const near = len >= max - 15;
+            t.textContent = `${len} / ${max}`;
+            t.style.color = near ? 'var(--amber, #d97706)' : 'var(--text-muted)';
+        }
         const ALLOWED_IMG = ['png','jpg','jpeg','webp','gif'];
         const AVATAR_MAX = 500 * 1024;
         const TITLES = ['', 'Dr', 'Prof', 'Mr', 'Mrs', 'Ms', 'Mx'];
@@ -75,19 +83,23 @@
                             </div>
                             <div class="form-field">
                                 <label>Role <span style="color:var(--text-muted);font-weight:400;">(shown to students — e.g. "Biology &amp; Physiology Teacher", "Technology &amp; Support")</span></label>
-                                <input type="text" id="f-job" value="${esc(p.job_title||'')}" maxlength="80" placeholder="Your role at the Academy">
+                                <input type="text" id="f-job" value="${esc(p.job_title||'')}" maxlength="70" placeholder="Your role at the Academy" oninput="cc(this,'cc-job')">
+                                <div class="hint" id="cc-job"></div>
                             </div>
                             <div class="form-field">
                                 <label>Specialty <span style="color:var(--text-muted);font-weight:400;">(e.g. "Physics &amp; Chemistry", "Human Physiology")</span></label>
-                                <input type="text" id="f-specialty" value="${esc(p.specialty||'')}" maxlength="120" placeholder="What you specialise in">
+                                <input type="text" id="f-specialty" value="${esc(p.specialty||'')}" maxlength="90" placeholder="What you specialise in" oninput="cc(this,'cc-specialty')">
+                                <div class="hint" id="cc-specialty"></div>
                             </div>
                             <div class="form-field">
-                                <label>About you <span style="color:var(--text-muted);font-weight:400;">(a short paragraph students &amp; staff can read)</span></label>
-                                <textarea id="f-bio" rows="4" maxlength="800" placeholder="A few sentences about who you are, your experience, and how you help students.">${esc(p.bio||'')}</textarea>
+                                <label>About you <span style="color:var(--text-muted);font-weight:400;">(a short paragraph — kept brief so every profile card is the same size)</span></label>
+                                <textarea id="f-bio" rows="4" maxlength="320" placeholder="A few sentences about who you are, your experience, and how you help students." oninput="cc(this,'cc-bio')">${esc(p.bio||'')}</textarea>
+                                <div class="hint" id="cc-bio"></div>
                             </div>
                             <div class="form-field">
                                 <label>Education <span style="color:var(--text-muted);font-weight:400;">(e.g. "MD, Tel Aviv University · MSc Biochemistry")</span></label>
-                                <input type="text" id="f-education" value="${esc(p.education||'')}" maxlength="200" placeholder="Your degrees / qualifications">
+                                <input type="text" id="f-education" value="${esc(p.education||'')}" maxlength="160" placeholder="Your degrees / qualifications" oninput="cc(this,'cc-education')">
+                                <div class="hint" id="cc-education"></div>
                             </div>
                             <div class="form-field">
                                 <label>Email <span style="color:var(--text-muted);font-weight:400;">(read-only — contact the office to change)</span></label>
@@ -112,6 +124,10 @@
                         <div id="mfa-section"></div>
                     </div>
                 </div>`;
+
+            // Initialise the character counters with the saved values.
+            [['f-job','cc-job'],['f-specialty','cc-specialty'],['f-bio','cc-bio'],['f-education','cc-education']]
+                .forEach(([f,c]) => { const el = document.getElementById(f); if (el) cc(el, c); });
 
             function refreshCache(patch) {
                 try { const k = `mda_profile_${uid}`; const c = JSON.parse(sessionStorage.getItem(k) || '{}'); Object.assign(c, patch); sessionStorage.setItem(k, JSON.stringify(c)); } catch(e){}
