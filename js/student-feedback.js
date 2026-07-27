@@ -217,7 +217,7 @@ function renderFeedbackNotes() {
         if (n.initiated_by === 'student') {
             const isNew = SF_NEW_MSGS.has(n.id);
             const del = SF_SUPER ? `<div class="no-print" style="display:flex;gap:8px;"><button class="btn btn-danger btn-sm" onclick="deleteFeedbackNote('${n.id}')">Delete</button></div>` : '';
-            return `<div class="list-row ${isNew ? 'sf-msg-new' : ''}" style="align-items:flex-start;flex-direction:column;gap:8px;border-left:4px solid var(--blue-500, #2563eb);">
+            return `<div class="list-row sf-msg ${isNew ? 'sf-msg-new' : ''}" style="align-items:flex-start;flex-direction:column;gap:8px;border-left:4px solid var(--blue-500, #2563eb);">
                 <div style="display:flex;justify-content:space-between;gap:10px;width:100%;flex-wrap:wrap;align-items:baseline;">
                     <div style="font-size:12px;color:var(--text-muted);">
                         <strong style="color:var(--navy-800);">${escapeHtml(fmtStamp(n.created_at))}</strong>
