@@ -33,13 +33,21 @@ function escapeHtml(str) {
 function fmtStamp(iso) {
     return iso ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 }
+function sfInitials(name) { return (name || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'; }
+// Small round avatar for a thread bubble/head — photo or initials.
+function tAvatar(url, name) {
+    const ini = escapeHtml(sfInitials(name));
+    if (url) return `<span class="tava" data-initials="${ini}"><img src="${escapeHtml(url)}" alt="" onerror="this.parentNode.classList.add('is-fallback');this.remove();"></span>`;
+    return `<span class="tava is-fallback" data-initials="${ini}"></span>`;
+}
+let SF_STAFF_AVATARS = {};   // staff id -> avatar_url (for thread bubbles/heads)
 
 async function initStudentFeedback(studentId, profile) {
     SF_UID = profile.id || null;
     SF_NAME = profile.full_name || 'Staff';
     SF_SUPER = profile.role === 'superadmin';
 
-    const { data: p } = await db.from('profiles').select('id, full_name, email').eq('id', studentId).single();
+    const { data: p } = await db.from('profiles').select('id, full_name, email, avatar_url').eq('id', studentId).single();
     SF_STUDENT = p || { id: studentId, full_name: 'Student', email: '' };
     renderLayout('students', 'Feedback & Messages', SF_STUDENT.full_name || 'Student', profile);
 
@@ -155,15 +163,28 @@ async function loadFeedbackNotes() {
     SF_REPLIES = {};
     SF_NEW_REPLIES = new Set();
     const noteIds = SF_NOTES.map(n => n.id);
+    let allReps = [];
     if (noteIds.length) {
         const { data: reps } = await db.from('student_note_replies')
-            .select('id, note_id, author_role, author_name, body, created_at, read_by_staff')
+            .select('id, note_id, author_role, author_id, author_name, body, created_at, read_by_staff')
             .in('note_id', noteIds).order('created_at', { ascending: true });
-        (reps || []).forEach(r => { (SF_REPLIES[r.note_id] = SF_REPLIES[r.note_id] || []).push(r); });
+        allReps = reps || [];
+        allReps.forEach(r => { (SF_REPLIES[r.note_id] = SF_REPLIES[r.note_id] || []).push(r); });
         // Which student replies are new (unread) — captured before we mark them read,
         // so the highlight survives this page view.
-        (reps || []).forEach(r => { if (r.author_role === 'student' && !r.read_by_staff) SF_NEW_REPLIES.add(r.id); });
-        markStudentRepliesRead(reps || []);
+        allReps.forEach(r => { if (r.author_role === 'student' && !r.read_by_staff) SF_NEW_REPLIES.add(r.id); });
+        markStudentRepliesRead(allReps);
+    }
+
+    // Staff photos for the thread bubbles/heads (admin can read staff profiles).
+    SF_STAFF_AVATARS = {};
+    const staffIds = [...new Set([
+        ...SF_NOTES.filter(n => n.initiated_by !== 'student' && n.author_id).map(n => n.author_id),
+        ...allReps.filter(r => r.author_role === 'staff' && r.author_id).map(r => r.author_id),
+    ])];
+    if (staffIds.length) {
+        const { data: sp } = await db.from('profiles').select('id, avatar_url').in('id', staffIds);
+        (sp || []).forEach(x => { SF_STAFF_AVATARS[x.id] = x.avatar_url; });
     }
 
     renderFeedbackNotes();
@@ -218,10 +239,10 @@ function renderFeedbackNotes() {
             const isNew = SF_NEW_MSGS.has(n.id);
             const del = SF_SUPER ? `<div class="no-print" style="display:flex;gap:8px;"><button class="btn btn-danger btn-sm" onclick="deleteFeedbackNote('${n.id}')">Delete</button></div>` : '';
             return `<div class="list-row sf-msg ${isNew ? 'sf-msg-new' : ''}" style="align-items:flex-start;flex-direction:column;gap:8px;border-left:4px solid var(--blue-500, #2563eb);">
-                <div style="display:flex;justify-content:space-between;gap:10px;width:100%;flex-wrap:wrap;align-items:baseline;">
-                    <div style="font-size:12px;color:var(--text-muted);">
-                        <strong style="color:var(--navy-800);">${escapeHtml(fmtStamp(n.created_at))}</strong>
-                        · Message from ${escapeHtml(SF_STUDENT.full_name || 'the student')}
+                <div style="display:flex;justify-content:space-between;gap:10px;width:100%;flex-wrap:wrap;align-items:center;">
+                    <div style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px;">
+                        ${tAvatar(SF_STUDENT.avatar_url, SF_STUDENT.full_name)}
+                        <span><strong style="color:var(--navy-800);">${escapeHtml(fmtStamp(n.created_at))}</strong> · Message from ${escapeHtml(SF_STUDENT.full_name || 'the student')}</span>
                     </div>
                     <span class="sf-msg-badge">${isNew ? '● New message' : 'Message to you'}</span>
                 </div>
@@ -242,10 +263,10 @@ function renderFeedbackNotes() {
             SF_SUPER ? `<button class="btn btn-danger btn-sm" onclick="deleteFeedbackNote('${n.id}')">Delete</button>` : ''
         ].filter(Boolean).join('');
         return `<div class="list-row" style="align-items:flex-start;flex-direction:column;gap:8px;">
-            <div style="display:flex;justify-content:space-between;gap:10px;width:100%;flex-wrap:wrap;align-items:baseline;">
-                <div style="font-size:12px;color:var(--text-muted);">
-                    <strong style="color:var(--navy-800);">${escapeHtml(fmtStamp(n.created_at))}</strong>
-                    · ${escapeHtml(n.author_name || 'Staff')} ${tag}${edited}
+            <div style="display:flex;justify-content:space-between;gap:10px;width:100%;flex-wrap:wrap;align-items:center;">
+                <div style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px;">
+                    ${tAvatar(SF_STAFF_AVATARS[n.author_id], n.author_name)}
+                    <span><strong style="color:var(--navy-800);">${escapeHtml(fmtStamp(n.created_at))}</strong> · ${escapeHtml(n.author_name || 'Staff')} ${tag}${edited}</span>
                 </div>
                 ${badge}
             </div>
@@ -267,8 +288,10 @@ function threadHtml(n) {
         const staff = r.author_role === 'staff';
         const isNew = !staff && SF_NEW_REPLIES.has(r.id);
         const cls = staff ? 'reply-mine' : ('reply-in' + (isNew ? ' reply-new' : ''));
+        const av = staff ? tAvatar(SF_STAFF_AVATARS[r.author_id], r.author_name) : tAvatar(SF_STUDENT.avatar_url, SF_STUDENT.full_name);
         return `<div class="reply-row ${cls}">
             <div class="reply-head">
+                ${av}
                 <strong>${staff ? escapeHtml(r.author_name || 'Staff') : escapeHtml(r.author_name || 'Student') + ' (student)'}</strong>
                 <span>· ${escapeHtml(fmtStamp(r.created_at))}</span>
                 ${isNew ? '<span class="reply-new-pill">New</span>' : ''}
