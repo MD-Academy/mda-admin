@@ -64,7 +64,44 @@ async function initQuestionBank(profile) {
 
     document.getElementById('qb-file').addEventListener('change', onQbFile);
     await Promise.all([loadQbCategories(), loadQbTargets()]);
+    ['qb-cat', 'qb-size', 'qb-target'].forEach(id => enhanceSelect(document.getElementById(id)));
     await loadQbPage();
+}
+
+// Turn a native <select> into a themed dropdown (keeps the select working underneath).
+function enhanceSelect(sel) {
+    if (!sel || sel._csEnhanced) return;
+    sel._csEnhanced = true;
+    sel.style.display = 'none';
+    const wrap = document.createElement('span'); wrap.className = 'cs-wrap';
+    sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(sel);
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'cs-btn';
+    if (sel.style.minWidth) btn.style.minWidth = sel.style.minWidth;
+    const lbl = document.createElement('span'); const chev = document.createElement('span'); chev.className = 'cs-chev'; chev.textContent = '▾';
+    btn.appendChild(lbl); btn.appendChild(chev); wrap.appendChild(btn);
+    const menu = document.createElement('div'); menu.className = 'cs-menu'; wrap.appendChild(menu);
+
+    const sync = () => { const o = sel.options[sel.selectedIndex]; lbl.textContent = o ? o.textContent : ''; };
+    const build = () => {
+        menu.innerHTML = '';
+        Array.from(sel.options).forEach((o, i) => {
+            const d = document.createElement('div');
+            d.className = 'cs-opt' + (i === sel.selectedIndex ? ' sel' : '');
+            d.textContent = o.textContent;
+            d.onclick = (e) => { e.stopPropagation(); sel.selectedIndex = i; sync(); wrap.classList.remove('open'); sel.dispatchEvent(new Event('change')); };
+            menu.appendChild(d);
+        });
+    };
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        const isOpen = wrap.classList.contains('open');
+        document.querySelectorAll('.cs-wrap.open').forEach(w => w.classList.remove('open'));
+        if (!isOpen) { build(); wrap.classList.add('open'); }
+    };
+    document.addEventListener('click', () => wrap.classList.remove('open'));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') wrap.classList.remove('open'); });
+    sel._csSync = sync;   // call after options are rebuilt in code
+    sync();
 }
 
 // ── IMPORT ──
@@ -108,6 +145,7 @@ async function loadQbCategories() {
     const cats = [...new Set((data || []).map(r => r.category).filter(Boolean))].sort();
     const cur = QB_CAT;
     sel.innerHTML = `<option value="">All categories</option>` + cats.map(c => `<option value="${escapeHtml(c)}" ${c === cur ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+    if (sel._csSync) sel._csSync();
 }
 
 async function loadQbPage() {
@@ -181,9 +219,12 @@ async function loadQbTargets() {
     (exRes.data || []).filter(e => e.type !== 'pdf').forEach(e => QB_TARGETS.push({ kind: 'exam', id: e.id, label: `Exam · ${e.title || 'Untitled'}` }));
 
     const sel = document.getElementById('qb-target');
-    if (sel) sel.innerHTML = QB_TARGETS.length
-        ? QB_TARGETS.map((t, i) => `<option value="${i}">${escapeHtml(t.label)}</option>`).join('')
-        : `<option value="">No MCQ quizzes or exams yet</option>`;
+    if (sel) {
+        sel.innerHTML = QB_TARGETS.length
+            ? QB_TARGETS.map((t, i) => `<option value="${i}">${escapeHtml(t.label)}</option>`).join('')
+            : `<option value="">No MCQ quizzes or exams yet</option>`;
+        if (sel._csSync) sel._csSync();
+    }
 }
 
 async function addSelectedToTarget() {
