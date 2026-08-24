@@ -96,7 +96,14 @@ function enhanceSelect(sel) {
         e.stopPropagation();
         const isOpen = wrap.classList.contains('open');
         document.querySelectorAll('.cs-wrap.open').forEach(w => w.classList.remove('open'));
-        if (!isOpen) { build(); wrap.classList.add('open'); }
+        if (!isOpen) {
+            build();
+            // Open upward if there isn't room below (e.g. in the sticky bottom bar).
+            const rect = btn.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            wrap.classList.toggle('up', spaceBelow < 300 && rect.top > spaceBelow);
+            wrap.classList.add('open');
+        }
     };
     document.addEventListener('click', () => wrap.classList.remove('open'));
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') wrap.classList.remove('open'); });

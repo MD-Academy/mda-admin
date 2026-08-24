@@ -370,6 +370,7 @@ body {
 .cs-wrap.open .cs-btn { border-color: var(--crimson); }
 .cs-wrap.open .cs-btn .cs-chev { transform: rotate(180deg); }
 .cs-menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 100%; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 32px rgba(15,23,42,.16); padding: 6px; z-index: 60; max-height: 320px; overflow-y: auto; display: none; }
+.cs-wrap.up .cs-menu { top: auto; bottom: calc(100% + 6px); }
 .cs-wrap.open .cs-menu { display: block; }
 .cs-opt { padding: 8px 11px; border-radius: 7px; font-size: 14px; color: var(--text); cursor: pointer; white-space: nowrap; }
 .cs-opt:hover { background: #f1f5f9; }
