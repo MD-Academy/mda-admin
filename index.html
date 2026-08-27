@@ -52,6 +52,7 @@
                             </span>
                             <input type="email" id="email-input" placeholder="Admin Email" autocomplete="email" required>
                         </div>
+                        <div id="email-error" style="display:none;color:#dc2626;font-size:12.5px;font-weight:600;margin-top:6px;padding-left:2px;">⚠️ That's not a valid email address.</div>
                     </div>
 
                     <div class="field-group">
@@ -94,5 +95,15 @@
     <script src="js/config.js"></script>
     <script src="js/login.js"></script>
     <script src="js/mfa.js"></script>
+    <script>
+        // Immediate "not a valid email" feedback when the field loses focus.
+        (function () {
+            var inp = document.getElementById('email-input'), err = document.getElementById('email-error');
+            if (!inp || !err) return;
+            var ok = function (v) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((v || '').trim()); };
+            inp.addEventListener('blur', function () { var v = inp.value.trim(); err.style.display = (v && !ok(v)) ? 'block' : 'none'; });
+            inp.addEventListener('input', function () { if (err.style.display === 'block' && ok(inp.value)) err.style.display = 'none'; });
+        })();
+    </script>
 </body>
 </html>
