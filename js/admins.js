@@ -25,7 +25,7 @@ async function loadAdmins() {
 
     const { data, error } = await db
         .from('profiles')
-        .select('id, full_name, role, job_title, status, created_at')
+        .select('id, full_name, email, role, job_title, status, created_at')
         .in('role', ['admin', 'superadmin'])
         .order('created_at', { ascending: true });
 
@@ -53,12 +53,16 @@ function renderAdmins() {
             : `<span style="font-size:13px;color:var(--text-muted);font-style:italic;">Not set</span>`;
         return `
             <tr>
-                <td><strong>${escapeHtml(a.full_name || '—')}</strong>${isSelf ? ' <span class="badge badge-green" style="margin-left:6px;">You</span>' : ''}</td>
+                <td>
+                    <strong>${escapeHtml(a.full_name || '—')}</strong>${isSelf ? ' <span class="badge badge-green" style="margin-left:6px;">You</span>' : ''}
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${a.email ? '✉️ ' + escapeHtml(a.email) : '<span style="color:var(--red);">no email on file</span>'}</div>
+                </td>
                 <td>${roleBadge}</td>
                 <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${jobCell}<button class="btn btn-ghost btn-sm" onclick="openRoleModal('${a.id}')">Edit</button></div></td>
                 <td>${a.status === 'suspended' ? '<span class="badge badge-red">Suspended</span>' : '<span class="badge badge-green">Active</span>'}</td>
                 <td>${formatDate(a.created_at)}</td>
                 <td class="row-actions">
+                    <button class="btn btn-ghost btn-sm" style="color:var(--navy-800);border-color:#c7d2e4;" onclick="openEditLogin('${a.id}')">✏️ Edit login</button>
                     <button class="btn btn-ghost btn-sm" onclick="resetAdminPw('${a.id}')">Reset PW</button>
                     <button class="btn btn-ghost btn-sm" onclick="resetAdminMfa('${a.id}')">Reset 2FA</button>
                     ${isSelf
@@ -70,6 +74,59 @@ function renderAdmins() {
                 </td>
             </tr>`;
     }).join('');
+}
+
+// ── EDIT LOGIN (name + login email) — super-admin only ──
+async function openEditLogin(id) {
+    const a = allAdmins.find(x => x.id === id);
+    if (!a) return;
+    document.getElementById('login-alert').style.display = 'none';
+    document.getElementById('login-user-id').value = id;
+    document.getElementById('login-context').textContent = a.full_name || 'This staff member';
+    document.getElementById('login-name').value = a.full_name || '';
+    const emailField = document.getElementById('login-email');
+    emailField.value = a.email || '';
+    openModal('login-modal');
+    setTimeout(() => emailField.focus(), 50);
+    // Confirm the actual sign-in email from auth (source of truth), in case the
+    // profile copy is missing or stale.
+    try {
+        const r = await apiRequest('GET', `/admin/auth-email/${id}`);
+        if (r && r.email) {
+            emailField.value = r.email;
+            if (a.email !== r.email) { a.email = r.email; renderAdmins(); }
+        }
+    } catch (e) { /* fall back to the profile copy already shown */ }
+}
+
+async function saveEditLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('login-save-btn');
+    const alert = document.getElementById('login-alert');
+    alert.style.display = 'none';
+    const id = document.getElementById('login-user-id').value;
+    const full_name = document.getElementById('login-name').value.trim();
+    const email = document.getElementById('login-email').value.trim();
+    if (!email) { showModalAlert(alert, 'Enter the login email.', 'error'); return; }
+    if (!ensureSafe(alert, [['Name', full_name]])) return;
+
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+        const r = await apiRequest('POST', `/admin/update-user-email/${id}`, { email, full_name });
+        const a = allAdmins.find(x => x.id === id);
+        if (a) { a.email = r.email || email; if (full_name) a.full_name = full_name; }
+        renderAdmins();
+        closeModal('login-modal');
+        await confirmDialog({
+            title: 'Login updated ✓',
+            message: `Their login email is now ${r.email || email}. Tell them to sign in with this email. If they've forgotten the password, use "Reset PW" to generate a new one.`,
+            confirmText: 'OK', cancelText: 'Close'
+        });
+    } catch (err) {
+        showModalAlert(alert, err.message || 'Could not update the login.', 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save Login';
+    }
 }
 
 // ── EDIT A STAFF MEMBER'S DESCRIPTIVE ROLE (job_title) — super-admin only ──
