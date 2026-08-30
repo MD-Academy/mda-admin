@@ -20,13 +20,15 @@ async function initQuestionBank(profile) {
                     <div style="font-weight:700;color:var(--navy-800);font-size:15px;">Import questions</div>
                     <div class="hint" style="margin-top:3px;">Upload a <strong>Moodle XML</strong> export. Single-answer multiple-choice questions are imported; short-answer and image questions are skipped. Re-importing the same file won't create duplicates.</div>
                 </div>
-                <div style="display:flex;gap:8px;align-items:center;">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <button class="btn btn-primary" onclick="openAddQuestion()">＋ Add question</button>
                     <input type="file" id="qb-file" accept=".xml,text/xml,application/xml" style="display:none">
-                    <button class="btn btn-primary" id="qb-import-btn" onclick="document.getElementById('qb-file').click()">⬆ Import Moodle XML</button>
+                    <button class="btn btn-ghost" id="qb-import-btn" onclick="document.getElementById('qb-file').click()">⬆ Import Moodle XML</button>
                 </div>
             </div>
             <div class="alert" id="qb-import-alert" style="display:none;margin-top:12px;margin-bottom:0;"></div>
         </div>
+        <datalist id="qb-cat-list"></datalist>
 
         <div class="toolbar" style="flex-wrap:wrap;gap:10px;">
             <div class="search-box">
@@ -57,8 +59,61 @@ async function initQuestionBank(profile) {
                 <span style="color:var(--text-muted);font-size:13px;">Add to:</span>
                 <select id="qb-target" class="filter-select" style="min-width:260px;"></select>
                 <button class="btn btn-primary" id="qb-add-btn" onclick="addSelectedToTarget()">Add to quiz / exam</button>
+                <button class="btn btn-ghost btn-sm" onclick="openSetCat()">🏷️ Set category</button>
                 <button class="btn btn-ghost btn-sm" onclick="clearQbSelection()">Clear selection</button>
                 <span id="qb-add-msg" style="font-size:13px;"></span>
+            </div>
+        </div>
+
+        <!-- Add-question modal -->
+        <div class="modal-overlay" id="addq-modal">
+            <div class="modal">
+                <div class="modal-head"><h3>Add a question</h3><button class="modal-close" onclick="closeQbModal('addq-modal')">&times;</button></div>
+                <form onsubmit="saveNewQuestion(event)">
+                    <div class="modal-body">
+                        <div class="alert" id="addq-alert" style="display:none;"></div>
+                        <div class="form-field">
+                            <label>Category</label>
+                            <input type="text" id="addq-cat" list="qb-cat-list" placeholder="e.g. Chemistry, Physics, Biology, Anatomy & Physiology">
+                            <div class="hint">Pick an existing category or type a new one to create it.</div>
+                        </div>
+                        <div class="form-field">
+                            <label>Question</label>
+                            <textarea id="addq-text" rows="3" placeholder="Type the question…" required></textarea>
+                        </div>
+                        <div class="form-field">
+                            <label>Options <span style="color:var(--text-muted);font-weight:400;">(select the correct one)</span></label>
+                            <div id="addq-options"></div>
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="addQbOptionRow()" style="margin-top:8px;">+ Add option</button>
+                        </div>
+                    </div>
+                    <div class="modal-foot">
+                        <button type="button" class="btn btn-ghost" onclick="closeQbModal('addq-modal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="addq-save">Save question</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Set-category modal (bulk) -->
+        <div class="modal-overlay" id="setcat-modal">
+            <div class="modal">
+                <div class="modal-head"><h3>Set category</h3><button class="modal-close" onclick="closeQbModal('setcat-modal')">&times;</button></div>
+                <form onsubmit="applySetCat(event)">
+                    <div class="modal-body">
+                        <div class="alert" id="setcat-alert" style="display:none;"></div>
+                        <p id="setcat-context" style="font-size:14px;color:var(--text-muted);margin-bottom:14px;"></p>
+                        <div class="form-field">
+                            <label>Category</label>
+                            <input type="text" id="setcat-input" list="qb-cat-list" placeholder="e.g. Chemistry">
+                            <div class="hint">Existing or new — the selected questions move into it.</div>
+                        </div>
+                    </div>
+                    <div class="modal-foot">
+                        <button type="button" class="btn btn-ghost" onclick="closeQbModal('setcat-modal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="setcat-save">Move questions</button>
+                    </div>
+                </form>
             </div>
         </div>`;
 
@@ -153,6 +208,9 @@ async function loadQbCategories() {
     const cur = QB_CAT;
     sel.innerHTML = `<option value="">All categories</option>` + cats.map(c => `<option value="${escapeHtml(c)}" ${c === cur ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
     if (sel._csSync) sel._csSync();
+    // Feed the datalist used by the Add-question and Set-category inputs.
+    const dl = document.getElementById('qb-cat-list');
+    if (dl) dl.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
 }
 
 async function loadQbPage() {
@@ -277,3 +335,105 @@ async function addSelectedToTarget() {
         btn.disabled = false; btn.textContent = label;
     }
 }
+
+// ── MODAL HELPERS ──
+function openQbModal(id) { const m = document.getElementById(id); if (m) m.style.display = 'flex'; }
+function closeQbModal(id) { const m = document.getElementById(id); if (m) m.style.display = 'none'; }
+
+// ── ADD A QUESTION MANUALLY ──
+function addQbOptionRow(text, checked) {
+    const list = document.getElementById('addq-options');
+    const row = document.createElement('div');
+    row.className = 'addq-opt-row';
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
+    row.innerHTML = `
+        <input type="radio" name="addq-correct" ${checked ? 'checked' : ''} title="Mark as the correct answer" style="width:17px;height:17px;flex-shrink:0;accent-color:var(--crimson);">
+        <input type="text" class="addq-opt" value="${text ? escapeHtml(text) : ''}" placeholder="Answer option" style="flex:1;">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('.addq-opt-row').remove()" title="Remove">✕</button>`;
+    list.appendChild(row);
+}
+
+function openAddQuestion() {
+    document.getElementById('addq-alert').style.display = 'none';
+    document.getElementById('addq-cat').value = QB_CAT || '';   // default to the filtered category, if any
+    document.getElementById('addq-text').value = '';
+    document.getElementById('addq-options').innerHTML = '';
+    addQbOptionRow('', true);   // first option marked correct by default
+    addQbOptionRow('', false);
+    addQbOptionRow('', false);
+    addQbOptionRow('', false);
+    openQbModal('addq-modal');
+    setTimeout(() => document.getElementById('addq-text').focus(), 50);
+}
+
+async function saveNewQuestion(e) {
+    e.preventDefault();
+    const alert = document.getElementById('addq-alert');
+    const btn = document.getElementById('addq-save');
+    alert.style.display = 'none';
+
+    const category = document.getElementById('addq-cat').value.trim();
+    const question_text = document.getElementById('addq-text').value.trim();
+    const rows = Array.from(document.querySelectorAll('#addq-options .addq-opt-row'));
+    const options = rows.map(r => r.querySelector('.addq-opt').value.trim());
+    const correctIdx = rows.findIndex(r => r.querySelector('input[type=radio]').checked);
+
+    if (!question_text) { showModalAlert(alert, 'Enter the question.', 'error'); return; }
+    if (options.length < 2) { showModalAlert(alert, 'Add at least two options.', 'error'); return; }
+    if (options.some(o => !o)) { showModalAlert(alert, 'Fill in every option, or remove the empty ones.', 'error'); return; }
+    if (correctIdx < 0) { showModalAlert(alert, 'Mark which option is correct.', 'error'); return; }
+    if (!ensureSafe(alert, [['Question', question_text], ['Category', category], ...options.map((o, i) => [`Option ${i + 1}`, o])])) return;
+
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+        const { error } = await db.from('question_bank').insert({
+            category: category || null, question_text, options_json: options,
+            correct_answer_index: correctIdx, source: 'manual'
+        });
+        if (error) throw new Error(error.message);
+        closeQbModal('addq-modal');
+        QB_PAGE = 1;
+        await loadQbCategories();
+        await loadQbPage();
+    } catch (err) {
+        showModalAlert(alert, err.message || 'Could not save.', 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save question';
+    }
+}
+
+// ── SET CATEGORY ON SELECTED (bulk) ──
+function openSetCat() {
+    if (!QB_SELECTED.size) return;
+    document.getElementById('setcat-alert').style.display = 'none';
+    document.getElementById('setcat-context').textContent = `Move ${QB_SELECTED.size} selected question${QB_SELECTED.size === 1 ? '' : 's'} into a category.`;
+    document.getElementById('setcat-input').value = QB_CAT || '';
+    openQbModal('setcat-modal');
+    setTimeout(() => document.getElementById('setcat-input').focus(), 50);
+}
+
+async function applySetCat(e) {
+    e.preventDefault();
+    const alert = document.getElementById('setcat-alert');
+    const btn = document.getElementById('setcat-save');
+    alert.style.display = 'none';
+    const cat = document.getElementById('setcat-input').value.trim();
+    if (!ensureSafe(alert, [['Category', cat]])) return;
+    const ids = [...QB_SELECTED];
+    btn.disabled = true; btn.textContent = 'Moving…';
+    try {
+        const { error } = await db.from('question_bank').update({ category: cat || null }).in('id', ids);
+        if (error) throw new Error(error.message);
+        closeQbModal('setcat-modal');
+        QB_SELECTED.clear();
+        await loadQbCategories();
+        await loadQbPage();
+    } catch (err) {
+        showModalAlert(alert, err.message || 'Could not move.', 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Move questions';
+    }
+}
+
+// showModalAlert helper (matches other admin pages).
+function showModalAlert(el, msg, type) { el.className = `alert ${type}`; el.textContent = msg; el.style.display = 'block'; }
