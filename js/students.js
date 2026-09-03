@@ -700,13 +700,13 @@ async function resetPw(id) {
     const name = s ? (s.full_name || 'this student') : 'this student';
     const ok = await confirmDialog({
         title: 'Reset password?',
-        message: `A new password will be generated for ${name}. Their current password will stop working immediately.`,
+        message: `A new password will be generated for ${name} and emailed to them. Their current password will stop working immediately.`,
         confirmText: 'Generate New Password'
     });
     if (!ok) return;
     try {
         const res = await apiRequest('POST', `/admin/reset-password/${id}`);
-        showCredentials([{ full_name: name, email: '(unchanged)', password: res.new_password }]);
+        showCredentials([{ full_name: name, email: (s && s.email) || '(unchanged)', password: res.new_password, emailed: res.emailed }]);
     } catch (err) {
         alert(`Failed to reset password: ${err.message}`);
     }

@@ -119,7 +119,7 @@ async function saveEditLogin(e) {
         closeModal('login-modal');
         await confirmDialog({
             title: 'Login updated ✓',
-            message: `Their login email is now ${r.email || email}. Tell them to sign in with this email. If they've forgotten the password, use "Reset PW" to generate a new one.`,
+            message: `Their login email is now ${r.email || email}${r.emailed ? ' — and we emailed them a heads-up' : ''}. They sign in with this email from now on. If they've forgotten the password, use "Reset PW" to generate a new one.`,
             confirmText: 'OK', cancelText: 'Close'
         });
     } catch (err) {
@@ -200,8 +200,12 @@ async function createAdmin(e) {
 
 function showCredentials(res) {
     const body = document.getElementById('creds-body');
+    const emailedNote = res.emailed === true
+        ? `<p style="margin:0 0 12px;font-size:13px;color:var(--green);font-weight:600;">✓ Also emailed to ${escapeHtml(res.email)}.</p>`
+        : (res.emailed === false ? `<p style="margin:0 0 12px;font-size:13px;color:#b45309;font-weight:600;">⚠️ Couldn't email it — hand these over directly.</p>` : '');
     body.innerHTML = `
         <p class="creds-warning">⚠️ Save these credentials now — the password is shown only once. Hand them to the new ${res.role === 'superadmin' ? 'superadmin' : 'admin'}.</p>
+        ${emailedNote}
         <div class="preview-table-wrap">
             <table class="data-table">
                 <thead><tr><th>Name</th><th>Email</th><th>Password</th><th>Role</th></tr></thead>
@@ -221,13 +225,13 @@ async function resetAdminPw(id) {
     const name = a ? (a.full_name || 'this admin') : 'this admin';
     const ok = await confirmDialog({
         title: 'Reset password?',
-        message: `A new password will be generated for ${name}. Their current password stops working immediately.`,
+        message: `A new password will be generated for ${name} and emailed to them. Their current password stops working immediately.`,
         confirmText: 'Generate New Password'
     });
     if (!ok) return;
     try {
         const res = await apiRequest('POST', `/admin/reset-password/${id}`);
-        showCredentials({ full_name: name, email: '(unchanged)', password: res.new_password, role: 'admin' });
+        showCredentials({ full_name: name, email: (a && a.email) || '(unchanged)', password: res.new_password, role: 'admin', emailed: res.emailed });
     } catch (err) {
         alert(`Failed to reset password: ${err.message}`);
     }
