@@ -114,7 +114,7 @@ function renderCourses() {
                         Duplicate course
                     </button>
                 </div>
-                ${c.image_url ? `<div style="height:88px;margin:-22px -22px 14px;border-radius:16px 16px 0 0;background:url('${escapeHtml(c.image_url)}') center/cover;"></div>` : ''}
+                ${c.image_url ? `<div style="aspect-ratio:16/9;margin:-22px -22px 14px;border-radius:16px 16px 0 0;background:url('${escapeHtml(c.image_url)}') center/cover;"></div>` : ''}
                 <div class="ec-head">
                     <div class="ec-title">${escapeHtml(c.name)}</div>
                     ${visToggleHtml(c.id, c.is_visible)}
