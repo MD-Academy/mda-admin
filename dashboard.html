@@ -7,7 +7,7 @@
     <title>MDA Admin — Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/dashboard.css?v=17">
+    <link rel="stylesheet" href="css/dashboard.css?v=18">
 </head>
 <body>
     <div class="layout" id="app-layout"></div>
@@ -16,12 +16,15 @@
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/layout.js"></script>
+    <script src="js/tour.js"></script>
     <script>
         (async () => {
             const auth = await requireAdmin();
             if (!auth) return;
 
             renderLayout('dashboard', 'Dashboard', 'Welcome to the MDA management portal', auth.profile);
+            // First-login guided tour for staff (shows only once).
+            if (window.maybeStartTour) maybeStartTour(auth.session.user.id);
 
             const content = document.getElementById('page-content');
             content.innerHTML = `

@@ -7,7 +7,7 @@
     <title>MDA Admin — User Guide</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/dashboard.css?v=17">
+    <link rel="stylesheet" href="css/dashboard.css?v=18">
     <style>
         .guide { max-width: 860px; }
         .guide-intro { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; font-size: 14px; line-height: 1.6; color: var(--text-muted); }
@@ -32,6 +32,7 @@
     <script src="js/auth.js"></script>
     <script src="js/layout.js"></script>
     <script src="js/ui.js"></script>
+    <script src="js/tour.js"></script>
     <script>
         (async () => {
             const auth = await requireAdmin();
@@ -40,7 +41,10 @@
 
             document.getElementById('page-content').innerHTML = `
             <div class="guide">
-                <div class="guide-intro">A quick reference for the admin portal. Click any section to expand it. A general rule everywhere: the <strong>eye/visibility toggle</strong> controls whether students can see an item, and <strong>deletes always ask you to confirm first</strong> and are permanent.</div>
+                <div class="guide-intro" style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;">
+                    <span>A quick reference for the admin portal. Click any section to expand it. A general rule everywhere: the <strong>eye/visibility toggle</strong> controls whether students can see an item, and <strong>deletes always ask you to confirm first</strong> and are permanent.</span>
+                    <button class="btn btn-primary btn-sm" style="flex-shrink:0;" onclick="startTour('${auth.session.user.id}')">▶ Replay the welcome tour</button>
+                </div>
 
                 <details open><summary>🏠 Dashboard</summary><div class="guide-body">
                     <p>Your landing page — a quick overview of the academy (student counts, recent activity). Nothing to manage here; it's a snapshot.</p>
