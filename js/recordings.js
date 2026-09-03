@@ -321,7 +321,8 @@ function visLinkToggleHtml(id, isVisible) {
 async function loadMeetingLinks() {
     const tbody = document.getElementById('links-tbody');
     const { data, error } = await db.from('meeting_links')
-        .select('id, course_id, title, host_name, url, is_visible, created_at')
+        .select('id, course_id, title, host_name, url, is_visible, order_index, created_at')
+        .order('order_index', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false });
     if (error) {
         console.error('[recordings] links load failed:', error);
@@ -341,9 +342,18 @@ function renderMeetingLinks() {
         tbody.innerHTML = `<tr><td colspan="6" class="loader">No live class links yet. Click "Add link" to create one.</td></tr>`;
         return;
     }
-    tbody.innerHTML = meetingLinks.map(l => `
+    const last = meetingLinks.length - 1;
+    tbody.innerHTML = meetingLinks.map((l, i) => `
         <tr data-id="${l.id}">
-            <td><strong>${escapeHtml(l.title)}</strong></td>
+            <td>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <div style="display:flex;flex-direction:column;">
+                        <button class="btn btn-ghost btn-sm reorder-btn" title="Move up" onclick="moveLink('${l.id}',-1)" ${i === 0 ? 'disabled style="opacity:.3;cursor:default;"' : ''}>▲</button>
+                        <button class="btn btn-ghost btn-sm reorder-btn" title="Move down" onclick="moveLink('${l.id}',1)" ${i === last ? 'disabled style="opacity:.3;cursor:default;"' : ''}>▼</button>
+                    </div>
+                    <strong>${escapeHtml(l.title)}</strong>
+                </div>
+            </td>
             <td><span class="badge badge-blue">${escapeHtml(courseName(l.course_id))}</span></td>
             <td>${escapeHtml(l.host_name)}</td>
             <td><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--blue-500);word-break:break-all;">${escapeHtml(l.url)}</a></td>
@@ -353,6 +363,25 @@ function renderMeetingLinks() {
                 <button class="btn btn-danger btn-sm" onclick="deleteLink('${l.id}')">Delete</button>
             </td>
         </tr>`).join('');
+}
+
+// Move a live link up/down and persist the new order.
+async function moveLink(id, dir) {
+    const i = meetingLinks.findIndex(x => x.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= meetingLinks.length) return;
+    const arr = meetingLinks;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    renderMeetingLinks();
+    // Renumber every row that changed, so order is stable regardless of prior nulls.
+    try {
+        for (let k = 0; k < arr.length; k++) {
+            if (arr[k].order_index !== k) {
+                arr[k].order_index = k;
+                await db.from('meeting_links').update({ order_index: k }).eq('id', arr[k].id);
+            }
+        }
+    } catch (e) { console.error('[recordings] reorder failed:', e); }
 }
 
 async function toggleLinkVis(id) {

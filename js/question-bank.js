@@ -23,7 +23,7 @@ async function initQuestionBank(profile) {
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                     <button class="btn btn-primary" onclick="openAddQuestion()">＋ Add question</button>
                     <input type="file" id="qb-file" accept=".xml,text/xml,application/xml" style="display:none">
-                    <button class="btn btn-ghost" id="qb-import-btn" onclick="document.getElementById('qb-file').click()">⬆ Import Moodle XML</button>
+                    <button class="btn btn-ghost" id="qb-import-btn" onclick="document.getElementById('qb-file').click()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import Moodle XML</button>
                 </div>
             </div>
             <div class="alert" id="qb-import-alert" style="display:none;margin-top:12px;margin-bottom:0;"></div>
