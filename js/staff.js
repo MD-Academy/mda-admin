@@ -3,6 +3,7 @@
 // around to uploading their own, and it shouldn't have to wait on them.
 
 let IS_SUPER_STAFF = false;
+let staffList = [];
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -15,26 +16,46 @@ function staffInitials(name) {
 async function loadStaffDirectory(isSuper) {
     IS_SUPER_STAFF = !!isSuper;
     const wrap = document.getElementById('staff-wrap');
-    let staff = [];
     try {
         const r = await apiRequest('GET', '/admin/staff-directory');
-        staff = (r && r.staff) || [];
+        staffList = (r && r.staff) || [];
     } catch (e) {
         wrap.innerHTML = `<div class="empty-state"><h3 style="color:var(--red)">Couldn't load the team</h3><p>${escapeHtml(e.message || 'Please try again.')}</p></div>`;
         return;
     }
-    if (!staff.length) {
+    if (!staffList.length) {
         wrap.innerHTML = `<div class="empty-state"><h3>No staff yet</h3><p>Staff profiles appear here once accounts exist.</p></div>`;
         return;
     }
 
     const hint = IS_SUPER_STAFF
-        ? `Everyone on the team. Each person fills in their own details under <strong>My Profile</strong>. Click a photo to enlarge it — hover a photo to <strong>upload or replace it</strong> for anyone (handy since most people never get around to it themselves).`
+        ? `Everyone on the team. Each person fills in their own details under <strong>My Profile</strong>. Click a photo to enlarge it — hover a photo to <strong>upload or replace it</strong> for anyone (handy since most people never get around to it themselves). Use the <strong>▲ ▼</strong> arrows to set the order everyone appears in, here and in the student portal.`
         : `Everyone on the team. Each person fills in their own details under <strong>My Profile</strong>. Click a photo to enlarge it.`;
     wrap.innerHTML = `
         <p class="hint" style="margin-bottom:18px;">${hint}</p>
-        <div class="staff-grid">${staff.map(staffCard).join('')}</div>
+        <div class="staff-grid" id="staff-grid"></div>
         <input type="file" id="staff-photo-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">`;
+    renderStaffGrid();
+}
+
+function renderStaffGrid() {
+    const grid = document.getElementById('staff-grid');
+    if (grid) grid.innerHTML = staffList.map((s, i) => staffCard(s, i, staffList.length)).join('');
+}
+
+// ── SUPER-ADMIN: reorder the whole team (▲▼ per card, saved immediately) ──
+async function moveStaff(id, dir) {
+    const i = staffList.findIndex(x => x.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= staffList.length) return;
+    [staffList[i], staffList[j]] = [staffList[j], staffList[i]];
+    renderStaffGrid();
+    try {
+        await apiRequest('POST', '/admin/set-staff-order', { order: staffList.map(s => s.id) });
+    } catch (err) {
+        alert(`Couldn't save the new order: ${err.message}`);
+        await loadStaffDirectory(IS_SUPER_STAFF);   // fall back to the last saved order
+    }
 }
 
 function photoOrInitials(s, big) {
@@ -51,15 +72,22 @@ function photoOrInitials(s, big) {
     return `<span class="${cls} is-fallback" data-initials="${initials}">${editBtn}</span>`;
 }
 
-function staffCard(s) {
+function staffCard(s, i, total) {
     const role = s.job_title ? `<div class="staff-role">${escapeHtml(s.job_title)}</div>` : '';
     const spec = s.specialty ? `<div class="staff-line"><span class="k">Specialty</span>${escapeHtml(s.specialty)}</div>` : '';
     const edu = s.education ? `<div class="staff-line"><span class="k">Education</span>${escapeHtml(s.education)}</div>` : '';
     const bio = s.bio ? `<p class="staff-bio">${escapeHtml(s.bio)}</p>` : '';
     const empty = (!s.job_title && !s.specialty && !s.education && !s.bio)
         ? `<p class="staff-bio" style="color:var(--text-muted);font-style:italic;">No profile details added yet.</p>` : '';
+    const reorder = IS_SUPER_STAFF
+        ? `<div class="staff-reorder">
+             <button type="button" class="btn btn-ghost btn-sm reorder-btn" title="Move up" onclick="moveStaff('${escapeHtml(s.id)}',-1)" ${i === 0 ? 'disabled style="opacity:.3;cursor:default;"' : ''}>▲</button>
+             <button type="button" class="btn btn-ghost btn-sm reorder-btn" title="Move down" onclick="moveStaff('${escapeHtml(s.id)}',1)" ${i === total - 1 ? 'disabled style="opacity:.3;cursor:default;"' : ''}>▼</button>
+           </div>`
+        : '';
     return `
         <div class="staff-card">
+            ${reorder}
             <div class="staff-card-head">
                 ${photoOrInitials(s, true)}
                 <div>
