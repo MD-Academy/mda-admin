@@ -632,18 +632,18 @@ function openFeedback(id) {
     window.location.href = `student-feedback.html?id=${encodeURIComponent(id)}`;
 }
 
-// Manually run the attendance/grade warning check now (emails + records those below the thresholds).
+// Manually run the weekly attendance summary + grade warning check now.
 async function runWarningsNow() {
     const ok = await confirmDialog({
         title: 'Run warnings now?',
-        message: 'This checks every student against the attendance and grade minimums, emails those below them, and records each warning (viewable via "Notices"). Continue?',
+        message: 'This sends every student their weekly attendance summary (lessons attended/missed), emails a grade warning to those below the minimum, and records each below-minimum case (viewable via "Notices"). Only sends once per student per week — safe to run more than once. Continue?',
         confirmText: 'Run now'
     });
     if (!ok) return;
     try {
         const res = await apiRequest('POST', '/admin/run-reminders', { force: false });
         const msg = `Checked ${res.active_students ?? '?'} active students. `
-            + `Attendance warnings: ${res.attendance_sent ?? 0}, grade warnings: ${res.grade_sent ?? 0}. `
+            + `Weekly attendance summaries sent: ${res.attendance_sent ?? 0}, grade warnings: ${res.grade_sent ?? 0}. `
             + `Records built: ${res.warnings_built ?? 0}, saved: ${res.warnings_recorded ?? 0}.`
             + (res.warnings_error ? ` ⚠️ INSERT ERROR: ${res.warnings_error}` : '')
             + (res.grade_error ? ` ⚠️ GRADE ERROR: ${res.grade_error}` : '');
