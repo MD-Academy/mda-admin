@@ -205,9 +205,17 @@ async function deleteSession(sessionId) {
 }
 
 // ── OPEN A NEW CLASS ──
+function todayStr() {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+
 function openClassModal() {
     document.getElementById('open-alert').style.display = 'none';
     document.getElementById('opener-name').value = ADMIN_NAME || '';
+    const dateInp = document.getElementById('opener-date');
+    dateInp.value = todayStr();
+    dateInp.max = todayStr();   // block future dates in the picker itself
     openModal('open-modal');
     setTimeout(() => document.getElementById('opener-name').focus(), 50);
 }
@@ -218,17 +226,22 @@ async function submitNewClass(ev) {
     const name = (document.getElementById('opener-name').value || '').trim();
     if (!name) { showModalAlert(alert, 'Please type your name so we know who opened attendance.', 'error'); return; }
 
-    // Gentle guard against opening two classes the same day by accident.
-    const t = new Date();
-    const todayStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
-    if (atSessions.some(s => s.session_date === todayStr)) {
-        if (!confirm('You already opened attendance today. Open another class for today anyway?')) return;
+    const chosenDate = document.getElementById('opener-date').value;
+    const today = todayStr();
+    if (!chosenDate) { showModalAlert(alert, 'Please choose the class date.', 'error'); return; }
+    if (chosenDate > today) { showModalAlert(alert, "The class date can't be in the future.", 'error'); return; }
+
+    // Gentle guard against opening two classes the same date by accident.
+    if (atSessions.some(s => s.session_date === chosenDate)) {
+        const label = chosenDate === today ? 'today' : `on ${fmtSession(chosenDate)}`;
+        if (!confirm(`You already opened attendance ${label}. Open another class for that date anyway?`)) return;
     }
 
     const btn = document.getElementById('open-save-btn'); btn.disabled = true; btn.textContent = 'Opening…';
     try {
-        // session_date is set server-side (locked to today) by a DB trigger — we never send it.
-        const ins = await db.from('class_sessions').insert({ course_id: atCourseId, opened_by_name: name })
+        // session_date defaults to today but can be backdated (never future-dated) —
+        // enforced server-side by a DB trigger regardless of what's sent here.
+        const ins = await db.from('class_sessions').insert({ course_id: atCourseId, opened_by_name: name, session_date: chosenDate })
             .select('id, session_date, opened_by_name').single();
         if (ins.error) throw new Error(ins.error.message);
 

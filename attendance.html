@@ -22,7 +22,12 @@
             <form onsubmit="submitNewClass(event)">
                 <div class="modal-body">
                     <div class="alert" id="open-alert" style="display:none;"></div>
-                    <p style="font-size:14px;color:var(--text-muted);margin-bottom:14px;">This creates today's class. Everyone starts marked <strong>absent</strong> — mark each student present as you call the roll. The date is set automatically to today and cannot be changed.</p>
+                    <p style="font-size:14px;color:var(--text-muted);margin-bottom:14px;">Everyone starts marked <strong>absent</strong> — mark each student present as you call the roll. Defaults to today; pick an earlier date to catch up a class that was missed (future dates aren't allowed).</p>
+                    <div class="form-field">
+                        <label>Class date</label>
+                        <input type="date" id="opener-date" required>
+                        <div class="hint">Today by default — change it to open attendance for a day that already passed.</div>
+                    </div>
                     <div class="form-field">
                         <label>Your name (who is opening attendance)</label>
                         <input type="text" id="opener-name" maxlength="120" required placeholder="e.g. Dr. Ariel Holan">
