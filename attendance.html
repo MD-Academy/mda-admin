@@ -55,7 +55,7 @@
             CURRENT_UID = auth.session.user.id;
             ADMIN_NAME = auth.profile.full_name || '';
             IS_SUPER = !!(auth.profile && auth.profile.role === 'superadmin');
-            await loadAttendanceMin();
+            await Promise.all([loadAttendanceMin(), loadStaffNames()]);
             renderLayout('attendance', 'Attendance', 'Mark and review class attendance by course', auth.profile);
 
             document.getElementById('page-content').innerHTML = `

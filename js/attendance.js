@@ -8,11 +8,12 @@ let atCourses = [];
 let atCourseId = '';
 let atStudents = [];        // current page of {id, full_name}
 let atSessions = [];        // [{id, session_date, opened_by_name}] for the course (date asc)
-let atMarks = {};           // `${studentId}_${sessionId}` -> present(bool)
+let atMarks = {};           // `${studentId}_${sessionId}` -> {present, updated_by, updated_at}
 let atStudentIds = [];      // ALL enrolled student ids for the course
 let atPage = 1, atPageSize = 50, atTotal = 0, atSearch = '', atSearchTimer = null;
 let IS_SUPER = false;
 let atMin = 80;             // office minimum attendance % (global setting)
+let atStaffNames = {};      // staff uid -> full_name, for "marked by" tooltips
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -22,6 +23,7 @@ function openModal(id) { document.getElementById(id).style.display = 'flex'; }
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 function showModalAlert(el, msg, type) { el.className = `alert ${type}`; el.textContent = msg; el.style.display = 'block'; }
 function fmtSession(d) { return d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''; }
+function fmtDateTime(iso) { return iso ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''; }
 function pctColor(p) { return p >= atMin ? 'att-green' : (p >= atMin - 10 ? 'att-amber' : 'att-red'); }
 
 async function loadAttendanceMin() {
@@ -29,6 +31,13 @@ async function loadAttendanceMin() {
         const { data } = await db.from('app_settings').select('value').eq('key', 'attendance_min').limit(1);
         if (data && data[0] && data[0].value != null) atMin = Number(data[0].value) || 80;
     } catch (e) { /* keep default */ }
+}
+
+async function loadStaffNames() {
+    try {
+        const { data } = await db.from('profiles').select('id, full_name').in('role', ['admin', 'superadmin']);
+        (data || []).forEach(p => { atStaffNames[p.id] = p.full_name || 'Staff'; });
+    } catch (e) { /* tooltips just won't resolve a name */ }
 }
 
 async function saveAttendanceMin() {
@@ -119,8 +128,10 @@ async function loadAtPage() {
     const pageIds = atStudents.map(s => s.id);
     if (pageIds.length && atSessions.length) {
         const sesIds = atSessions.map(s => s.id);
-        const mRes = await db.from('attendance').select('session_id, student_id, present').in('session_id', sesIds).in('student_id', pageIds);
-        (mRes.data || []).forEach(m => { atMarks[`${m.student_id}_${m.session_id}`] = m.present; });
+        const mRes = await db.from('attendance').select('session_id, student_id, present, updated_by, updated_at').in('session_id', sesIds).in('student_id', pageIds);
+        (mRes.data || []).forEach(m => {
+            atMarks[`${m.student_id}_${m.session_id}`] = { present: m.present === true, updated_by: m.updated_by, updated_at: m.updated_at };
+        });
     }
     renderAttendance();
     renderAtPager();
@@ -168,16 +179,20 @@ function renderAttendance() {
     const rows = atStudents.map(s => {
         let attended = 0;
         const cells = atSessions.map(se => {
-            const isPresent = atMarks[`${s.id}_${se.id}`] === true;
+            const mark = atMarks[`${s.id}_${se.id}`];
+            const isPresent = !!(mark && mark.present);
             if (isPresent) attended++;
-            return `<td class="att-cell"><button class="att-mark ${isPresent ? 'att-present' : 'att-absent'}" onclick="toggleMark('${s.id}','${se.id}')" title="Click to toggle present/absent">${isPresent ? '✓' : '✗'}</button></td>`;
+            const who = mark && mark.updated_by ? (atStaffNames[mark.updated_by] || 'Unknown staff') : '';
+            const when = mark && mark.updated_at ? fmtDateTime(mark.updated_at) : '';
+            const tip = who ? `Marked ${isPresent ? 'present' : 'absent'} by ${who}${when ? ' · ' + when : ''} — click to toggle` : 'Click to toggle present/absent';
+            return `<td class="att-cell"><button class="att-mark ${isPresent ? 'att-present' : 'att-absent'}" onclick="toggleMark('${s.id}','${se.id}')" title="${escapeHtml(tip)}">${isPresent ? '✓' : '✗'}</button></td>`;
         }).join('');
         const pct = Math.round((attended / atSessions.length) * 100);
         return `<tr><td class="att-sticky"><strong>${escapeHtml(s.full_name || '—')}</strong></td>${cells}<td><span class="att-pct ${pctColor(pct)}">${pct}%</span></td></tr>`;
     }).join('');
 
     container.innerHTML = `
-        <p class="hint" style="margin-bottom:12px;">Everyone starts <strong>absent (✗)</strong> when you open a class — click a student's mark as you call their name to flip it to present (✓). Percentage = classes attended ÷ classes held. The student name stays pinned as you scroll across dates.</p>
+        <p class="hint" style="margin-bottom:12px;">Everyone starts <strong>absent (✗)</strong> when you open a class — click a student's mark as you call their name to flip it to present (✓). Hover a mark to see who set it and when. Percentage = classes attended ÷ classes held. The student name stays pinned as you scroll across dates.</p>
         <div class="panel" style="overflow-x:auto;">
             <table class="data-table att-table"><thead>${head}</thead><tbody>${rows}</tbody></table>
         </div>`;
@@ -185,14 +200,17 @@ function renderAttendance() {
 
 async function toggleMark(studentId, sessionId) {
     const key = `${studentId}_${sessionId}`;
-    const next = !(atMarks[key] === true);
-    atMarks[key] = next;
+    const prev = atMarks[key];
+    const next = !(prev && prev.present === true);
+    const nowIso = new Date().toISOString();
+    atMarks[key] = { present: next, updated_by: CURRENT_UID, updated_at: nowIso };
+    if (!atStaffNames[CURRENT_UID]) atStaffNames[CURRENT_UID] = ADMIN_NAME || 'You';
     renderAttendance();
     const { error } = await db.from('attendance').upsert(
-        { session_id: sessionId, student_id: studentId, present: next, updated_by: CURRENT_UID, updated_at: new Date().toISOString() },
+        { session_id: sessionId, student_id: studentId, present: next, updated_by: CURRENT_UID, updated_at: nowIso },
         { onConflict: 'session_id,student_id' }
     );
-    if (error) { alert(`Couldn't save that mark: ${error.message}`); atMarks[key] = !next; renderAttendance(); }
+    if (error) { alert(`Couldn't save that mark: ${error.message}`); atMarks[key] = prev; renderAttendance(); }
 }
 
 async function deleteSession(sessionId) {
