@@ -869,6 +869,7 @@ body {
 /* width:auto so columns size to their content (compact, date-width) instead of stretching to fill the screen. */
 .att-table { width: auto; }
 .att-table th, .att-table td { text-align: center; white-space: nowrap; vertical-align: middle; }
+.att-table thead th { vertical-align: top; }
 .att-table th:first-child, .att-table td:first-child { text-align: left; }
 /* Grey vertical dividers between every class column. */
 .att-table thead th, .att-table tbody td { border-right: 1px solid var(--border); }
