@@ -1,5 +1,6 @@
 // Attendance — per-course class sessions (rows = students, cols = class dates) + % attended.
-// Everyone starts present when a class is opened; the teacher flips absentees. Date is server-locked.
+// Everyone starts absent when a class is opened; the teacher marks each present as they call
+// the roll. Date is server-locked.
 
 let CURRENT_UID = null;
 let ADMIN_NAME = '';
@@ -176,7 +177,7 @@ function renderAttendance() {
     }).join('');
 
     container.innerHTML = `
-        <p class="hint" style="margin-bottom:12px;">Everyone starts <strong>present (✓)</strong> when you open a class — click any mark to flip it to absent (✗) or back. Percentage = classes attended ÷ classes held. The student name stays pinned as you scroll across dates.</p>
+        <p class="hint" style="margin-bottom:12px;">Everyone starts <strong>absent (✗)</strong> when you open a class — click a student's mark as you call their name to flip it to present (✓). Percentage = classes attended ÷ classes held. The student name stays pinned as you scroll across dates.</p>
         <div class="panel" style="overflow-x:auto;">
             <table class="data-table att-table"><thead>${head}</thead><tbody>${rows}</tbody></table>
         </div>`;
@@ -232,7 +233,7 @@ async function submitNewClass(ev) {
         if (ins.error) throw new Error(ins.error.message);
 
         if (atStudentIds.length) {
-            const rows = atStudentIds.map(sid => ({ session_id: ins.data.id, student_id: sid, present: true, updated_by: CURRENT_UID }));
+            const rows = atStudentIds.map(sid => ({ session_id: ins.data.id, student_id: sid, present: false, updated_by: CURRENT_UID }));
             const at = await db.from('attendance').insert(rows);
             if (at.error) throw new Error(at.error.message);
         }
