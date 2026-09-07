@@ -16,7 +16,7 @@
     <div class="modal-overlay" id="open-modal">
         <div class="modal">
             <div class="modal-head">
-                <h3>Open attendance for today</h3>
+                <h3>Open a class</h3>
                 <button class="modal-close" onclick="closeModal('open-modal')">&times;</button>
             </div>
             <form onsubmit="submitNewClass(event)">
@@ -68,7 +68,7 @@
                         <option value="">Select a course…</option>
                     </select>
                     <div id="course-name-label" style="display:none;font-size:19px;font-weight:800;color:var(--navy-800);align-self:center;"></div>
-                    <button class="btn btn-primary" id="open-class-btn" style="display:none;" onclick="openClassModal()">+ Open attendance for today</button>
+                    <button class="btn btn-primary" id="open-class-btn" style="display:none;" onclick="openClassModal()">+ Open a class</button>
                     <div class="search-box">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input type="text" id="at-search" placeholder="Find a student by name…" oninput="onAtSearch()">

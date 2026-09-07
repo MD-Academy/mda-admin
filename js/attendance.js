@@ -151,7 +151,7 @@ function renderAttendance() {
         return;
     }
     if (atSessions.length === 0) {
-        container.innerHTML = `<div class="empty-state"><h3>No classes yet</h3><p>Click <strong>Open attendance for today</strong> to start the first class.</p></div>`;
+        container.innerHTML = `<div class="empty-state"><h3>No classes yet</h3><p>Click <strong>+ Open a class</strong> to start the first one.</p></div>`;
         return;
     }
     if (atStudents.length === 0) {
