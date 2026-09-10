@@ -104,7 +104,7 @@ async function loadRecordings() {
     if (term) q = q.or(`title.ilike.%${term}%,professor.ilike.%${term}%`);
     if (dateFrom) q = q.gte('recorded_date', dateFrom);
     if (dateTo) q = q.lte('recorded_date', dateTo);
-    q = q.order('recorded_date', { ascending: false }).range(from, to);
+    q = q.order('created_at', { ascending: false }).range(from, to);
 
     const { data, error, count } = await q;
     if (error) { tbody.innerHTML = `<tr><td colspan="7" class="loader" style="color:var(--red)">Error loading recordings: ${escapeHtml(error.message)}</td></tr>`; return; }
