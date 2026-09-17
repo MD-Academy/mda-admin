@@ -57,7 +57,7 @@ async function uploadCardImage(file, prefix) {
     const ext = (file.name.split('.').pop() || '').toLowerCase();
     if (!file.type.startsWith('image/') || !ALLOWED_IMG.includes(ext)) return { error: 'Please choose an image (PNG, JPG, WEBP or GIF).' };
     if (file.size > IMG_MAX) return { error: `Image too large (${(file.size / 1024).toFixed(0)} KB). Max 500 KB.` };
-    const path = `${prefix}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const path = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const up = await db.storage.from(CARD_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
     if (up.error) return { error: up.error.message };
     const { data } = db.storage.from(CARD_BUCKET).getPublicUrl(path);
