@@ -16,7 +16,7 @@ const NAV_ITEMS = [
     { id: 'meetings', label: 'Personal Meetings', href: 'meetings.html', icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/>' },
     { id: 'calendar', label: 'Calendar', href: 'calendar.html', icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
     { id: 'announcements', label: 'Announcements', href: 'announcements.html', icon: '<path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>' },
-    { id: 'tickets', label: 'Student Tickets', href: 'tickets.html', icon: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>' },
+    { id: 'tickets', label: 'Student Tickets', href: 'tickets.html', superadminOnly: true, icon: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>' },
     { id: 'admins', label: 'Admins', href: 'admins.html', superadminOnly: true, icon: '<path d="M12 1l3 5 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L3 7l6-1z"/>' },
     { id: 'feedback', label: 'Feedback', href: 'feedback.html', superadminOnly: true, icon: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
     { id: 'appearance', label: 'Appearance', href: 'appearance.html', superadminOnly: true, icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>' },
@@ -144,17 +144,33 @@ async function _initAdminNotifs(isSuper) {
         const readMsgs = new Set((readMsgRes.data || []).map(r => r.ref_id));
         const snip = t => { const s = String(t || '').replace(/\s+/g, ' ').trim(); return s.length > 110 ? s.slice(0, 110) + '…' : s; };
 
+        // For a superadmin, messages addressed to a colleague still show up (oversight),
+        // but we need that colleague's name so it's never mistaken for "to you".
+        let staffNameById = {};
+        if (isSuper) {
+            const otherStaffIds = [...new Set([
+                ...(msgRes.data || []).map(m => m.staff_id),
+                ...(repRes.data || []).map(r => (r.student_notes || {}).staff_id)
+            ].filter(id => id && id !== _adminUid))];
+            if (otherStaffIds.length) {
+                const { data: staffProfiles } = await db.from('profiles').select('id, full_name').in('id', otherStaffIds);
+                (staffProfiles || []).forEach(p => { staffNameById[p.id] = p.full_name; });
+            }
+        }
+        const recipientPhrase = staffId => (!staffId || staffId === _adminUid) ? 'you' : (staffNameById[staffId] || 'a colleague');
+
         _adminNotifs = [];
         (msgRes.data || []).forEach(m => {
             if (readMsgs.has(m.id)) return;
             _adminNotifs.push({ kind: 'feedback', id: m.id, student_id: m.student_id,
-                title: snip(m.body), sub: `${m.author_name || 'A student'} messaged you · ` + _adminNotifDate(m.created_at), date: m.created_at });
+                title: snip(m.body), sub: `${m.author_name || 'A student'} messaged ${recipientPhrase(m.staff_id)} · ` + _adminNotifDate(m.created_at), date: m.created_at });
         });
         (repRes.data || []).forEach(r => {
             if (readReplies.has(r.id)) return;
             const note = r.student_notes || {};
+            const toPhrase = recipientPhrase(note.staff_id);
             _adminNotifs.push({ kind: 'reply', id: r.id, student_id: note.student_id,
-                title: snip(r.body), sub: `${r.author_name || 'A student'} replied · ` + _adminNotifDate(r.created_at), date: r.created_at });
+                title: snip(r.body), sub: `${r.author_name || 'A student'} replied${toPhrase === 'you' ? '' : ` (thread with ${toPhrase})`} · ` + _adminNotifDate(r.created_at), date: r.created_at });
         });
         _adminNotifs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         _renderAdminBell();

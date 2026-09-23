@@ -64,7 +64,7 @@
     <script src="js/tickets.js"></script>
     <script>
         (async () => {
-            const auth = await requireAdmin();
+            const auth = await requireSuperadmin();
             if (!auth) return;
             renderLayout('tickets', 'Student Tickets', 'Problems & suggestions reported by students', auth.profile);
 

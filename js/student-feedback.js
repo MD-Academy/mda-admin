@@ -244,7 +244,7 @@ function renderFeedbackNotes() {
                         ${tAvatar(SF_STUDENT.avatar_url, SF_STUDENT.full_name)}
                         <span><strong style="color:var(--navy-800);">${escapeHtml(fmtStamp(n.created_at))}</strong> · Message from ${escapeHtml(SF_STUDENT.full_name || 'the student')}</span>
                     </div>
-                    <span class="sf-msg-badge">${isNew ? '● New message' : 'Message to you'}</span>
+                    <span class="sf-msg-badge">${isNew ? '● ' : ''}${n.staff_id === SF_UID ? 'Message to you' : `Message to ${escapeHtml(n.staff_name || 'staff')}`}</span>
                 </div>
                 <div style="font-size:14px;line-height:1.65;color:var(--text);white-space:pre-wrap;">${escapeHtml(n.body)}</div>
                 ${del}
