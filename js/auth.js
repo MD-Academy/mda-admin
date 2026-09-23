@@ -18,6 +18,7 @@ async function requireAdmin() {
             const profile = JSON.parse(cached);
             if (profile && _isAdminRole(profile.role) && profile.status !== 'suspended') {
                 _verifyAdminInBackground(session.user.id, cacheKey);
+                _startAdminTracking(session.user.id);
                 return { session, profile };
             }
         } catch (e) { /* fall through to a fresh fetch */ }
@@ -52,7 +53,52 @@ async function requireAdmin() {
         if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') { window.location.href = 'index.html'; return null; }
     } catch (e) { /* ignore */ }
     sessionStorage.setItem(cacheKey, JSON.stringify(profile));
+    _startAdminTracking(session.user.id);
     return { session, profile };
+}
+
+// ── LOGIN-TIME TRACKING (mirrors the student portal's, for the Usage Analytics report) ──
+let _adminHeartbeatTimer = null;
+async function _startAdminTracking(adminId) {
+    try {
+        let sid = sessionStorage.getItem('mda_admin_login_session_id');
+        if (!sid) {
+            const { data, error } = await db.from('admin_sessions').insert({ admin_id: adminId }).select('id').single();
+            if (error) return;
+            sid = data.id;
+            sessionStorage.setItem('mda_admin_login_session_id', sid);
+        } else {
+            db.from('admin_sessions').update({ last_seen_at: new Date().toISOString(), ended_at: null }).eq('id', sid);
+        }
+        if (_adminHeartbeatTimer) clearInterval(_adminHeartbeatTimer);
+        _adminHeartbeatTimer = setInterval(() => {
+            const id = sessionStorage.getItem('mda_admin_login_session_id');
+            if (id) db.from('admin_sessions').update({ last_seen_at: new Date().toISOString(), ended_at: null }).eq('id', id);
+        }, 60000);
+
+        window.addEventListener('beforeunload', () => {
+            const id = sessionStorage.getItem('mda_admin_login_session_id');
+            if (id) db.from('admin_sessions').update({ last_seen_at: new Date().toISOString() }).eq('id', id);
+        });
+        const _touch = (keepOpen) => {
+            const id = sessionStorage.getItem('mda_admin_login_session_id');
+            if (!id) return;
+            const patch = { last_seen_at: new Date().toISOString() };
+            if (keepOpen) patch.ended_at = null;
+            db.from('admin_sessions').update(patch).eq('id', id);
+        };
+        document.addEventListener('visibilitychange', () => _touch(document.visibilityState === 'visible'));
+        window.addEventListener('focus', () => _touch(true));
+    } catch (e) { /* tracking must never block the page */ }
+}
+
+async function _endAdminSession() {
+    const sid = sessionStorage.getItem('mda_admin_login_session_id');
+    if (sid) {
+        try { await db.from('admin_sessions').update({ last_seen_at: new Date().toISOString(), ended_at: new Date().toISOString() }).eq('id', sid); } catch (e) {}
+        sessionStorage.removeItem('mda_admin_login_session_id');
+    }
+    if (_adminHeartbeatTimer) clearInterval(_adminHeartbeatTimer);
 }
 
 // Require superadmin specifically; sends regular admins back to the dashboard.
@@ -105,6 +151,7 @@ async function apiRequest(method, path, body = null) {
 }
 
 async function signOut() {
+    await _endAdminSession();
     Object.keys(sessionStorage)
         .filter(k => k.startsWith('mda_profile_'))
         .forEach(k => sessionStorage.removeItem(k));

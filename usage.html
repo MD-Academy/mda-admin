@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Usage Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css?v=23">
+    <style>
+        .usage-section { margin-bottom: 30px; }
+        .usage-section h3 { font-size: 16px; margin: 0 0 4px; }
+        .usage-section p.hint { margin: 0 0 14px; }
+        .stat-cell { font-variant-numeric: tabular-nums; }
+        .pct-bar { display:inline-block; width:70px; height:7px; border-radius:99px; background:var(--bg); overflow:hidden; vertical-align:middle; margin-right:8px; }
+        .pct-bar i { display:block; height:100%; background:var(--blue-500,#2563eb); }
+    </style>
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/usage.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireSuperadmin();
+            if (!auth) return;
+            renderLayout('usage', 'Usage Analytics', 'How much students and staff actually use the LMS', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="usage-section">
+                    <h3>Per-course engagement</h3>
+                    <p class="hint">Enrolled students, how many were active in the last 30 days, and total quiz attempts — per course.</p>
+                    <div class="panel"><table class="data-table">
+                        <thead><tr><th>Course</th><th>Enrolled</th><th>Active (30d)</th><th>Quiz attempts</th></tr></thead>
+                        <tbody id="course-tbody"><tr><td colspan="4" class="loader">Loading…</td></tr></tbody>
+                    </table></div>
+                </div>
+
+                <div class="usage-section">
+                    <h3>Student time in the portal</h3>
+                    <p class="hint">Total time logged in, number of sessions, and last activity — most active first.</p>
+                    <div class="panel"><table class="data-table">
+                        <thead><tr><th>Student</th><th>Total time</th><th>Sessions</th><th>Last active</th></tr></thead>
+                        <tbody id="student-tbody"><tr><td colspan="4" class="loader">Loading…</td></tr></tbody>
+                    </table></div>
+                </div>
+
+                <div class="usage-section">
+                    <h3>Staff usage of the admin panel</h3>
+                    <p class="hint">Total time signed into the admin panel, number of sessions, and last activity.</p>
+                    <div class="panel"><table class="data-table">
+                        <thead><tr><th>Staff member</th><th>Role</th><th>Total time</th><th>Sessions</th><th>Last active</th></tr></thead>
+                        <tbody id="staff-tbody"><tr><td colspan="5" class="loader">Loading…</td></tr></tbody>
+                    </table></div>
+                </div>`;
+            loadUsage();
+        })();
+    </script>
+</body>
+</html>
