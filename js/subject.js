@@ -158,7 +158,27 @@ async function initRoom(roomId, profile) {
         </div>
     `;
 
+    document.getElementById('quiz-title').addEventListener('input', debounce(autosaveQuizTitle, 500));
+    document.getElementById('quiz-title').addEventListener('blur', autosaveQuizTitle);
+
     await loadAll();
+}
+
+function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+async function autosaveQuizTitle() {
+    if (!currentQuiz) return;
+    const title = document.getElementById('quiz-title').value.trim();
+    if (!title || title === currentQuiz.title) return;
+    const res = await db.from('quizzes').update({ title }).eq('id', currentQuiz.id);
+    if (res.error) return;
+    currentQuiz.title = title;
+    const q = quizzes.find(x => x.id === currentQuiz.id);
+    if (q) q.title = title;
+    renderQuizzes();
 }
 
 function switchTab(name) {
@@ -872,6 +892,27 @@ async function saveQuizSettings() {
     document.getElementById('quiz-modal-title').textContent = 'Manage Quiz';
     renderQuizzes();
     showModalAlert(alert, 'Settings saved.', 'success');
+}
+
+async function closeQuizModal() {
+    const title = document.getElementById('quiz-title').value.trim();
+    if (currentQuiz && title && title !== currentQuiz.title) {
+        const time = parseInt(document.getElementById('quiz-time').value, 10);
+        const cd = parseInt(document.getElementById('quiz-cooldown').value, 10);
+        const payload = {
+            title,
+            time_limit_minutes: (time && time >= 1) ? time : currentQuiz.time_limit_minutes,
+            cooldown_minutes: isNaN(cd) ? currentQuiz.cooldown_minutes : cd
+        };
+        const res = await db.from('quizzes').update(payload).eq('id', currentQuiz.id);
+        if (!res.error) {
+            Object.assign(currentQuiz, payload);
+            const q = quizzes.find(x => x.id === currentQuiz.id);
+            if (q) Object.assign(q, payload);
+            renderQuizzes();
+        }
+    }
+    closeModal('quiz-modal');
 }
 
 async function deleteQuiz(quizId) {
