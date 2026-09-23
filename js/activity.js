@@ -18,6 +18,59 @@ function fmtDur(secs) {
 function fmtTime(d) { return new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
 function dayKey(d) { return new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }); }
 
+let _actAllSessions = [];
+let _actFilterFrom = null;   // Date or null (null = no lower bound)
+let _actFilterTo = null;     // Date or null (null = no upper bound)
+let _actActivePreset = 'all';
+
+function _dateInputVal(d) { return d ? new Date(d).toISOString().slice(0, 10) : ''; }
+
+function _actFilterBarHtml() {
+    const presets = [['today', 'Today'], ['week', 'This week'], ['month', 'This month'], ['all', 'All time']];
+    return `
+        <div class="toolbar no-print" id="act-filter-bar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+            ${presets.map(([id, label]) => `<button class="btn btn-sm ${_actActivePreset === id ? 'btn-primary' : 'btn-ghost'}" onclick="setActivityFilter('${id}')">${label}</button>`).join('')}
+            <input type="date" id="act-from" class="filter-select" style="width:auto;" value="${_actActivePreset === 'custom' ? _dateInputVal(_actFilterFrom) : ''}">
+            <span style="color:var(--text-muted);font-size:13px;">to</span>
+            <input type="date" id="act-to" class="filter-select" style="width:auto;" value="${_actActivePreset === 'custom' ? _dateInputVal(_actFilterTo) : ''}">
+            <button class="btn btn-sm ${_actActivePreset === 'custom' ? 'btn-primary' : 'btn-ghost'}" onclick="applyCustomActivityFilter()">Apply custom range</button>
+        </div>`;
+}
+
+function setActivityFilter(preset) {
+    _actActivePreset = preset;
+    const now = new Date();
+    const startOfDay = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    if (preset === 'today') { _actFilterFrom = startOfDay(now); _actFilterTo = null; }
+    else if (preset === 'week') { const f = startOfDay(now); f.setDate(f.getDate() - f.getDay()); _actFilterFrom = f; _actFilterTo = null; }
+    else if (preset === 'month') { _actFilterFrom = new Date(now.getFullYear(), now.getMonth(), 1); _actFilterTo = null; }
+    else { _actFilterFrom = null; _actFilterTo = null; }
+    document.getElementById('act-from').value = '';
+    document.getElementById('act-to').value = '';
+    renderActivityFiltered();
+}
+
+function applyCustomActivityFilter() {
+    const fromVal = document.getElementById('act-from').value;
+    const toVal = document.getElementById('act-to').value;
+    _actActivePreset = 'custom';
+    _actFilterFrom = fromVal ? new Date(fromVal + 'T00:00:00') : null;
+    _actFilterTo = toVal ? new Date(toVal + 'T23:59:59') : null;
+    renderActivityFiltered();
+}
+
+function renderActivityFiltered() {
+    const filterBar = document.getElementById('act-filter-bar');
+    if (filterBar) filterBar.outerHTML = _actFilterBarHtml();
+    const sessions = _actAllSessions.filter(s => {
+        const t = new Date(s.started_at).getTime();
+        if (_actFilterFrom && t < _actFilterFrom.getTime()) return false;
+        if (_actFilterTo && t > _actFilterTo.getTime()) return false;
+        return true;
+    });
+    renderActivityReport(sessions);
+}
+
 async function initActivity(studentId, profile) {
     const { data: student } = await db.from('profiles').select('full_name').eq('id', studentId).single();
     const name = (student && student.full_name) || 'Student';
@@ -45,6 +98,7 @@ async function initActivity(studentId, profile) {
                 <span id="gen-time">Updated ${new Date().toLocaleString('en-GB')} · refreshes automatically</span>
             </div>
         </div>
+        ${_actFilterBarHtml()}
         <div id="report"><div class="loader">Loading activity…</div></div>
     `;
 
@@ -69,9 +123,18 @@ async function refreshActivity(studentId) {
 
     if (error) { report.innerHTML = `<div class="loader" style="color:var(--red)">Error: ${escapeHtml(error.message)}</div>`; return; }
 
-    const sessions = data || [];
-    if (sessions.length === 0) {
+    _actAllSessions = data || [];
+    if (_actAllSessions.length === 0) {
         report.innerHTML = `<div class="empty-state"><h3>No activity yet</h3><p>This student hasn't logged into the portal yet, or sessions are still being recorded.</p></div>`;
+        return;
+    }
+    renderActivityFiltered();
+}
+
+function renderActivityReport(sessions) {
+    const report = document.getElementById('report');
+    if (sessions.length === 0) {
+        report.innerHTML = `<div class="empty-state"><h3>No activity in this range</h3><p>Try a wider date range.</p></div>`;
         return;
     }
 
@@ -100,7 +163,7 @@ async function refreshActivity(studentId) {
     const badgeEnded = `<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:#fee2e2;color:#b91c1c;white-space:nowrap;">Ended</span>`;
 
     report.innerHTML = `
-        <div class="grand"><div>Total time recorded (all days)</div><div class="g-val">${fmtDur(grand)}</div></div>
+        <div class="grand"><div>Total time recorded (${escapeHtml({ today: 'today', week: 'this week', month: 'this month', all: 'all time', custom: 'selected range' }[_actActivePreset] || 'all time')})</div><div class="g-val">${fmtDur(grand)}</div></div>
         <p class="hint no-print" style="margin:10px 2px 16px;">Each row is one login session: <strong>Started → Ended</strong>, with how long it lasted. <span style="color:#15803d;font-weight:600;">● Active</span> means the student is still in the portal.</p>
         ${ordered.map(k => {
             const d = days[k];
