@@ -74,7 +74,7 @@ async function _startAdminTracking(adminId) {
         _adminHeartbeatTimer = setInterval(() => {
             const id = sessionStorage.getItem('mda_admin_login_session_id');
             if (id) db.from('admin_sessions').update({ last_seen_at: new Date().toISOString(), ended_at: null }).eq('id', id);
-        }, 60000);
+        }, 15000);
 
         window.addEventListener('beforeunload', () => {
             const id = sessionStorage.getItem('mda_admin_login_session_id');
