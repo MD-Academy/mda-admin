@@ -123,18 +123,18 @@ async function _initAdminNotifs(isSuper) {
         if (!session) return;
         _adminUid = session.user.id;
 
-        // Two kinds of inbound-from-students, addressed to me (or all, for super):
-        //   1) student replies in any thread that's with me
-        //   2) new messages a student started with me (initiated_by = 'student')
-        let repQ = db.from('student_note_replies')
+        // Two kinds of inbound-from-students, addressed to me: student replies in a
+        // thread that's with me, and new messages a student started with me
+        // (initiated_by = 'student'). RLS itself restricts these to my own threads
+        // — only the designated messages owner gets everyone's, for oversight.
+        const repQ = db.from('student_note_replies')
             .select('id, author_name, body, created_at, student_notes!inner(staff_id, student_id)')
             .eq('author_role', 'student')
             .order('created_at', { ascending: false }).limit(100);
-        let msgQ = db.from('student_notes')
+        const msgQ = db.from('student_notes')
             .select('id, author_name, body, created_at, student_id, staff_id')
             .eq('initiated_by', 'student')
             .order('created_at', { ascending: false }).limit(100);
-        if (!isSuper) { repQ = repQ.eq('student_notes.staff_id', _adminUid); msgQ = msgQ.eq('staff_id', _adminUid); }
 
         const [repRes, msgRes, readRepRes, readMsgRes] = await Promise.all([
             repQ, msgQ,

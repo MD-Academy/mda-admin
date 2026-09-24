@@ -76,10 +76,14 @@ async function _startAdminTracking(adminId) {
             if (id) db.from('admin_sessions').update({ last_seen_at: new Date().toISOString(), ended_at: null }).eq('id', id);
         }, 15000);
 
-        window.addEventListener('beforeunload', () => {
+        const _sendEndBeacon = () => {
             const id = sessionStorage.getItem('mda_admin_login_session_id');
-            if (id) db.from('admin_sessions').update({ last_seen_at: new Date().toISOString() }).eq('id', id);
-        });
+            if (!id) return;
+            const blob = new Blob([JSON.stringify({ session_id: id, table: 'admin_sessions' })], { type: 'application/json' });
+            navigator.sendBeacon(`${BACKEND_URL}/track/session-end`, blob);
+        };
+        window.addEventListener('beforeunload', _sendEndBeacon);
+        window.addEventListener('pagehide', _sendEndBeacon);
         const _touch = (keepOpen) => {
             const id = sessionStorage.getItem('mda_admin_login_session_id');
             if (!id) return;
