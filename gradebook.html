@@ -8,6 +8,17 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/dashboard.css?v=23">
+    <style>
+        .ad-q { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+        .ad-q-num { font-size: 12px; font-weight: 700; color: var(--blue-500); margin-bottom: 4px; }
+        .ad-q-text { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+        .ad-opt { padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; margin-bottom: 6px; font-size: 13.5px; }
+        .ad-opt.correct { border-color: var(--green); background: #f0fdf4; }
+        .ad-opt.wrong { border-color: var(--red); background: #fef2f2; }
+        .ad-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+        .ad-tag.correct { background: #dcfce7; color: #15803d; }
+        .ad-tag.wrong { background: #fee2e2; color: #b91c1c; }
+    </style>
 </head>
 <body>
     <div class="layout" id="app-layout"></div>
@@ -36,6 +47,20 @@
                     <button type="submit" class="btn btn-primary" id="score-save-btn">Save Score</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- MCQ EXAM ATTEMPT DETAIL MODAL (which questions were right/wrong) -->
+    <div class="modal-overlay" id="attempt-detail-modal">
+        <div class="modal wide">
+            <div class="modal-head">
+                <h3 id="ad-title">Attempt detail</h3>
+                <button class="modal-close" onclick="closeModal('attempt-detail-modal')">&times;</button>
+            </div>
+            <div class="modal-body" id="ad-body"><div class="loader">Loading…</div></div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-primary" onclick="closeModal('attempt-detail-modal')">Close</button>
+            </div>
         </div>
     </div>
 

@@ -254,9 +254,8 @@ function renderGradebook() {
             if (a && a.score != null) {
                 const cls = a.score >= e.pass_threshold ? 'pass' : 'fail';
                 const inner = `<span class="gb-cell ${cls}">${Math.round(a.score)}%</span>`;
-                return `<td>${e.type === 'pdf'
-                    ? `<button class="btn btn-ghost btn-sm gb-enter" onclick="openScoreEntry('${s.id}','${e.id}')">${inner}</button>`
-                    : inner}</td>`;
+                const onclick = e.type === 'pdf' ? `openScoreEntry('${s.id}','${e.id}')` : `openAttemptDetail('${s.id}','${e.id}')`;
+                return `<td><button class="btn btn-ghost btn-sm gb-enter" onclick="${onclick}">${inner}</button></td>`;
             }
             return `<td>${e.type === 'pdf'
                 ? `<button class="btn btn-ghost btn-sm gb-enter" onclick="openScoreEntry('${s.id}','${e.id}')">+ Score</button>`
@@ -372,6 +371,50 @@ async function saveScore(ev) {
     } finally {
         btn.disabled = false; btn.textContent = 'Save Score';
     }
+}
+
+// ── AUTO-GRADED (MCQ) EXAM — per-question breakdown ──
+async function openAttemptDetail(studentId, examId) {
+    const s = gbStudents.find(x => x.id === studentId);
+    const e = examById(examId);
+    if (!s || !e) return;
+    document.getElementById('ad-title').textContent = `${e.title} — ${s.full_name}`;
+    document.getElementById('ad-body').innerHTML = `<div class="loader">Loading…</div>`;
+    openModal('attempt-detail-modal');
+
+    const [{ data: attempt, error: aErr }, { data: questions, error: qErr }] = await Promise.all([
+        db.from('exam_attempts').select('score, passed, answers_json').eq('exam_id', examId).eq('student_id', studentId).single(),
+        db.from('exam_questions').select('id, question_text, options_json, correct_answer_index, order_index').eq('exam_id', examId).order('order_index', { ascending: true })
+    ]);
+    renderAttemptDetail(attempt, aErr, questions, qErr, e.pass_threshold);
+}
+
+function renderAttemptDetail(attempt, aErr, questions, qErr, passThreshold) {
+    const body = document.getElementById('ad-body');
+    if (aErr || !attempt) { body.innerHTML = `<div class="empty-state"><h3>No attempt on record</h3></div>`; return; }
+    if (qErr) { body.innerHTML = `<div class="empty-state"><h3>Couldn't load questions</h3><p>${escapeHtml(qErr.message)}</p></div>`; return; }
+    const answers = attempt.answers_json || {};
+    const pass = attempt.score >= passThreshold;
+    body.innerHTML = `
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;">
+            <span class="gb-cell ${pass ? 'pass' : 'fail'}" style="font-size:20px;padding:8px 16px;">${Math.round(attempt.score)}%</span>
+            <span style="font-size:13px;color:var(--text-muted);">Pass mark ${passThreshold}%</span>
+        </div>
+        ${(questions || []).map((q, i) => {
+            const opts = Array.isArray(q.options_json) ? q.options_json : [];
+            const picked = answers[q.id];
+            const wasCorrect = picked === q.correct_answer_index;
+            return `<div class="ad-q">
+                <div class="ad-q-num">Question ${i + 1}${picked === undefined ? ' <span style="color:var(--text-muted);font-weight:400;">— not answered</span>' : (wasCorrect ? ' <span class="ad-tag correct">Correct</span>' : ' <span class="ad-tag wrong">Incorrect</span>')}</div>
+                <div class="ad-q-text">${escapeHtml(q.question_text)}</div>
+                ${opts.map((o, oi) => {
+                    let cls = 'ad-opt';
+                    if (oi === q.correct_answer_index) cls += ' correct';
+                    else if (oi === picked) cls += ' wrong';
+                    return `<div class="${cls}">${escapeHtml(o)}${oi === picked ? ' <strong>(student\'s answer)</strong>' : ''}</div>`;
+                }).join('')}
+            </div>`;
+        }).join('')}`;
 }
 
 // ── ORAL PRESENTATION GRADE + FEEDBACK ──

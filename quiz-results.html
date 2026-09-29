@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Quiz Results</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css?v=23">
+    <style>
+        .ad-q { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+        .ad-q-num { font-size: 12px; font-weight: 700; color: var(--blue-500); margin-bottom: 4px; }
+        .ad-q-text { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+        .ad-opt { padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; margin-bottom: 6px; font-size: 13.5px; }
+        .ad-opt.correct { border-color: var(--green); background: #f0fdf4; }
+        .ad-opt.wrong { border-color: var(--red); background: #fef2f2; }
+        .ad-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+        .ad-tag.correct { background: #dcfce7; color: #15803d; }
+        .ad-tag.wrong { background: #fee2e2; color: #b91c1c; }
+        .qr-detail { display: none; background: var(--bg); padding: 18px; }
+        .qr-detail.open { display: block; }
+    </style>
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script>
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+        }
+        function fmtStamp(iso) { try { return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+
+        let QUESTIONS = [], ATTEMPTS_BY_STUDENT = {}, OPEN_ROW = null;
+
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+            const quizId = new URLSearchParams(location.search).get('id');
+            if (!quizId) { window.close(); return; }
+
+            const [{ data: quiz }, { data: questions, error: qErr }, { data: attempts, error: aErr }] = await Promise.all([
+                db.from('quizzes').select('id, title').eq('id', quizId).single(),
+                db.from('quiz_questions').select('id, question_text, options_json, correct_answer_index, order_index').eq('quiz_id', quizId).order('order_index', { ascending: true }),
+                db.from('quiz_attempts').select('student_id, score, answers_json, completed_at').eq('quiz_id', quizId).order('completed_at', { ascending: false })
+            ]);
+            renderLayout('subjects', 'Quiz Results', `Who has attempted "${escapeHtml((quiz || {}).title || 'this quiz')}", and what they got right/wrong`, auth.profile);
+            const content = document.getElementById('page-content');
+
+            if (qErr || aErr) { content.innerHTML = `<div class="empty-state"><h3>Couldn't load results</h3><p>${escapeHtml((qErr || aErr).message)}</p></div>`; return; }
+            QUESTIONS = questions || [];
+
+            // Keep only each student's most recent attempt (rows are already newest-first).
+            (attempts || []).forEach(a => { if (!ATTEMPTS_BY_STUDENT[a.student_id]) ATTEMPTS_BY_STUDENT[a.student_id] = a; });
+            const studentIds = Object.keys(ATTEMPTS_BY_STUDENT);
+
+            if (studentIds.length === 0) {
+                content.innerHTML = `<div class="empty-state"><h3>No attempts yet</h3><p>No student has taken this quiz.</p></div>`;
+                return;
+            }
+            const { data: profiles } = await db.from('profiles').select('id, full_name').in('id', studentIds);
+            const nameById = {};
+            (profiles || []).forEach(p => { nameById[p.id] = p.full_name; });
+
+            const rows = studentIds
+                .map(sid => ({ sid, name: nameById[sid] || '—', ...ATTEMPTS_BY_STUDENT[sid] }))
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+            content.innerHTML = `
+                <div class="panel"><table class="data-table">
+                    <thead><tr><th>Student</th><th>Score</th><th>Completed</th><th></th></tr></thead>
+                    <tbody>${rows.map(r => `
+                        <tr>
+                            <td><strong>${escapeHtml(r.name)}</strong></td>
+                            <td><span class="gb-cell ${r.score >= 100 ? 'pass' : 'fail'}">${Math.round(r.score)}%</span></td>
+                            <td style="color:var(--text-muted);font-size:13px;">${escapeHtml(fmtStamp(r.completed_at))}</td>
+                            <td><button class="btn btn-ghost btn-sm" onclick="toggleRow('${r.sid}')">View answers</button></td>
+                        </tr>
+                        <tr><td colspan="4" style="padding:0;"><div class="qr-detail" id="detail-${r.sid}"></div></td></tr>
+                    `).join('')}</tbody>
+                </table></div>`;
+        })();
+
+        function toggleRow(sid) {
+            if (OPEN_ROW && OPEN_ROW !== sid) document.getElementById('detail-' + OPEN_ROW).classList.remove('open');
+            const el = document.getElementById('detail-' + sid);
+            const opening = !el.classList.contains('open');
+            el.classList.toggle('open', opening);
+            OPEN_ROW = opening ? sid : null;
+            if (opening && !el.dataset.rendered) {
+                el.dataset.rendered = '1';
+                renderDetail(el, ATTEMPTS_BY_STUDENT[sid].answers_json || {});
+            }
+        }
+
+        function renderDetail(el, answers) {
+            el.innerHTML = QUESTIONS.map((q, i) => {
+                const opts = Array.isArray(q.options_json) ? q.options_json : [];
+                const picked = answers[q.id];
+                const wasCorrect = picked === q.correct_answer_index;
+                return `<div class="ad-q">
+                    <div class="ad-q-num">Question ${i + 1}${picked === undefined ? ' <span style="color:var(--text-muted);font-weight:400;">— not answered</span>' : (wasCorrect ? ' <span class="ad-tag correct">Correct</span>' : ' <span class="ad-tag wrong">Incorrect</span>')}</div>
+                    <div class="ad-q-text">${escapeHtml(q.question_text)}</div>
+                    ${opts.map((o, oi) => {
+                        let cls = 'ad-opt';
+                        if (oi === q.correct_answer_index) cls += ' correct';
+                        else if (oi === picked) cls += ' wrong';
+                        return `<div class="${cls}">${escapeHtml(o)}${oi === picked ? ' <strong>(student\'s answer)</strong>' : ''}</div>`;
+                    }).join('')}
+                </div>`;
+            }).join('');
+        }
+    </script>
+</body>
+</html>
