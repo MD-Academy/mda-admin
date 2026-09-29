@@ -782,6 +782,7 @@ function renderQuizzes() {
                 </div>
                 <div class="lr-actions">
                     ${visToggleHtml('toggleQuizVis', q.id, q.is_visible)}
+                    <button class="btn btn-ghost btn-sm" ${count === 0 ? 'disabled style="opacity:.5;cursor:default;" title="Add questions first"' : `onclick="window.open('quiz-preview.html?id=${q.id}', '_blank')"`}>Preview</button>
                     <button class="btn btn-primary btn-sm" onclick="openQuizBuilder('${q.id}')">Manage Quiz</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteQuiz('${q.id}')">Delete</button>
                 </div>

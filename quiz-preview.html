@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Quiz Preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css?v=23">
+    <style>
+        .exam-meta { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 18px; }
+        .exam-meta h2 { font-size: 19px; font-weight: 800; color: var(--navy-800); margin-bottom: 6px; }
+        .exam-meta p { font-size: 14px; color: var(--text-muted); }
+        .preview-banner { background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; border-radius: 10px; padding: 10px 16px; font-size: 13px; font-weight: 600; margin-bottom: 18px; }
+        .q-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
+        .q-card .q-num { font-size: 12px; font-weight: 700; color: var(--blue-500); }
+        .q-card .q-text { font-size: 15px; font-weight: 600; color: var(--text); margin: 6px 0 14px; }
+        .opt { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: all 0.12s; }
+        .opt:hover { border-color: var(--blue-400); background: #f8fbff; }
+        .opt input { width: 18px; height: 18px; accent-color: var(--blue-500); }
+        .opt.sel { border-color: var(--blue-500); background: #eff5ff; }
+        .result-card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 36px; text-align: center; max-width: 520px; margin: 0 auto 24px; }
+        .result-card .r-score { font-size: 52px; font-weight: 800; line-height: 1; }
+        .result-card .r-badge { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; padding: 10px 22px; border-radius: 30px; margin: 16px 0; }
+        .result-card .r-badge.pass { background: #dcfce7; color: #15803d; }
+        .result-card .r-badge.fail { background: #fee2e2; color: #b91c1c; }
+        .r-review { text-align: left; background: var(--bg); border-radius: 12px; padding: 14px 18px; margin-top: 16px; font-size: 14px; color: var(--text); }
+    </style>
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        function esc(s){ return s ? String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
+        let QUIZ = null, QUESTIONS = [], answers = {};
+
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+            const quizId = new URLSearchParams(location.search).get('id');
+            if (!quizId) { window.close(); return; }
+            renderLayout('subjects', 'Quiz Preview', 'See and take this quiz exactly as a student would', auth.profile);
+            const content = document.getElementById('page-content');
+            content.innerHTML = `<div class="loader">Loading quiz…</div>`;
+
+            const [{ data: quiz, error: qErr }, { data: questions, error: quErr }] = await Promise.all([
+                db.from('quizzes').select('id, title').eq('id', quizId).single(),
+                db.from('quiz_questions').select('id, question_text, options_json, correct_answer_index, order_index').eq('quiz_id', quizId).order('order_index', { ascending: true })
+            ]);
+            if (qErr || !quiz) { content.innerHTML = `<div class="empty-state"><h3>Quiz not found</h3></div>`; return; }
+            if (quErr) { content.innerHTML = `<div class="empty-state"><h3>Couldn't load questions</h3><p>${esc(quErr.message)}</p></div>`; return; }
+            QUIZ = quiz; QUESTIONS = questions || [];
+            if (QUESTIONS.length === 0) { content.innerHTML = `<div class="empty-state"><h3>No questions yet</h3><p>Add questions to this quiz first.</p></div>`; return; }
+            renderQuiz();
+        })();
+
+        function renderQuiz() {
+            answers = {};
+            const content = document.getElementById('page-content');
+            content.innerHTML = `
+                <div class="preview-banner">👁 Preview mode — this is exactly what a student sees. Nothing you submit here is recorded or counted.</div>
+                <div class="exam-meta">
+                    <h2>${esc(QUIZ.title || 'Quiz')}</h2>
+                    <p>Answer <strong>all ${QUESTIONS.length}</strong> questions correctly to pass.</p>
+                </div>
+                <div id="questions">${QUESTIONS.map((q, i) => {
+                    const opts = Array.isArray(q.options_json) ? q.options_json : [];
+                    return `<div class="q-card" id="q-${q.id}">
+                        <div class="q-num">Question ${i + 1} of ${QUESTIONS.length}</div>
+                        <div class="q-text">${esc(q.question_text)}</div>
+                        ${opts.map((o, oi) => `<label class="opt" onclick="pick('${q.id}', ${oi}, this)"><input type="radio" name="q-${q.id}" value="${oi}"> <span>${esc(o)}</span></label>`).join('')}
+                    </div>`;
+                }).join('')}</div>
+                <div style="display:flex;gap:12px;align-items:center;margin-top:8px;">
+                    <button class="btn btn-primary" id="submit-btn" onclick="submitPreview()">Submit Quiz</button>
+                    <button class="btn btn-ghost" onclick="window.close()">Close preview</button>
+                </div>`;
+        }
+
+        function pick(qid, oi, el) {
+            answers[qid] = oi;
+            const card = document.getElementById('q-' + qid);
+            card.querySelectorAll('.opt').forEach(o => o.classList.remove('sel'));
+            el.classList.add('sel');
+            el.querySelector('input').checked = true;
+        }
+
+        async function submitPreview() {
+            const unanswered = QUESTIONS.filter(q => answers[q.id] === undefined).length;
+            if (unanswered > 0) {
+                const ok = await confirmDialog({ title: 'Submit quiz?', message: `${unanswered} question(s) unanswered. Submit anyway?`, confirmText: 'Submit anyway', cancelText: 'Keep answering' });
+                if (!ok) return;
+            }
+            const correctCount = QUESTIONS.filter(q => answers[q.id] === q.correct_answer_index).length;
+            const total = QUESTIONS.length;
+            const score = Math.round(correctCount / total * 100);
+            const pass = correctCount === total;
+            const wrong = QUESTIONS.map((q, i) => ({ q, n: i + 1 })).filter(({ q }) => answers[q.id] !== q.correct_answer_index).map(({ n }) => n);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="preview-banner">👁 Preview mode — nothing here is recorded or counted toward any student.</div>
+                <div class="result-card">
+                    <div class="r-score" style="color:${pass ? 'var(--green)' : 'var(--red)'};">${score}%</div>
+                    <div class="r-badge ${pass ? 'pass' : 'fail'}">${pass ? '✓ Passed' : '✕ Not passed'}</div>
+                    <p style="color:var(--text-muted);">You got ${correctCount} of ${total} correct. ${pass ? 'Perfect — all correct!' : 'Every question must be correct to pass.'}</p>
+                    ${(!pass && wrong.length) ? `<div class="r-review"><strong>Questions to review:</strong> ${wrong.map(n => '#' + n).join(', ')}.</div>` : ''}
+                </div>
+                <div style="display:flex;gap:12px;align-items:center;justify-content:center;">
+                    <button class="btn btn-primary" onclick="renderQuiz()">Take again</button>
+                    <button class="btn btn-ghost" onclick="window.close()">Close preview</button>
+                </div>`;
+        }
+    </script>
+</body>
+</html>
