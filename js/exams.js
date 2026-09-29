@@ -88,8 +88,10 @@ function renderExams(list) {
         const typeBadge = isManual
             ? `<span class="badge badge-green">Multiple-choice</span>`
             : `<span class="badge badge-amber">PDF</span>`;
+        const qCount = questionCounts[e.id] || 0;
         const contentBtn = isManual
-            ? `<button class="btn btn-ghost btn-sm" onclick="openQuestions('${e.id}')">Questions (${questionCounts[e.id] || 0})</button>`
+            ? `<button class="btn btn-ghost btn-sm" onclick="openQuestions('${e.id}')">Questions (${qCount})</button>
+               <button class="btn btn-ghost btn-sm" ${qCount === 0 ? 'disabled style="opacity:.5;cursor:default;" title="Add questions first"' : `onclick="window.open('exam-preview.html?id=${e.id}', '_blank')"`}>Preview</button>`
             : `<button class="btn btn-ghost btn-sm" onclick="previewExam('${e.id}', this)">Preview</button>`;
         return `
             <tr>
