@@ -228,11 +228,11 @@ function renderStudents(students) {
                 <td>
                     <div class="row-actions">
                         <button class="btn btn-ghost btn-sm" onclick="openFeedback('${s.id}')" style="color:var(--navy-800);border-color:#c7d2e4;">💬 Messages<span class="msg-badge" id="msgbadge-${s.id}" style="display:none;">0</span></button>
+                        <button class="btn btn-ghost btn-sm" onclick="resetPw('${s.id}')">Reset PW</button>
+                        <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
                         <button class="btn btn-ghost btn-sm" onclick="openActivity('${s.id}')">Activity</button>
                         <button class="btn btn-ghost btn-sm" onclick="openNotices('${s.id}')">Notices</button>
-                        <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
                         <button class="btn btn-ghost btn-sm" onclick="toggleStatus('${s.id}')">${s.status === 'suspended' ? 'Activate' : 'Block'}</button>
-                        <button class="btn btn-ghost btn-sm" onclick="resetPw('${s.id}')">Reset PW</button>
                         <button class="btn btn-ghost btn-sm" onclick="resetMfa('${s.id}')">Reset 2FA</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button>
                     </div>
