@@ -43,6 +43,16 @@ function openPhotoLightbox(src, name) {
     ov.classList.add('open');
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const ov = document.getElementById('photo-lightbox'); if (ov) ov.classList.remove('open'); } });
+
+// ── ROW ⋯ MENU (Activity, Notices, Block/Activate, Reset 2FA, Delete) ──
+function toggleCardMenu(e, id) {
+    e.stopPropagation();
+    const menu = document.getElementById(`menu-${id}`);
+    const open = menu.classList.contains('open');
+    document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open'));
+    if (!open) menu.classList.add('open');
+}
+document.addEventListener('click', () => document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open')));
 function studentInitials(name) {
     return (name || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 }
@@ -228,13 +238,18 @@ function renderStudents(students) {
                 <td>
                     <div class="row-actions">
                         <button class="btn btn-ghost btn-sm" onclick="openFeedback('${s.id}')" style="color:var(--navy-800);border-color:#c7d2e4;">💬 Messages<span class="msg-badge" id="msgbadge-${s.id}" style="display:none;">0</span></button>
-                        <button class="btn btn-ghost btn-sm" onclick="openActivity('${s.id}')">Activity</button>
-                        <button class="btn btn-ghost btn-sm" onclick="openNotices('${s.id}')">Notices</button>
                         <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
-                        <button class="btn btn-ghost btn-sm" onclick="toggleStatus('${s.id}')">${s.status === 'suspended' ? 'Activate' : 'Block'}</button>
                         <button class="btn btn-ghost btn-sm" onclick="resetPw('${s.id}')">Reset PW</button>
-                        <button class="btn btn-ghost btn-sm" onclick="resetMfa('${s.id}')">Reset 2FA</button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button>
+                        <span class="row-menu-wrap">
+                            <button class="row-dots" onclick="toggleCardMenu(event, '${s.id}')" aria-label="More options" title="More">⋯</button>
+                            <div class="card-menu" id="menu-${s.id}">
+                                <button onclick="openActivity('${s.id}')">Activity</button>
+                                <button onclick="openNotices('${s.id}')">Notices</button>
+                                <button onclick="toggleStatus('${s.id}')">${s.status === 'suspended' ? 'Activate' : 'Block'}</button>
+                                <button onclick="resetMfa('${s.id}')">Reset 2FA</button>
+                                <button onclick="deleteStudent('${s.id}')" style="color:var(--red);">Delete</button>
+                            </div>
+                        </span>
                     </div>
                 </td>
             </tr>

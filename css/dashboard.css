@@ -462,10 +462,12 @@ body {
     font-weight: 600;
 }
 
-/* Wrap onto multiple lines instead of hiding buttons behind a sideways scrollbar
-   inside the cell — every action (Reset PW, Delete, etc.) is always fully visible. */
-.row-actions { display: flex; gap: 6px; flex-wrap: wrap; max-width: 420px; }
+/* One line; scroll sideways inside the cell to reach the last (Delete) button. */
+.row-actions { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; max-width: 640px; padding-bottom: 2px; scrollbar-width: thin; }
 .row-actions > * { flex-shrink: 0; white-space: nowrap; }
+.row-actions::-webkit-scrollbar { height: 6px; }
+.row-actions::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.row-actions::-webkit-scrollbar-track { background: transparent; }
 
 /* ── BADGES ── */
 .badge {
@@ -878,10 +880,7 @@ body {
 .ui-confirm-actions .btn { flex: 1; justify-content: center; }
 
 /* ── ATTENDANCE SHEET (grid: students × class dates) ── */
-/* Bounded height with its own scrollbars, like a spreadsheet, so both the
-   horizontal scrollbar and the frozen header/column are reachable without
-   first scrolling the whole page down past every row. */
-.att-scroll-box { max-height: 70vh; overflow: auto; }
+.att-scroll-box { overflow-x: auto; }
 /* width:auto so columns size to their content (compact, date-width) instead of stretching to fill the screen. */
 /* border-collapse breaks position:sticky on table cells in Safari (and is flaky
    elsewhere too) — separate + zero spacing looks identical but keeps the frozen
