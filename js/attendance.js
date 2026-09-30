@@ -110,7 +110,7 @@ function changeAtPage(delta) {
 
 async function loadAtPage() {
     const container = document.getElementById('attendance-container');
-    if (atStudentIds.length === 0) { atStudents = []; atTotal = 0; renderAttendance(); document.getElementById('pager').style.display = 'none'; return; }
+    if (atStudentIds.length === 0) { atStudents = []; atTotal = 0; renderAttendance(true); document.getElementById('pager').style.display = 'none'; return; }
     container.innerHTML = `<div class="loader">Loading attendance…</div>`;
 
     const from = (atPage - 1) * atPageSize, to = from + atPageSize - 1;
@@ -133,7 +133,7 @@ async function loadAtPage() {
             atMarks[`${m.student_id}_${m.session_id}`] = { present: m.present === true, updated_by: m.updated_by, updated_at: m.updated_at };
         });
     }
-    renderAttendance();
+    renderAttendance(true);
     renderAtPager();
 }
 
@@ -155,7 +155,7 @@ function renderAtPager() {
     prev.style.opacity = prev.disabled ? '.4' : '1'; next.style.opacity = next.disabled ? '.4' : '1';
 }
 
-function renderAttendance() {
+function renderAttendance(jumpToLatest) {
     const container = document.getElementById('attendance-container');
     if (atStudentIds.length === 0) {
         container.innerHTML = `<div class="empty-state"><h3>No students enrolled</h3><p>Enrol students in this course (Courses → open the course) to mark attendance.</p></div>`;
@@ -196,6 +196,15 @@ function renderAttendance() {
         <div class="panel att-scroll-box">
             <table class="data-table att-table"><thead>${head}</thead><tbody>${rows}</tbody></table>
         </div>`;
+
+    // Newest classes are added on the right — start scrolled there so today's
+    // column is ready to mark without scrolling through the whole history first.
+    // Only on a fresh load (not after toggling a mark), so mid-edit scroll position
+    // is never yanked out from under whoever's clicking.
+    if (jumpToLatest) {
+        const box = container.querySelector('.att-scroll-box');
+        if (box) box.scrollLeft = box.scrollWidth;
+    }
 }
 
 async function toggleMark(studentId, sessionId) {
