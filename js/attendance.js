@@ -157,6 +157,12 @@ function renderAtPager() {
 
 function renderAttendance(jumpToLatest) {
     const container = document.getElementById('attendance-container');
+    // Marking a student rebuilds this whole table's HTML, which destroys and
+    // recreates the scroll container — a brand new element always starts at
+    // scrollLeft 0, which is why every mark used to jump the view back to the
+    // far left. Capture wherever she'd scrolled to and put it right back.
+    const prevBox = container.querySelector('.att-scroll-box');
+    const prevScrollLeft = prevBox ? prevBox.scrollLeft : null;
     if (atStudentIds.length === 0) {
         container.innerHTML = `<div class="empty-state"><h3>No students enrolled</h3><p>Enrol students in this course (Courses → open the course) to mark attendance.</p></div>`;
         return;
@@ -201,9 +207,10 @@ function renderAttendance(jumpToLatest) {
     // column is ready to mark without scrolling through the whole history first.
     // Only on a fresh load (not after toggling a mark), so mid-edit scroll position
     // is never yanked out from under whoever's clicking.
-    if (jumpToLatest) {
-        const box = container.querySelector('.att-scroll-box');
-        if (box) box.scrollLeft = box.scrollWidth;
+    const box = container.querySelector('.att-scroll-box');
+    if (box) {
+        if (jumpToLatest) box.scrollLeft = box.scrollWidth;
+        else if (prevScrollLeft !== null) box.scrollLeft = prevScrollLeft;
     }
 }
 
