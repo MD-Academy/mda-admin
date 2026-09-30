@@ -43,6 +43,18 @@ function openPhotoLightbox(src, name) {
     ov.classList.add('open');
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const ov = document.getElementById('photo-lightbox'); if (ov) ov.classList.remove('open'); } });
+
+// "More" actions — a native <select> so the popup is never clipped by any
+// ancestor's overflow, unlike a custom absolutely-positioned dropdown.
+function handleMoreAction(sel, id) {
+    const val = sel.value;
+    sel.value = '';
+    if (val === 'activity') openActivity(id);
+    else if (val === 'notices') openNotices(id);
+    else if (val === 'toggle') toggleStatus(id);
+    else if (val === 'resetmfa') resetMfa(id);
+    else if (val === 'delete') deleteStudent(id);
+}
 function studentInitials(name) {
     return (name || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 }
@@ -226,15 +238,18 @@ function renderStudents(students) {
                 <td>${statusBadge}</td>
                 <td>${expiryText}</td>
                 <td>
-                    <div class="row-actions">
+                    <div class="row-actions" style="overflow:visible;max-width:none;">
                         <button class="btn btn-ghost btn-sm" onclick="openFeedback('${s.id}')" style="color:var(--navy-800);border-color:#c7d2e4;">💬 Messages<span class="msg-badge" id="msgbadge-${s.id}" style="display:none;">0</span></button>
                         <button class="btn btn-ghost btn-sm" onclick="resetPw('${s.id}')">Reset PW</button>
                         <button class="btn btn-ghost btn-sm" onclick="openEdit('${s.id}')">Edit</button>
-                        <button class="btn btn-ghost btn-sm" onclick="openActivity('${s.id}')">Activity</button>
-                        <button class="btn btn-ghost btn-sm" onclick="openNotices('${s.id}')">Notices</button>
-                        <button class="btn btn-ghost btn-sm" onclick="toggleStatus('${s.id}')">${s.status === 'suspended' ? 'Activate' : 'Block'}</button>
-                        <button class="btn btn-ghost btn-sm" onclick="resetMfa('${s.id}')">Reset 2FA</button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button>
+                        <select class="filter-select btn-sm" style="width:auto;" onchange="handleMoreAction(this,'${s.id}')">
+                            <option value="">More ▾</option>
+                            <option value="activity">Activity</option>
+                            <option value="notices">Notices</option>
+                            <option value="toggle">${s.status === 'suspended' ? 'Activate' : 'Block'}</option>
+                            <option value="resetmfa">Reset 2FA</option>
+                            <option value="delete">Delete</option>
+                        </select>
                     </div>
                 </td>
             </tr>
