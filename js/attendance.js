@@ -193,7 +193,7 @@ function renderAttendance() {
 
     container.innerHTML = `
         <p class="hint" style="margin-bottom:12px;">Everyone starts <strong>absent (✗)</strong> when you open a class — click a student's mark as you call their name to flip it to present (✓). Hover a mark to see who set it and when. Percentage = classes attended ÷ classes held. The student name stays pinned as you scroll across dates.</p>
-        <div class="panel" style="overflow-x:auto;">
+        <div class="panel att-scroll-box">
             <table class="data-table att-table"><thead>${head}</thead><tbody>${rows}</tbody></table>
         </div>`;
 }
