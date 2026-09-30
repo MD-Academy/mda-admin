@@ -117,7 +117,12 @@ body {
 .logout-btn:hover { background: rgba(220,38,38,0.15); color: #fca5a5; }
 
 /* ── MAIN ── */
-.main { flex: 1; margin-left: 260px; display: flex; flex-direction: column; }
+/* min-width:0 overrides the flex-item default (min-width:auto), which otherwise
+   refuses to shrink below the width of wide content (like the attendance table)
+   and makes the WHOLE PAGE scroll horizontally instead of scrolling inside that
+   content's own box — which is also what silently defeated position:sticky on
+   the attendance sheet's frozen student-name column. */
+.main { flex: 1; min-width: 0; margin-left: 260px; display: flex; flex-direction: column; }
 
 .topbar {
     background: #fdf6f8;   /* faint warm blush — signals the ADMIN portal at a glance */
@@ -228,7 +233,7 @@ body {
 @keyframes replyPulse { 0%,100% { box-shadow: 0 0 0 3px rgba(74,222,128,.18); } 50% { box-shadow: 0 0 0 6px rgba(74,222,128,.40); } }
 @media (prefers-reduced-motion: reduce) { .reply-in.reply-new { animation: none; } }
 
-.content { padding: 32px; flex: 1; }
+.content { padding: 32px; flex: 1; min-width: 0; }
 
 /* ── STAT CARDS ── */
 .stat-grid {
