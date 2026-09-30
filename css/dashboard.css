@@ -876,7 +876,10 @@ body {
 
 /* ── ATTENDANCE SHEET (grid: students × class dates) ── */
 /* width:auto so columns size to their content (compact, date-width) instead of stretching to fill the screen. */
-.att-table { width: auto; }
+/* border-collapse breaks position:sticky on table cells in Safari (and is flaky
+   elsewhere too) — separate + zero spacing looks identical but keeps the frozen
+   student-name column actually frozen while scrolling sideways through classes. */
+.att-table { width: auto; border-collapse: separate; border-spacing: 0; }
 .att-table th, .att-table td { text-align: center; white-space: nowrap; vertical-align: middle; }
 .att-table thead th { vertical-align: top; }
 .att-table th:first-child, .att-table td:first-child { text-align: left; }
