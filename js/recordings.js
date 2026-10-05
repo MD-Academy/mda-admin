@@ -97,14 +97,17 @@ async function loadRecordings() {
 
     const from = (currentPage - 1) * pageSize, to = from + pageSize - 1;
     let q = db.from('recordings')
-        .select('id, title, professor, recorded_date, aws_url, duration_seconds, is_visible', { count: 'exact' })
+        .select('id, title, professor, recorded_date, aws_url, duration_seconds, is_visible, order_index', { count: 'exact' })
         .eq('kind', 'zoom');
     if (idFilter) q = q.in('id', idFilter);
     const term = searchQuery.replace(/[%,()]/g, ' ').trim();
     if (term) q = q.or(`title.ilike.%${term}%,professor.ilike.%${term}%`);
     if (dateFrom) q = q.gte('recorded_date', dateFrom);
     if (dateTo) q = q.lte('recorded_date', dateTo);
-    q = q.order('recorded_date', { ascending: false }).order('created_at', { ascending: false }).range(from, to);
+    // Newest class day first (unchanged default); within the SAME day, manual
+    // order_index wins so multi-part uploads (Part 1, Part 2...) can be put in
+    // the right order instead of always falling back to "most recently uploaded first".
+    q = q.order('recorded_date', { ascending: false }).order('order_index', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false }).range(from, to);
 
     const { data, error, count } = await q;
     if (error) { tbody.innerHTML = `<tr><td colspan="7" class="loader" style="color:var(--red)">Error loading recordings: ${escapeHtml(error.message)}</td></tr>`; return; }
@@ -148,7 +151,16 @@ function renderRecordings(list) {
         tbody.innerHTML = `<tr><td colspan="7" class="loader">${any ? 'No recordings match your filters.' : 'No recordings yet. Click "Add Recording" to create one.'}</td></tr>`;
         return;
     }
-    tbody.innerHTML = list.map(r => `
+    tbody.innerHTML = list.map(r => {
+        // Reorder only makes sense among recordings on the SAME class day — that's
+        // the only place the tiebreak (order_index, then upload time) is visible,
+        // since recorded_date always dominates the sort above it.
+        const sameDay = list.filter(x => x.recorded_date === r.recorded_date);
+        const dayIdx = sameDay.findIndex(x => x.id === r.id);
+        const reorder = sameDay.length > 1 ? `
+                <button class="btn btn-ghost btn-sm reorder-btn" title="Move earlier" onclick="moveZoomRecording('${r.id}',-1)" ${dayIdx === 0 ? 'disabled style="opacity:.3;cursor:default;"' : ''}>▲</button>
+                <button class="btn btn-ghost btn-sm reorder-btn" title="Move later" onclick="moveZoomRecording('${r.id}',1)" ${dayIdx === sameDay.length - 1 ? 'disabled style="opacity:.3;cursor:default;"' : ''}>▼</button>` : '';
+        return `
         <tr>
             <td>${formatDate(r.recorded_date)}</td>
             <td><strong>${escapeHtml(r.title)}</strong></td>
@@ -157,6 +169,7 @@ function renderRecordings(list) {
             <td>${formatDuration(r.duration_seconds)}</td>
             <td>${visToggleHtml(r.id, r.is_visible)}</td>
             <td class="row-actions">
+                ${reorder}
                 <a class="btn btn-ghost btn-sm" href="${escapeHtml(r.aws_url)}" target="_blank" rel="noopener">Preview</a>
                 <button class="btn btn-ghost btn-sm" onclick="openRecModal('${r.id}')">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteRecording('${r.id}')">Delete</button>
@@ -171,7 +184,31 @@ function renderRecordings(list) {
                 </span>
             </td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
+}
+
+// Reorder recordings within the same class day (default sort stays
+// "newest day first"; this only controls part 1/2/3 order within one day).
+async function moveZoomRecording(id, direction) {
+    const r = allRecordings.find(x => x.id === id);
+    if (!r) return;
+    const sameDay = allRecordings.filter(x => x.recorded_date === r.recorded_date);
+    const idx = sameDay.findIndex(x => x.id === id);
+    const target = idx + direction;
+    if (idx < 0 || target < 0 || target >= sameDay.length) return;
+
+    // Most existing rows have never had an order_index set — normalize this
+    // day's group to its current display order first, then swap the two.
+    sameDay.forEach((x, i) => { x.order_index = i; });
+    const tmp = sameDay[idx].order_index;
+    sameDay[idx].order_index = sameDay[target].order_index;
+    sameDay[target].order_index = tmp;
+
+    const results = await Promise.all(sameDay.map(x => db.from('recordings').update({ order_index: x.order_index }).eq('id', x.id)));
+    const failed = results.find(res => res.error);
+    if (failed) { alert(`Failed to reorder: ${failed.error.message}`); return; }
+    await loadRecordings();
 }
 
 // ── ROW ⋯ MENU ──
