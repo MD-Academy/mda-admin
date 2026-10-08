@@ -156,20 +156,17 @@ function renderRecordings(list) {
         // the only place the tiebreak (order_index, then upload time) is visible,
         // since recorded_date always dominates the sort above it.
         const sameDay = list.filter(x => x.recorded_date === r.recorded_date);
-        const dayIdx = sameDay.findIndex(x => x.id === r.id);
-        const reorder = sameDay.length > 1 ? `
-                <button class="btn btn-ghost btn-sm reorder-btn" title="Move earlier" onclick="moveZoomRecording('${r.id}',-1)" ${dayIdx === 0 ? 'disabled style="opacity:.3;cursor:default;"' : ''}>▲</button>
-                <button class="btn btn-ghost btn-sm reorder-btn" title="Move later" onclick="moveZoomRecording('${r.id}',1)" ${dayIdx === sameDay.length - 1 ? 'disabled style="opacity:.3;cursor:default;"' : ''}>▼</button>` : '';
+        const canDrag = sameDay.length > 1;
+        const handle = canDrag ? `<span class="drag-handle" draggable="true" title="Drag to reorder within ${formatDate(r.recorded_date)}">⠿</span> ` : '';
         return `
-        <tr>
-            <td>${formatDate(r.recorded_date)}</td>
+        <tr data-id="${r.id}" data-date="${escapeHtml(r.recorded_date || '')}">
+            <td>${handle}${formatDate(r.recorded_date)}</td>
             <td><strong>${escapeHtml(r.title)}</strong></td>
             <td>${courseNamesFor(r.id)}</td>
             <td>${escapeHtml(r.professor)}</td>
             <td>${formatDuration(r.duration_seconds)}</td>
             <td>${visToggleHtml(r.id, r.is_visible)}</td>
             <td class="row-actions">
-                ${reorder}
                 <a class="btn btn-ghost btn-sm" href="${escapeHtml(r.aws_url)}" target="_blank" rel="noopener">Preview</a>
                 <button class="btn btn-ghost btn-sm" onclick="openRecModal('${r.id}')">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteRecording('${r.id}')">Delete</button>
@@ -188,22 +185,55 @@ function renderRecordings(list) {
     }).join('');
 }
 
-// Reorder recordings within the same class day (default sort stays
-// "newest day first"; this only controls part 1/2/3 order within one day).
-async function moveZoomRecording(id, direction) {
-    const r = allRecordings.find(x => x.id === id);
-    if (!r) return;
-    const sameDay = allRecordings.filter(x => x.recorded_date === r.recorded_date);
-    const idx = sameDay.findIndex(x => x.id === id);
-    const target = idx + direction;
-    if (idx < 0 || target < 0 || target >= sameDay.length) return;
+// Drag-to-reorder within the same class day (default sort stays "newest day
+// first"; this only controls part 1/2/3 order within one day — dragging onto
+// a different day's row is a no-op since recorded_date always sorts first).
+let _dragRecId = null;
+function setupRecDragReorder() {
+    const tbody = document.getElementById('rec-tbody');
+    if (!tbody) return;
+    tbody.addEventListener('dragstart', e => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        const tr = handle.closest('tr[data-id]');
+        if (!tr) return;
+        _dragRecId = tr.dataset.id;
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    tbody.addEventListener('dragover', e => {
+        if (!_dragRecId) return;
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr || tr.dataset.id === _dragRecId) return;
+        e.preventDefault();
+        tr.classList.add('drag-over');
+    });
+    tbody.addEventListener('dragleave', e => {
+        const tr = e.target.closest('tr[data-id]');
+        if (tr) tr.classList.remove('drag-over');
+    });
+    tbody.addEventListener('drop', async e => {
+        const draggedId = _dragRecId;
+        _dragRecId = null;
+        tbody.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr || !draggedId || tr.dataset.id === draggedId) return;
+        e.preventDefault();
+        await reorderZoomRecording(draggedId, tr.dataset.id);
+    });
+}
 
-    // Most existing rows have never had an order_index set — normalize this
-    // day's group to its current display order first, then swap the two.
+async function reorderZoomRecording(draggedId, targetId) {
+    const dragged = allRecordings.find(x => x.id === draggedId);
+    const target = allRecordings.find(x => x.id === targetId);
+    if (!dragged || !target || dragged.recorded_date !== target.recorded_date) return;
+
+    const sameDay = allRecordings.filter(x => x.recorded_date === dragged.recorded_date);
+    const from = sameDay.findIndex(x => x.id === draggedId);
+    const to = sameDay.findIndex(x => x.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = sameDay.splice(from, 1);
+    sameDay.splice(to, 0, moved);
     sameDay.forEach((x, i) => { x.order_index = i; });
-    const tmp = sameDay[idx].order_index;
-    sameDay[idx].order_index = sameDay[target].order_index;
-    sameDay[target].order_index = tmp;
 
     const results = await Promise.all(sameDay.map(x => db.from('recordings').update({ order_index: x.order_index }).eq('id', x.id)));
     const failed = results.find(res => res.error);
@@ -220,6 +250,7 @@ function toggleCardMenu(e, id) {
     if (!open) menu.classList.add('open');
 }
 document.addEventListener('click', () => document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open')));
+setupRecDragReorder();
 
 // ── VISIBILITY ──
 async function toggleVisibility(id) {
