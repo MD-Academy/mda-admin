@@ -250,7 +250,10 @@ function toggleCardMenu(e, id) {
     if (!open) menu.classList.add('open');
 }
 document.addEventListener('click', () => document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open')));
-setupRecDragReorder();
+// This script tag loads before #rec-tbody exists in the HTML below it, so calling
+// setupRecDragReorder() directly here finds nothing and silently attaches no
+// listeners — wait for the DOM to finish parsing first.
+document.addEventListener('DOMContentLoaded', setupRecDragReorder);
 
 // ── VISIBILITY ──
 async function toggleVisibility(id) {
