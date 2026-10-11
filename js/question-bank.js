@@ -9,6 +9,7 @@ function escapeHtml(str) {
 let QB_PAGE = 1, QB_SIZE = 25, QB_TOTAL = 0, QB_SEARCH = '', QB_CAT = '', QB_TIMER = null;
 let QB_SELECTED = new Set();     // question ids selected across pages
 let QB_TARGETS = [];             // [{kind:'quiz'|'exam', id, label}]
+let QB_ROWS = [];                // ids currently rendered on this page
 
 async function initQuestionBank(profile) {
     renderLayout('question-bank', 'Question Bank', 'Import and reuse questions across quizzes & exams', profile);
@@ -226,17 +227,25 @@ async function loadQbPage() {
     if (error) { box.innerHTML = `<div class="empty-state"><h3 style="color:var(--red)">Couldn't load</h3><p>${escapeHtml(error.message)}</p></div>`; return; }
     QB_TOTAL = count || 0;
     const rows = data || [];
+    QB_ROWS = rows.map(r => r.id);
     if (QB_TOTAL === 0) {
         box.innerHTML = `<div class="empty-state"><h3>No questions yet</h3><p>${QB_SEARCH || QB_CAT ? 'Nothing matches your filter.' : 'Import a Moodle XML export above to fill the bank.'}</p></div>`;
         renderQbPager(); return;
     }
 
-    box.innerHTML = `<div class="list-rows">` + rows.map(qq => {
+    const filterLabel = QB_CAT ? `in "${escapeHtml(QB_CAT)}"` : 'matching filter';
+    box.innerHTML = `<div class="list-rows">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border:1px solid var(--border);border-bottom:none;border-radius:10px 10px 0 0;flex-wrap:wrap;">
+            <input type="checkbox" id="qb-page-select-all" onchange="toggleQbPageSelectAll(this.checked)" title="Select all on this page" style="width:17px;height:17px;flex-shrink:0;accent-color:var(--crimson);">
+            <span style="font-size:13px;color:var(--text-muted);">Select page</span>
+            <span style="color:var(--border);">·</span>
+            <button type="button" class="btn btn-ghost btn-sm" id="qb-select-all-link" onclick="selectAllQbMatching()">Select all ${QB_TOTAL} ${filterLabel}</button>
+        </div>` + rows.map(qq => {
         const opts = Array.isArray(qq.options_json) ? qq.options_json : [];
         const checked = QB_SELECTED.has(qq.id) ? 'checked' : '';
         const optHtml = opts.map((o, i) => `<span style="display:inline-block;margin:2px 8px 2px 0;padding:2px 9px;border-radius:8px;font-size:12.5px;${i === qq.correct_answer_index ? 'background:#dcfce7;color:#166534;font-weight:700;border:1px solid #86efac;' : 'background:#f1f5f9;color:var(--text-muted);'}">${i === qq.correct_answer_index ? '✓ ' : ''}${escapeHtml(o)}</span>`).join('');
         return `<label class="list-row" style="align-items:flex-start;gap:12px;cursor:pointer;">
-            <input type="checkbox" ${checked} onchange="toggleQb('${qq.id}', this.checked)" style="margin-top:3px;width:17px;height:17px;flex-shrink:0;accent-color:var(--crimson);">
+            <input type="checkbox" ${checked} data-qid="${qq.id}" onchange="toggleQb('${qq.id}', this.checked)" style="margin-top:3px;width:17px;height:17px;flex-shrink:0;accent-color:var(--crimson);">
             <div style="flex:1;min-width:0;">
                 ${qq.category ? `<span class="badge badge-blue" style="margin-bottom:6px;">${escapeHtml(qq.category)}</span>` : ''}
                 <div style="font-size:14px;font-weight:600;color:var(--text);line-height:1.5;">${escapeHtml(qq.question_text)}</div>
@@ -245,6 +254,7 @@ async function loadQbPage() {
         </label>`;
     }).join('') + `</div>`;
     renderQbPager();
+    syncQbPageCheckbox();
     updateQbActionBar();
 }
 
@@ -262,13 +272,52 @@ function renderQbPager() {
 }
 
 // ── SELECTION ──
-function toggleQb(id, on) { if (on) QB_SELECTED.add(id); else QB_SELECTED.delete(id); updateQbActionBar(); }
-function clearQbSelection() { QB_SELECTED.clear(); document.querySelectorAll('#qb-list input[type=checkbox]').forEach(c => c.checked = false); updateQbActionBar(); }
+function toggleQb(id, on) { if (on) QB_SELECTED.add(id); else QB_SELECTED.delete(id); syncQbPageCheckbox(); updateQbActionBar(); }
+function clearQbSelection() { QB_SELECTED.clear(); document.querySelectorAll('#qb-list input[type=checkbox]').forEach(c => c.checked = false); syncQbPageCheckbox(); updateQbActionBar(); }
 function updateQbActionBar() {
     const bar = document.getElementById('qb-actionbar');
     const n = QB_SELECTED.size;
     bar.style.display = n ? 'block' : 'none';
     if (n) document.getElementById('qb-sel-count').textContent = `${n} question${n === 1 ? '' : 's'} selected`;
+}
+
+// Tick/untick every row on the currently loaded page at once.
+function toggleQbPageSelectAll(checked) {
+    QB_ROWS.forEach(id => checked ? QB_SELECTED.add(id) : QB_SELECTED.delete(id));
+    document.querySelectorAll('#qb-list input[type=checkbox][data-qid]').forEach(c => c.checked = checked);
+    updateQbActionBar();
+}
+
+// Keep the "select page" checkbox's checked/indeterminate state matching the current page.
+function syncQbPageCheckbox() {
+    const cb = document.getElementById('qb-page-select-all');
+    if (!cb) return;
+    const n = QB_ROWS.filter(id => QB_SELECTED.has(id)).length;
+    cb.checked = QB_ROWS.length > 0 && n === QB_ROWS.length;
+    cb.indeterminate = n > 0 && n < QB_ROWS.length;
+}
+
+// Select every question matching the current search/category filter — across all pages, not just this one.
+async function selectAllQbMatching() {
+    const link = document.getElementById('qb-select-all-link');
+    if (link) { link.disabled = true; link.textContent = 'Selecting…'; }
+    try {
+        const pageSize = 1000;
+        for (let from = 0; from < QB_TOTAL; from += pageSize) {
+            let q = db.from('question_bank').select('id');
+            if (QB_CAT) q = q.eq('category', QB_CAT);
+            const term = QB_SEARCH.replace(/[%,()]/g, ' ').trim();
+            if (term) q = q.ilike('question_text', `%${term}%`);
+            q = q.order('created_at', { ascending: true }).range(from, Math.min(from + pageSize - 1, QB_TOTAL - 1));
+            const { data, error } = await q;
+            if (error) throw new Error(error.message);
+            (data || []).forEach(r => QB_SELECTED.add(r.id));
+        }
+        await loadQbPage();   // re-render current page so its checkboxes reflect the new selection
+    } catch (err) {
+        if (link) { link.disabled = false; link.textContent = `Select all ${QB_TOTAL} matching filter`; }
+        alert(err.message || 'Could not select all matching questions.');
+    }
 }
 
 // ── TARGETS (quizzes + exams) ──
