@@ -235,7 +235,7 @@ function renderStudentRows() {
 
     tbody.innerHTML = rows.map(r => `
         <tr>
-            <td><strong>${escapeHtml(r.name)}</strong></td>
+            <td><a href="activity.html?id=${encodeURIComponent(r.id)}" style="font-weight:700;color:var(--navy-800);text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${escapeHtml(r.name)}</a></td>
             <td class="stat-cell">${fmtDur(r.totalSecs)}</td>
             <td class="stat-cell">${r.sessionCount}</td>
             <td>${escapeHtml(fmtWhen(r.lastActive))} ${recencyBadge(r.lastActive)}</td>
