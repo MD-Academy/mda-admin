@@ -32,6 +32,7 @@ let _actAllSessions = [];       // [{started_at, last_seen_at, ended_at}]
 let _actAllQuizAttempts = [];   // [{quiz_id, score, completed_at, quizTitle, roomName}]
 let _actAllExamAttempts = [];   // [{exam_id, score, passed, attempts, completed_at, examTitle}]
 let _actAllAttendance = [];     // [{session_id, session_date, courseName, present, updated_at}]
+let _actAllSectionTime = [];    // [{section_type, section_ref, started_at, last_seen_at, ended_at, label}]
 let _actFilterFrom = null;   // Date or null (null = no lower bound)
 let _actFilterTo = null;     // Date or null (null = no upper bound)
 let _actActivePreset = 'all';
@@ -87,8 +88,9 @@ function renderActivityFiltered() {
     const quizAttempts = _actAllQuizAttempts.filter(a => !a.completed_at || inRange(new Date(a.completed_at).getTime()));
     const examAttempts = _actAllExamAttempts.filter(a => !a.completed_at || inRange(new Date(a.completed_at).getTime()));
     const attendance = _actAllAttendance.filter(a => !a.session_date || inRange(new Date(a.session_date + 'T00:00:00').getTime()));
+    const sectionTime = _actAllSectionTime.filter(s => inRange(new Date(s.started_at).getTime()));
 
-    renderFullReport(sessions, quizAttempts, examAttempts, attendance);
+    renderFullReport(sessions, quizAttempts, examAttempts, attendance, sectionTime);
 }
 
 async function initActivity(studentId, profile) {
@@ -133,11 +135,12 @@ async function refreshActivity(studentId) {
     const report = document.getElementById('report');
     if (!report) { if (window._actTimer) clearInterval(window._actTimer); return; }
 
-    const [sessRes, qaRes, eaRes, enrRes] = await Promise.all([
+    const [sessRes, qaRes, eaRes, enrRes, secRes] = await Promise.all([
         db.from('login_sessions').select('started_at, last_seen_at, ended_at').eq('student_id', studentId).order('started_at', { ascending: false }),
         db.from('quiz_attempts').select('quiz_id, score, completed_at').eq('student_id', studentId).order('completed_at', { ascending: false }),
         db.from('exam_attempts').select('exam_id, score, passed, attempts, completed_at').eq('student_id', studentId).order('completed_at', { ascending: false }),
         db.from('course_enrollments').select('course_id').eq('student_id', studentId),
+        db.from('section_sessions').select('section_type, section_ref, started_at, last_seen_at, ended_at').eq('student_id', studentId).order('started_at', { ascending: false }),
     ]);
 
     const gt = document.getElementById('gen-time');
@@ -146,35 +149,51 @@ async function refreshActivity(studentId) {
     if (sessRes.error) { report.innerHTML = `<div class="loader" style="color:var(--red)">Error: ${escapeHtml(sessRes.error.message)}</div>`; return; }
     _actAllSessions = sessRes.data || [];
 
-    // Resolve each quiz attempt's quiz title + room name.
     const quizAttempts = qaRes.data || [];
-    const quizIds = [...new Set(quizAttempts.map(a => a.quiz_id))];
+    const examAttempts = eaRes.data || [];
+    const sectionRows = secRes.data || [];
+    const sectionQuizIds = sectionRows.filter(r => r.section_type === 'quiz').map(r => r.section_ref);
+    const sectionExamIds = sectionRows.filter(r => r.section_type === 'exam').map(r => r.section_ref);
+    const sectionRoomIds = sectionRows.filter(r => r.section_type === 'subject').map(r => r.section_ref);
+
+    // Resolve quiz titles + room names — covers both attempted quizzes and
+    // quizzes that were only opened (a section_session with no attempt yet).
+    const quizIds = [...new Set([...quizAttempts.map(a => a.quiz_id), ...sectionQuizIds])];
     const quizMeta = {};
+    const roomNames = {};
     if (quizIds.length) {
         const { data: quizzes } = await db.from('quizzes').select('id, title, room_id').in('id', quizIds);
-        const roomIds = [...new Set((quizzes || []).map(q => q.room_id).filter(Boolean))];
-        const roomNames = {};
-        if (roomIds.length) {
-            const { data: rooms } = await db.from('rooms').select('id, name').in('id', roomIds);
-            (rooms || []).forEach(r => { roomNames[r.id] = r.name; });
-        }
-        (quizzes || []).forEach(q => { quizMeta[q.id] = { title: q.title || 'Untitled quiz', room: roomNames[q.room_id] || '—' }; });
+        (quizzes || []).forEach(q => { quizMeta[q.id] = { title: q.title || 'Untitled quiz', room_id: q.room_id }; });
+    }
+    const roomIds = [...new Set([...Object.values(quizMeta).map(q => q.room_id).filter(Boolean), ...sectionRoomIds])];
+    if (roomIds.length) {
+        const { data: rooms } = await db.from('rooms').select('id, name').in('id', roomIds);
+        (rooms || []).forEach(r => { roomNames[r.id] = r.name; });
     }
     _actAllQuizAttempts = quizAttempts.map(a => ({
         ...a,
         quizTitle: (quizMeta[a.quiz_id] || {}).title || 'Untitled quiz',
-        roomName: (quizMeta[a.quiz_id] || {}).room || '—',
+        roomName: roomNames[(quizMeta[a.quiz_id] || {}).room_id] || '—',
     }));
 
-    // Resolve each exam attempt's exam title.
-    const examAttempts = eaRes.data || [];
-    const examIds = [...new Set(examAttempts.map(a => a.exam_id))];
+    // Resolve exam titles — covers attempted exams and exams only opened.
+    const examIds = [...new Set([...examAttempts.map(a => a.exam_id), ...sectionExamIds])];
     const examTitles = {};
     if (examIds.length) {
         const { data: exams } = await db.from('exams').select('id, title').in('id', examIds);
         (exams || []).forEach(e => { examTitles[e.id] = e.title || 'Untitled exam'; });
     }
     _actAllExamAttempts = examAttempts.map(a => ({ ...a, examTitle: examTitles[a.exam_id] || 'Untitled exam' }));
+
+    // Per-section time: label each page-view row using the same lookups above.
+    _actAllSectionTime = sectionRows.map(r => {
+        let label;
+        if (r.section_type === 'quiz') label = `Quiz: ${(quizMeta[r.section_ref] || {}).title || 'Untitled quiz'}`;
+        else if (r.section_type === 'exam') label = `Exam: ${examTitles[r.section_ref] || 'Untitled exam'}`;
+        else if (r.section_type === 'subject') label = `Subject: ${roomNames[r.section_ref] || 'Untitled subject'}`;
+        else label = r.section_type.charAt(0).toUpperCase() + r.section_type.slice(1);
+        return { ...r, label };
+    });
 
     // Attendance across every course this student is/was enrolled in.
     const courseIds = [...new Set((enrRes.data || []).map(e => e.course_id))];
@@ -205,7 +224,7 @@ async function refreshActivity(studentId) {
         });
     }
 
-    if (!_actAllSessions.length && !_actAllQuizAttempts.length && !_actAllExamAttempts.length && !_actAllAttendance.length) {
+    if (!_actAllSessions.length && !_actAllQuizAttempts.length && !_actAllExamAttempts.length && !_actAllAttendance.length && !_actAllSectionTime.length) {
         report.innerHTML = `<div class="empty-state"><h3>No activity yet</h3><p>This student hasn't used the portal yet, or data is still being recorded.</p></div>`;
         return;
     }
@@ -308,7 +327,51 @@ function buildAttendanceSection(records) {
     </table></div>`;
 }
 
-function renderFullReport(sessions, quizAttempts, examAttempts, attendance) {
+// Group per-section page views by day — same shape as buildSessionsReport,
+// but each row is one page view of a specific section instead of a login.
+function buildSectionTimeReport(records) {
+    if (records.length === 0) {
+        return `<div class="panel" style="padding:16px 20px;"><p class="hint" style="margin:0;">No section-level activity recorded yet — this tracks forward from when it was turned on, not retroactively.</p></div>`;
+    }
+
+    const days = {};
+    const now = Date.now();
+    records.forEach(r => {
+        const start = new Date(r.started_at);
+        const endedAt = r.ended_at ? new Date(r.ended_at) : null;
+        const lastSeen = r.last_seen_at ? new Date(r.last_seen_at) : null;
+        const end = endedAt || lastSeen || start;
+        const active = !endedAt && (now - (lastSeen || start).getTime()) < 600000;
+        const dur = Math.max(0, (end - start) / 1000);
+        const k = dayKey(r.started_at);
+        if (!days[k]) days[k] = { total: 0, rows: [], sort: start.getTime() };
+        days[k].total += dur;
+        days[k].sort = Math.max(days[k].sort, start.getTime());
+        days[k].rows.push({ label: r.label, start, end, dur, active });
+    });
+
+    const ordered = Object.keys(days).sort((a, b) => days[b].sort - days[a].sort);
+    const badgeActive = `<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:#dcfce7;color:#15803d;white-space:nowrap;">● Active</span>`;
+    const badgeEnded = `<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:#fee2e2;color:#b91c1c;white-space:nowrap;">Ended</span>`;
+
+    return ordered.map(k => {
+        const d = days[k];
+        d.rows.sort((a, b) => a.start - b.start);
+        return `
+        <div class="day-card">
+            <div class="day-head"><div class="d-date">${escapeHtml(k)}</div><div class="d-total">Total: ${fmtDur(d.total)}</div></div>
+            ${d.rows.map(r => `<div class="sess-row">
+                <span><strong>${escapeHtml(r.label)}</strong> <span style="color:var(--text-muted);">— ${fmtTime(r.start)} <span style="color:var(--text-muted);">→</span> ${r.active ? '<span style="color:#15803d;font-weight:600;">still active</span>' : fmtTime(r.end)}</span></span>
+                <span style="display:inline-flex;align-items:center;gap:12px;">
+                    <span class="dur">${fmtDur(r.dur)}</span>
+                    ${r.active ? badgeActive : badgeEnded}
+                </span>
+            </div>`).join('')}
+        </div>`;
+    }).join('');
+}
+
+function renderFullReport(sessions, quizAttempts, examAttempts, attendance, sectionTime) {
     const report = document.getElementById('report');
     const { grand, html: sessionsHtml } = buildSessionsReport(sessions);
 
@@ -349,5 +412,8 @@ function renderFullReport(sessions, quizAttempts, examAttempts, attendance) {
 
         <h3 style="font-size:15px;margin:22px 0 10px;">Attendance</h3>
         ${buildAttendanceSection(attendance)}
+
+        <h3 style="font-size:15px;margin:22px 0 10px;">Time per section</h3>
+        ${buildSectionTimeReport(sectionTime)}
     `;
 }
