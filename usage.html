@@ -43,11 +43,27 @@
                 </div>
 
                 <div class="usage-section">
-                    <h3>Student time in the portal</h3>
-                    <p class="hint">Total time logged in, number of sessions, and last activity — most active first.</p>
+                    <h3>Student engagement</h3>
+                    <p class="hint">Time in the portal, quiz &amp; exam activity, and attendance — search, filter by course, and sort to spot who needs attention.</p>
+                    <div class="toolbar" style="flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+                        <div class="search-box">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="usage-search" placeholder="Search students…" oninput="onUsageSearch()">
+                        </div>
+                        <select id="usage-course-filter" onchange="onUsageCourseFilter()" style="height:42px;border:1.5px solid var(--border);border-radius:10px;padding:0 12px;font-family:'Inter',sans-serif;font-size:14px;background:#fff;cursor:pointer;">
+                            <option value="">All courses</option>
+                        </select>
+                        <select id="usage-sort" onchange="onUsageSort()" style="height:42px;border:1.5px solid var(--border);border-radius:10px;padding:0 12px;font-family:'Inter',sans-serif;font-size:14px;background:#fff;cursor:pointer;">
+                            <option value="time">Most time in portal</option>
+                            <option value="inactive">Least active first</option>
+                            <option value="quiz">Lowest quiz scores first</option>
+                            <option value="exam">Lowest exam scores first</option>
+                            <option value="attendance">Lowest attendance first</option>
+                        </select>
+                    </div>
                     <div class="panel"><table class="data-table">
-                        <thead><tr><th>Student</th><th>Total time</th><th>Sessions</th><th>Last active</th></tr></thead>
-                        <tbody id="student-tbody"><tr><td colspan="4" class="loader">Loading…</td></tr></tbody>
+                        <thead><tr><th>Student</th><th>Total time</th><th>Sessions</th><th>Last active</th><th>Quizzes</th><th>Exams</th><th>Attendance</th></tr></thead>
+                        <tbody id="student-tbody"><tr><td colspan="7" class="loader">Loading…</td></tr></tbody>
                     </table></div>
                 </div>
 
