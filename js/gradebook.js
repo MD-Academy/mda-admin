@@ -770,7 +770,10 @@ async function addExamToCourse() {
     const sel = document.getElementById('gs-add-exam');
     const examId = sel ? sel.value : '';
     if (!examId) return;
-    const { error } = await db.from('exam_courses').insert({ course_id: currentCourseId, exam_id: examId });
+    // Upsert + ignoreDuplicates: if it's already linked (a stale local cache),
+    // that's not a real failure, just resync instead of crashing on it.
+    const { error } = await db.from('exam_courses')
+        .upsert({ course_id: currentCourseId, exam_id: examId }, { onConflict: 'course_id,exam_id', ignoreDuplicates: true });
     if (error) { alert('Failed to add exam: ' + error.message); return; }
     const ex = allExamsForPicker.find(e => e.id === examId);
     if (ex && !gbExams.some(x => x.id === examId)) { gbExams.push({ ...ex, pass_threshold: ex.pass_threshold ?? 70 }); gbExamIds.push(examId); }

@@ -199,7 +199,10 @@ async function toggleExam(examId) {
         if (error) { alert(`Failed: ${error.message}`); return; }
         courseExamIds.delete(examId);
     } else {
-        const { error } = await db.from('exam_courses').insert({ course_id: COURSE_ID, exam_id: examId });
+        // Upsert + ignoreDuplicates: if it's already linked (a stale local cache —
+        // another tab, a double-click), that's not a real failure, just resync.
+        const { error } = await db.from('exam_courses')
+            .upsert({ course_id: COURSE_ID, exam_id: examId }, { onConflict: 'course_id,exam_id', ignoreDuplicates: true });
         if (error) { alert(`Failed: ${error.message}`); return; }
         courseExamIds.add(examId);
     }
