@@ -6,6 +6,8 @@ let allSubjects = [];        // rooms
 let courseSubjectIds = new Set();
 let enrolledStudents = [];   // full objects of students enrolled in THIS course
 let enrolledIds = new Set();
+let enrollExpiry = {};       // student_id -> per-enrollment expires_at (date string), only for students who have one set
+let enrollExpiryTarget = null;
 let stuMap = {};             // id -> student object (enrolled + search results)
 let stuSearchTimer = null;
 let allExams = [];           // [{id, title, type}]
@@ -44,6 +46,26 @@ async function initCourse(courseId, profile) {
                     <input type="text" id="student-search" placeholder="Search to find or add a student…" oninput="onStudentSearch()">
                 </div>
                 <div id="students-list"><div class="loader">Loading…</div></div>
+            </div>
+            <div class="modal-overlay" id="enrollexp-modal">
+                <div class="modal">
+                    <div class="modal-head"><h3>Set enrollment expiry</h3><button class="modal-close" onclick="closeEnrollExpiryModal()">&times;</button></div>
+                    <form onsubmit="saveEnrollExpiry(event)">
+                        <div class="modal-body">
+                            <div class="alert" id="enrollexp-alert" style="display:none;"></div>
+                            <p id="enrollexp-context" style="font-size:14px;color:var(--text-muted);margin-bottom:14px;"></p>
+                            <div class="form-field">
+                                <label>Expiry date</label>
+                                <input type="date" id="enrollexp-input">
+                                <div class="hint">Optional. Leave empty for no personal expiry — only the course's own expiry (if any) applies. This affects only this one student on this one course.</div>
+                            </div>
+                        </div>
+                        <div class="modal-foot">
+                            <button type="button" class="btn btn-ghost" onclick="closeEnrollExpiryModal()">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="enrollexp-save">Save</button>
+                        </div>
+                    </form>
+                </div>
             </div>` : '';
 
     document.getElementById('page-content').innerHTML = `
@@ -150,9 +172,11 @@ async function loadData() {
     // Enrolment is superadmin-only. Load ONLY the enrolled students (the roster);
     // adding others is search-driven so the panel scales to thousands across schools.
     if (IS_SUPER) {
-        const enrRes = await db.from('course_enrollments').select('student_id').eq('course_id', COURSE_ID);
+        const enrRes = await db.from('course_enrollments').select('student_id, expires_at').eq('course_id', COURSE_ID);
         const ids = [...new Set((enrRes.data || []).map(r => r.student_id))];
         enrolledIds = new Set(ids);
+        enrollExpiry = {};
+        (enrRes.data || []).forEach(r => { if (r.expires_at) enrollExpiry[r.student_id] = r.expires_at; });
         enrolledStudents = [];
         if (ids.length) {
             let res = await db.from('profiles').select('id, full_name, status, email').in('id', ids).order('full_name', { ascending: true });
@@ -346,14 +370,17 @@ function _studentRows(list) {
     return `<div class="list-rows">${list.map(s => {
         const enrolled = enrolledIds.has(s.id);
         const suspended = s.status === 'suspended';
+        const exp = enrollExpiry[s.id];
         return `
             <div class="list-row">
                 <div class="lr-body">
                     <div class="lr-title">${escapeHtml(s.full_name || '—')}</div>
                     ${s.email ? `<div class="lr-sub">${escapeHtml(s.email)}</div>` : ''}
                     ${suspended ? '<div class="lr-sub" style="color:var(--red)">Suspended</div>' : ''}
+                    ${enrolled ? `<div class="lr-sub">${exp ? `Access to this course expires ${escapeHtml(exp)}` : 'No personal expiry on this course'}</div>` : ''}
                 </div>
                 <div class="lr-actions">
+                    ${enrolled ? `<button class="btn btn-ghost btn-sm" onclick="openEnrollExpiry('${s.id}')">${exp ? 'Change expiry' : 'Set expiry'}</button>` : ''}
                     <button class="btn btn-sm ${enrolled ? 'btn-danger' : 'btn-primary'}" onclick="toggleEnroll('${s.id}')">${enrolled ? 'Remove' : 'Enrol'}</button>
                 </div>
             </div>`;
@@ -399,6 +426,7 @@ async function toggleEnroll(studentId) {
         const { error } = await db.from('course_enrollments').delete().eq('course_id', COURSE_ID).eq('student_id', studentId);
         if (error) { alert(`Failed: ${error.message}`); return; }
         enrolledIds.delete(studentId);
+        delete enrollExpiry[studentId];
         enrolledStudents = enrolledStudents.filter(s => s.id !== studentId);
     } else {
         const { error } = await db.from('course_enrollments').insert({ course_id: COURSE_ID, student_id: studentId });
@@ -410,4 +438,33 @@ async function toggleEnroll(studentId) {
     // Refresh: if a search is active, re-render results (button labels flip); else show roster.
     if ((document.getElementById('student-search')?.value || '').trim()) runStudentSearch();
     else renderStudents();
+}
+
+// ── PER-STUDENT ENROLLMENT EXPIRY (optional, independent of the course's own expiry) ──
+function openEnrollExpiry(studentId) {
+    enrollExpiryTarget = studentId;
+    const s = stuMap[studentId];
+    document.getElementById('enrollexp-alert').style.display = 'none';
+    document.getElementById('enrollexp-context').textContent =
+        `Set a personal access expiry for ${s ? (s.full_name || 'this student') : 'this student'} on this course only — other students enrolled in it are unaffected.`;
+    document.getElementById('enrollexp-input').value = enrollExpiry[studentId] || '';
+    document.getElementById('enrollexp-modal').style.display = 'flex';
+}
+function closeEnrollExpiryModal() {
+    document.getElementById('enrollexp-modal').style.display = 'none';
+}
+async function saveEnrollExpiry(e) {
+    e.preventDefault();
+    const alertEl = document.getElementById('enrollexp-alert');
+    const btn = document.getElementById('enrollexp-save');
+    alertEl.style.display = 'none';
+    const val = document.getElementById('enrollexp-input').value || null;
+    btn.disabled = true; const label = btn.textContent; btn.textContent = 'Saving…';
+    const { error } = await db.from('course_enrollments')
+        .update({ expires_at: val }).eq('course_id', COURSE_ID).eq('student_id', enrollExpiryTarget);
+    btn.disabled = false; btn.textContent = label;
+    if (error) { alertEl.className = 'alert error'; alertEl.textContent = error.message; alertEl.style.display = 'block'; return; }
+    if (val) enrollExpiry[enrollExpiryTarget] = val; else delete enrollExpiry[enrollExpiryTarget];
+    closeEnrollExpiryModal();
+    renderStudents();
 }
