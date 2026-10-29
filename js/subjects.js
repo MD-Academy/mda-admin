@@ -106,12 +106,13 @@ function renderRooms() {
         return;
     }
 
-    container.innerHTML = `<div class="card-grid">${allRooms.map(r => {
+    container.innerHTML = `<div class="card-grid" id="rooms-grid">${allRooms.map(r => {
         const nP = presCounts[r.id] || 0, nV = vidCounts[r.id] || 0, nQ = quizCounts[r.id] || 0;
         return `
-            <div class="entity-card">
+            <div class="entity-card" data-id="${r.id}">
                 ${r.image_url ? `<div style="height:88px;margin:-22px -22px 14px;border-radius:16px 16px 0 0;background:url('${escapeHtml(r.image_url)}') center/cover;"></div>` : ''}
                 <div class="ec-head">
+                    <span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span>
                     <div class="ec-title">${escapeHtml(r.name)}</div>
                     ${visToggleHtml(r.id, r.is_visible)}
                 </div>
@@ -132,6 +133,61 @@ function renderRooms() {
 
 function openRoom(id) {
     window.location.href = `subject.html?id=${encodeURIComponent(id)}`;
+}
+
+// Drag-to-reorder subject cards. Listens on the stable outer container
+// (rooms-container) since the card-grid inside it is rebuilt on every render.
+let _dragRoomId = null;
+function setupRoomDragReorder() {
+    const container = document.getElementById('rooms-container');
+    if (!container) return;
+    container.addEventListener('dragstart', e => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        const card = handle.closest('.entity-card[data-id]');
+        if (!card) return;
+        _dragRoomId = card.dataset.id;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    container.addEventListener('dragend', e => {
+        const card = e.target.closest('.entity-card[data-id]');
+        if (card) card.classList.remove('dragging');
+    });
+    container.addEventListener('dragover', e => {
+        if (!_dragRoomId) return;
+        const card = e.target.closest('.entity-card[data-id]');
+        if (!card || card.dataset.id === _dragRoomId) return;
+        e.preventDefault();
+        card.classList.add('drag-over');
+    });
+    container.addEventListener('dragleave', e => {
+        const card = e.target.closest('.entity-card[data-id]');
+        if (card) card.classList.remove('drag-over');
+    });
+    container.addEventListener('drop', async e => {
+        const draggedId = _dragRoomId;
+        _dragRoomId = null;
+        container.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        const card = e.target.closest('.entity-card[data-id]');
+        if (!card || !draggedId || card.dataset.id === draggedId) return;
+        e.preventDefault();
+        await reorderRoom(draggedId, card.dataset.id);
+    });
+}
+document.addEventListener('DOMContentLoaded', setupRoomDragReorder);
+
+async function reorderRoom(draggedId, targetId) {
+    const from = allRooms.findIndex(r => r.id === draggedId);
+    const to = allRooms.findIndex(r => r.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = allRooms.splice(from, 1);
+    allRooms.splice(to, 0, moved);
+    allRooms.forEach((r, i) => { r.order_index = i; });
+    renderRooms();
+    const results = await Promise.all(allRooms.map(r => db.from('rooms').update({ order_index: r.order_index }).eq('id', r.id)));
+    const failed = results.find(res => res.error);
+    if (failed) alert(`Failed to reorder: ${failed.error.message}`);
 }
 
 // ── ROOM CREATE / EDIT ──
@@ -160,16 +216,13 @@ function openRoomModal(id = null) {
         document.getElementById('room-name').value = r.name || '';
         document.getElementById('room-slug').value = r.slug || '';
         document.getElementById('room-desc').value = r.description || '';
-        document.getElementById('room-order').value = r.order_index ?? 1;
         if (r.image_url) document.getElementById('room-image-current').textContent = 'A cover image is set — choose a file to replace it.';
     } else {
-        const nextOrder = allRooms.length ? Math.max(...allRooms.map(r => r.order_index || 0)) + 1 : 1;
         document.getElementById('room-modal-title').textContent = 'Add Subject';
         document.getElementById('room-id').value = '';
         document.getElementById('room-name').value = '';
         document.getElementById('room-slug').value = '';
         document.getElementById('room-desc').value = '';
-        document.getElementById('room-order').value = nextOrder;
     }
     openModal('room-modal');
 }
@@ -184,9 +237,11 @@ async function saveRoom(e) {
     const payload = {
         name: document.getElementById('room-name').value.trim(),
         slug: slugify(document.getElementById('room-slug').value),
-        description: document.getElementById('room-desc').value.trim() || null,
-        order_index: parseInt(document.getElementById('room-order').value, 10) || 1
+        description: document.getElementById('room-desc').value.trim() || null
     };
+    // New subjects start at the bottom; existing ones keep their order_index
+    // (reordering happens by dragging cards on the list, not from this form).
+    if (!id) payload.order_index = allRooms.length ? Math.max(...allRooms.map(r => r.order_index || 0)) + 1 : 1;
 
     if (!payload.name || !payload.slug) {
         showModalAlert(alert, 'Name and slug are required.', 'error');
