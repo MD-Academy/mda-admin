@@ -327,15 +327,14 @@ function renderQuestions() {
         const opts = Array.isArray(q.options_json) ? q.options_json : [];
         const correct = opts[q.correct_answer_index] || '—';
         return `
-            <div class="list-row">
+            <div class="list-row" data-id="${q.id}">
+                <span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span>
                 <div class="lr-index">${i + 1}</div>
                 <div class="lr-body">
                     <div class="lr-title">${escapeHtml(q.question_text)}</div>
                     <div class="lr-sub">Correct: ${escapeHtml(correct)}</div>
                 </div>
                 <div class="lr-actions">
-                    <button class="btn btn-ghost btn-sm" onclick="moveQuestion('${q.id}', -1)" ${i === 0 ? 'disabled style="opacity:.4;cursor:default;"' : ''}>↑</button>
-                    <button class="btn btn-ghost btn-sm" onclick="moveQuestion('${q.id}', 1)" ${i === currentQuestions.length - 1 ? 'disabled style="opacity:.4;cursor:default;"' : ''}>↓</button>
                     <button class="btn btn-ghost btn-sm" onclick="openQuestionForm('${q.id}')">Edit</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteQuestion('${q.id}')">Delete</button>
                 </div>
@@ -427,16 +426,51 @@ async function deleteQuestion(id) {
     await refreshQuestions();
 }
 
-async function moveQuestion(id, dir) {
-    const idx = currentQuestions.findIndex(q => q.id === id);
-    const t = idx + dir;
-    if (idx < 0 || t < 0 || t >= currentQuestions.length) return;
-    const a = currentQuestions[idx], b = currentQuestions[t];
-    const [r1, r2] = await Promise.all([
-        db.from('exam_questions').update({ order_index: b.order_index }).eq('id', a.id),
-        db.from('exam_questions').update({ order_index: a.order_index }).eq('id', b.id)
-    ]);
-    if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
+let _dragExamQuestionId = null;
+function setupExamQuestionDragReorder() {
+    const list = document.getElementById('eq-list');
+    if (!list) return;
+    list.addEventListener('dragstart', e => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        const row = handle.closest('.list-row[data-id]');
+        if (!row) return;
+        _dragExamQuestionId = row.dataset.id;
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    list.addEventListener('dragover', e => {
+        if (!_dragExamQuestionId) return;
+        const row = e.target.closest('.list-row[data-id]');
+        if (!row || row.dataset.id === _dragExamQuestionId) return;
+        e.preventDefault();
+        row.classList.add('drag-over');
+    });
+    list.addEventListener('dragleave', e => {
+        const row = e.target.closest('.list-row[data-id]');
+        if (row) row.classList.remove('drag-over');
+    });
+    list.addEventListener('drop', async e => {
+        const draggedId = _dragExamQuestionId;
+        _dragExamQuestionId = null;
+        list.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        const row = e.target.closest('.list-row[data-id]');
+        if (!row || !draggedId || row.dataset.id === draggedId) return;
+        e.preventDefault();
+        await reorderExamQuestion(draggedId, row.dataset.id);
+    });
+}
+document.addEventListener('DOMContentLoaded', setupExamQuestionDragReorder);
+
+async function reorderExamQuestion(draggedId, targetId) {
+    const from = currentQuestions.findIndex(q => q.id === draggedId);
+    const to = currentQuestions.findIndex(q => q.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = currentQuestions.splice(from, 1);
+    currentQuestions.splice(to, 0, moved);
+    currentQuestions.forEach((q, i) => { q.order_index = i; });
+    const results = await Promise.all(currentQuestions.map(q => db.from('exam_questions').update({ order_index: q.order_index }).eq('id', q.id)));
+    const failed = results.find(res => res.error);
+    if (failed) { alert(`Failed to reorder: ${failed.error.message}`); return; }
     await refreshQuestions();
 }
 

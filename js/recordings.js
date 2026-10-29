@@ -413,17 +413,11 @@ function renderMeetingLinks() {
         tbody.innerHTML = `<tr><td colspan="6" class="loader">No live class links yet. Click "Add link" to create one.</td></tr>`;
         return;
     }
-    const last = meetingLinks.length - 1;
-    tbody.innerHTML = meetingLinks.map((l, i) => `
+    tbody.innerHTML = meetingLinks.map(l => `
         <tr data-id="${l.id}">
             <td>
-                <div style="display:flex;align-items:center;gap:4px;">
-                    <div style="display:flex;flex-direction:column;">
-                        <button class="btn btn-ghost btn-sm reorder-btn" title="Move up" onclick="moveLink('${l.id}',-1)" ${i === 0 ? 'disabled style="opacity:.3;cursor:default;"' : ''}>▲</button>
-                        <button class="btn btn-ghost btn-sm reorder-btn" title="Move down" onclick="moveLink('${l.id}',1)" ${i === last ? 'disabled style="opacity:.3;cursor:default;"' : ''}>▼</button>
-                    </div>
-                    <strong>${escapeHtml(l.title)}</strong>
-                </div>
+                <span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span>
+                <strong>${escapeHtml(l.title)}</strong>
             </td>
             <td><span class="badge badge-blue">${escapeHtml(courseName(l.course_id))}</span></td>
             <td>${escapeHtml(l.host_name)}</td>
@@ -436,22 +430,52 @@ function renderMeetingLinks() {
         </tr>`).join('');
 }
 
-// Move a live link up/down and persist the new order.
-async function moveLink(id, dir) {
-    const i = meetingLinks.findIndex(x => x.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= meetingLinks.length) return;
-    const arr = meetingLinks;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+let _dragLinkId = null;
+function setupLinkDragReorder() {
+    const tbody = document.getElementById('links-tbody');
+    if (!tbody) return;
+    tbody.addEventListener('dragstart', e => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        const tr = handle.closest('tr[data-id]');
+        if (!tr) return;
+        _dragLinkId = tr.dataset.id;
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    tbody.addEventListener('dragover', e => {
+        if (!_dragLinkId) return;
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr || tr.dataset.id === _dragLinkId) return;
+        e.preventDefault();
+        tr.classList.add('drag-over');
+    });
+    tbody.addEventListener('dragleave', e => {
+        const tr = e.target.closest('tr[data-id]');
+        if (tr) tr.classList.remove('drag-over');
+    });
+    tbody.addEventListener('drop', async e => {
+        const draggedId = _dragLinkId;
+        _dragLinkId = null;
+        tbody.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr || !draggedId || tr.dataset.id === draggedId) return;
+        e.preventDefault();
+        await reorderLink(draggedId, tr.dataset.id);
+    });
+}
+document.addEventListener('DOMContentLoaded', setupLinkDragReorder);
+
+// Drag a live link to a new position and persist the new order.
+async function reorderLink(draggedId, targetId) {
+    const from = meetingLinks.findIndex(x => x.id === draggedId);
+    const to = meetingLinks.findIndex(x => x.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = meetingLinks.splice(from, 1);
+    meetingLinks.splice(to, 0, moved);
+    meetingLinks.forEach((x, i) => { x.order_index = i; });
     renderMeetingLinks();
-    // Renumber every row that changed, so order is stable regardless of prior nulls.
     try {
-        for (let k = 0; k < arr.length; k++) {
-            if (arr[k].order_index !== k) {
-                arr[k].order_index = k;
-                await db.from('meeting_links').update({ order_index: k }).eq('id', arr[k].id);
-            }
-        }
+        await Promise.all(meetingLinks.map(x => db.from('meeting_links').update({ order_index: x.order_index }).eq('id', x.id)));
     } catch (e) { console.error('[recordings] reorder failed:', e); }
 }
 
