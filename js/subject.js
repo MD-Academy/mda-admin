@@ -198,8 +198,8 @@ async function loadAll() {
     // Quizzes belong to the subject; load them + their question counts.
     quizzes = [];
     quizQuestionCounts = {};
-    const qRes = await db.from('quizzes').select('id, room_id, title, time_limit_minutes, cooldown_minutes, is_visible').eq('room_id', ROOM_ID);
-    quizzes = (qRes.data || []).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    const qRes = await db.from('quizzes').select('id, room_id, title, time_limit_minutes, cooldown_minutes, is_visible').eq('room_id', ROOM_ID).order('created_at', { ascending: false });
+    quizzes = qRes.data || [];
     const quizIds = quizzes.map(q => q.id);
     if (quizIds.length) {
         const qqRes = await db.from('quiz_questions').select('id, quiz_id').in('quiz_id', quizIds);
