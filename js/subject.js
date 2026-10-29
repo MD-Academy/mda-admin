@@ -161,6 +161,11 @@ async function initRoom(roomId, profile) {
     document.getElementById('quiz-title').addEventListener('input', debounce(autosaveQuizTitle, 500));
     document.getElementById('quiz-title').addEventListener('blur', autosaveQuizTitle);
 
+    setupLectureDragReorder();
+    setupMaterialDragReorder('materials-tbody');
+    setupMaterialDragReorder('notes-tbody');
+    setupQuizQuestionDragReorder();
+
     await loadAll();
 }
 
@@ -247,14 +252,12 @@ function renderRecordings(kind) {
     const reorder = kind === 'lecture';   // lectures are manually orderable; zoom is by date
     tbody.innerHTML = list.map((r, i) => `
         <tr data-id="${r.id}">
-            <td><strong>${escapeHtml(r.title)}</strong></td>
+            <td>${reorder ? `<span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span> ` : ''}<strong>${escapeHtml(r.title)}</strong></td>
             <td>${escapeHtml(r.professor)}</td>
             <td>${formatDate(r.recorded_date)}</td>
             <td>${formatDuration(r.duration_seconds)}</td>
             <td>${visToggleHtml('toggleRecVis', r.id, r.is_visible)}</td>
             <td class="row-actions">
-                ${reorder ? `<button class="btn btn-ghost btn-sm" onclick="moveRecording('${r.id}', -1)" ${i === 0 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move up">↑</button>
-                <button class="btn btn-ghost btn-sm" onclick="moveRecording('${r.id}', 1)" ${i === list.length - 1 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move down">↓</button>` : ''}
                 <a class="btn btn-ghost btn-sm" href="${escapeHtml(r.aws_url)}" target="_blank" rel="noopener">Preview</a>
                 <button class="btn btn-ghost btn-sm" onclick="openRecModal('${kind}', '${r.id}')">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteRecording('${r.id}')">Delete</button>
@@ -262,19 +265,54 @@ function renderRecordings(kind) {
         </tr>`).join('');
 }
 
-async function moveRecording(id, direction) {
+// Drag-to-reorder lecture videos (zoom recordings are ordered by date, not draggable here).
+let _dragLectureId = null;
+function setupLectureDragReorder() {
+    const tbody = document.getElementById('lecture-tbody');
+    if (!tbody) return;
+    tbody.addEventListener('dragstart', e => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        const tr = handle.closest('tr[data-id]');
+        if (!tr) return;
+        _dragLectureId = tr.dataset.id;
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    tbody.addEventListener('dragover', e => {
+        if (!_dragLectureId) return;
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr || tr.dataset.id === _dragLectureId) return;
+        e.preventDefault();
+        tr.classList.add('drag-over');
+    });
+    tbody.addEventListener('dragleave', e => {
+        const tr = e.target.closest('tr[data-id]');
+        if (tr) tr.classList.remove('drag-over');
+    });
+    tbody.addEventListener('drop', async e => {
+        const draggedId = _dragLectureId;
+        _dragLectureId = null;
+        tbody.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr || !draggedId || tr.dataset.id === draggedId) return;
+        e.preventDefault();
+        await reorderLecture(draggedId, tr.dataset.id);
+    });
+}
+
+async function reorderLecture(draggedId, targetId) {
     const list = recordings.filter(r => r.kind === 'lecture');
-    const idx = list.findIndex(r => r.id === id);
-    const target = idx + direction;
-    if (idx < 0 || target < 0 || target >= list.length) return;
-    const a = list[idx], b = list[target];
-    const [r1, r2] = await Promise.all([
-        db.from('recordings').update({ order_index: b.order_index }).eq('id', a.id),
-        db.from('recordings').update({ order_index: a.order_index }).eq('id', b.id)
-    ]);
-    if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
+    const from = list.findIndex(r => r.id === draggedId);
+    const to = list.findIndex(r => r.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+    list.forEach((r, i) => { r.order_index = i; });
+    const results = await Promise.all(list.map(r => db.from('recordings').update({ order_index: r.order_index }).eq('id', r.id)));
+    const failed = results.find(res => res.error);
+    if (failed) { alert(`Failed to reorder: ${failed.error.message}`); return; }
     await loadAll();
-    flashMovedRow(id);
+    flashMovedRow(draggedId);
 }
 
 function openRecModal(kind, id = null) {
@@ -368,16 +406,14 @@ async function deleteRecording(id) {
 }
 
 // ════════════ MATERIALS ════════════
-function materialRowHtml(m, i, n) {
+function materialRowHtml(m) {
     return `
         <tr data-id="${m.id}">
-            <td><strong>${escapeHtml(m.title)}</strong>${m.external_url ? ' <span title="External link">🔗</span>' : ''}</td>
+            <td><span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span> <strong>${escapeHtml(m.title)}</strong>${m.external_url ? ' <span title="External link">🔗</span>' : ''}</td>
             <td><span class="badge badge-blue">${escapeHtml((m.type || 'file').toUpperCase())}</span></td>
             <td>${formatDate(m.created_at)}</td>
             <td>${visToggleHtml('toggleMaterialVis', m.id, m.is_visible)}</td>
             <td class="row-actions">
-                <button class="btn btn-ghost btn-sm" onclick="moveMaterial('${m.id}', -1)" ${i === 0 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move up">↑</button>
-                <button class="btn btn-ghost btn-sm" onclick="moveMaterial('${m.id}', 1)" ${i === n - 1 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move down">↓</button>
                 <button class="btn btn-ghost btn-sm" onclick="previewMaterial('${m.id}', this)">Preview</button>
                 <button class="btn btn-ghost btn-sm" onclick="openMaterialEdit('${m.id}')">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteMaterial('${m.id}')">Delete</button>
@@ -389,7 +425,7 @@ function renderMaterials() {
     const tbody = document.getElementById('materials-tbody');
     const list = materials.filter(m => matCategory(m) === 'material');
     tbody.innerHTML = list.length
-        ? list.map((m, i) => materialRowHtml(m, i, list.length)).join('')
+        ? list.map(m => materialRowHtml(m)).join('')
         : `<tr><td colspan="5" class="loader">No presentations yet.</td></tr>`;
 }
 
@@ -397,26 +433,62 @@ function renderNotes() {
     const tbody = document.getElementById('notes-tbody');
     const list = materials.filter(m => matCategory(m) === 'note');
     tbody.innerHTML = list.length
-        ? list.map((m, i) => materialRowHtml(m, i, list.length)).join('')
+        ? list.map(m => materialRowHtml(m)).join('')
         : `<tr><td colspan="5" class="loader">No notes yet.</td></tr>`;
 }
 
-async function moveMaterial(id, direction) {
-    const m = materials.find(x => x.id === id);
-    if (!m) return;
-    const cat = matCategory(m);
-    const list = materials.filter(x => matCategory(x) === cat);
-    const idx = list.findIndex(x => x.id === id);
-    const target = idx + direction;
-    if (idx < 0 || target < 0 || target >= list.length) return;
-    const a = list[idx], b = list[target];
-    const [r1, r2] = await Promise.all([
-        db.from('materials').update({ order_index: b.order_index }).eq('id', a.id),
-        db.from('materials').update({ order_index: a.order_index }).eq('id', b.id)
-    ]);
-    if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
+// Drag-to-reorder materials/notes — one listener setup reused for both tables
+// (each row's own category, via matCategory, scopes the reorder correctly).
+let _dragMaterialId = null;
+function setupMaterialDragReorder(tbodyId) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    tbody.addEventListener('dragstart', e => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        const tr = handle.closest('tr[data-id]');
+        if (!tr) return;
+        _dragMaterialId = tr.dataset.id;
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    tbody.addEventListener('dragover', e => {
+        if (!_dragMaterialId) return;
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr || tr.dataset.id === _dragMaterialId) return;
+        e.preventDefault();
+        tr.classList.add('drag-over');
+    });
+    tbody.addEventListener('dragleave', e => {
+        const tr = e.target.closest('tr[data-id]');
+        if (tr) tr.classList.remove('drag-over');
+    });
+    tbody.addEventListener('drop', async e => {
+        const draggedId = _dragMaterialId;
+        _dragMaterialId = null;
+        tbody.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr || !draggedId || tr.dataset.id === draggedId) return;
+        e.preventDefault();
+        await reorderMaterial(draggedId, tr.dataset.id);
+    });
+}
+
+async function reorderMaterial(draggedId, targetId) {
+    const dragged = materials.find(x => x.id === draggedId);
+    const target = materials.find(x => x.id === targetId);
+    if (!dragged || !target || matCategory(dragged) !== matCategory(target)) return;
+    const list = materials.filter(x => matCategory(x) === matCategory(dragged));
+    const from = list.findIndex(x => x.id === draggedId);
+    const to = list.findIndex(x => x.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+    list.forEach((x, i) => { x.order_index = i; });
+    const results = await Promise.all(list.map(x => db.from('materials').update({ order_index: x.order_index }).eq('id', x.id)));
+    const failed = results.find(res => res.error);
+    if (failed) { alert(`Failed to reorder: ${failed.error.message}`); return; }
     await loadAll();
-    flashMovedRow(id);
+    flashMovedRow(draggedId);
 }
 
 // Next order_index for a new material within this room+category (so it lands at the bottom).
@@ -845,14 +917,13 @@ function renderQuizQuestions() {
             const correct = opts[q.correct_answer_index] || '—';
             return `
                 <div class="list-row" data-id="${q.id}">
+                    <span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span>
                     <div class="lr-index">${i + 1}</div>
                     <div class="lr-body">
                         <div class="lr-title">${escapeHtml(q.question_text)}</div>
                         <div class="lr-sub">Correct: ${escapeHtml(correct)}</div>
                     </div>
                     <div class="lr-actions">
-                        <button class="btn btn-ghost btn-sm" onclick="moveQuestion('${q.id}', -1)" ${i === 0 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move up">↑</button>
-                        <button class="btn btn-ghost btn-sm" onclick="moveQuestion('${q.id}', 1)" ${i === currentQuizQuestions.length - 1 ? 'disabled style="opacity:.4;cursor:default;"' : ''} title="Move down">↓</button>
                         <button class="btn btn-ghost btn-sm" onclick="openQuestionForm('${q.id}')">Edit</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteQuestion('${q.id}')">Delete</button>
                     </div>
@@ -1029,16 +1100,50 @@ async function deleteQuestion(id) {
     await refreshQuizQuestions();
 }
 
-async function moveQuestion(id, dir) {
-    const idx = currentQuizQuestions.findIndex(q => q.id === id);
-    const t = idx + dir;
-    if (idx < 0 || t < 0 || t >= currentQuizQuestions.length) return;
-    const a = currentQuizQuestions[idx], b = currentQuizQuestions[t];
-    const [r1, r2] = await Promise.all([
-        db.from('quiz_questions').update({ order_index: b.order_index }).eq('id', a.id),
-        db.from('quiz_questions').update({ order_index: a.order_index }).eq('id', b.id)
-    ]);
-    if (r1.error || r2.error) { alert(`Failed to reorder: ${(r1.error || r2.error).message}`); return; }
+let _dragQuestionId = null;
+function setupQuizQuestionDragReorder() {
+    const list = document.getElementById('quiz-questions-list');
+    if (!list) return;
+    list.addEventListener('dragstart', e => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        const row = handle.closest('.list-row[data-id]');
+        if (!row) return;
+        _dragQuestionId = row.dataset.id;
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    list.addEventListener('dragover', e => {
+        if (!_dragQuestionId) return;
+        const row = e.target.closest('.list-row[data-id]');
+        if (!row || row.dataset.id === _dragQuestionId) return;
+        e.preventDefault();
+        row.classList.add('drag-over');
+    });
+    list.addEventListener('dragleave', e => {
+        const row = e.target.closest('.list-row[data-id]');
+        if (row) row.classList.remove('drag-over');
+    });
+    list.addEventListener('drop', async e => {
+        const draggedId = _dragQuestionId;
+        _dragQuestionId = null;
+        list.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        const row = e.target.closest('.list-row[data-id]');
+        if (!row || !draggedId || row.dataset.id === draggedId) return;
+        e.preventDefault();
+        await reorderQuestion(draggedId, row.dataset.id);
+    });
+}
+
+async function reorderQuestion(draggedId, targetId) {
+    const from = currentQuizQuestions.findIndex(q => q.id === draggedId);
+    const to = currentQuizQuestions.findIndex(q => q.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = currentQuizQuestions.splice(from, 1);
+    currentQuizQuestions.splice(to, 0, moved);
+    currentQuizQuestions.forEach((q, i) => { q.order_index = i; });
+    const results = await Promise.all(currentQuizQuestions.map(q => db.from('quiz_questions').update({ order_index: q.order_index }).eq('id', q.id)));
+    const failed = results.find(res => res.error);
+    if (failed) { alert(`Failed to reorder: ${failed.error.message}`); return; }
     await refreshQuizQuestions();
-    flashMovedRow(id);
+    flashMovedRow(draggedId);
 }
