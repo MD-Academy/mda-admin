@@ -104,6 +104,12 @@
                         <input type="text" id="edit-name" required>
                     </div>
                     <div class="form-field">
+                        <label>Login Email <span style="color:var(--text-muted);font-weight:400;">(this is what they sign in with)</span></label>
+                        <input type="email" id="edit-email" placeholder="student@example.com" required>
+                        <input type="hidden" id="edit-email-original">
+                        <div class="hint">Changing this updates their sign-in email immediately — they log in with the new address right away.</div>
+                    </div>
+                    <div class="form-field">
                         <label>Status</label>
                         <select id="edit-status">
                             <option value="active">Active</option>

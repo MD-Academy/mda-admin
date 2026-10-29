@@ -600,7 +600,7 @@ function downloadCredsCsv() {
 }
 
 // ── EDIT ──
-function openEdit(id) {
+async function openEdit(id) {
     const s = allStudents.find(x => x.id === id);
     if (!s) return;
     document.getElementById('edit-id').value = s.id;
@@ -608,7 +608,19 @@ function openEdit(id) {
     document.getElementById('edit-status').value = s.status;
     document.getElementById('edit-expiry').value = s.expiry_date || '';
     document.getElementById('edit-alert').style.display = 'none';
+    const emailField = document.getElementById('edit-email');
+    emailField.value = s.email || '';
+    document.getElementById('edit-email-original').value = s.email || '';
     openModal('edit-modal');
+    // Confirm the actual sign-in email from auth (source of truth) — the profiles
+    // copy can go stale, same check the admin-login editor already does.
+    try {
+        const r = await apiRequest('GET', `/admin/auth-email/${id}`);
+        if (r && r.email) {
+            emailField.value = r.email;
+            document.getElementById('edit-email-original').value = r.email;
+        }
+    } catch (err) { /* fall back to the profile copy already shown */ }
 }
 
 async function saveEdit(e) {
@@ -621,12 +633,18 @@ async function saveEdit(e) {
     const full_name = document.getElementById('edit-name').value.trim();
     const status = document.getElementById('edit-status').value;
     const expiry_date = document.getElementById('edit-expiry').value || '';
+    const email = document.getElementById('edit-email').value.trim();
+    const emailChanged = email !== document.getElementById('edit-email-original').value;
 
     if (!ensureSafe(alert, [['Full Name', full_name]])) return;
+    if (!email) { showModalAlert(alert, 'Enter the login email.', 'error'); return; }
 
     btn.disabled = true; btn.textContent = 'Saving…';
 
     try {
+        if (emailChanged) {
+            await apiRequest('POST', `/admin/update-user-email/${id}`, { email, full_name });
+        }
         await apiRequest('PATCH', `/admin/update-student/${id}`, { full_name, status, expiry_date });
         closeModal('edit-modal');
         loadStudents();
