@@ -710,6 +710,7 @@ function renderGradingSetup() {
 
     const oralRows = gbOrals.length ? gbOrals.map(o => `
         <div class="list-row" data-oral="${o.id}">
+            <span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span>
             <div class="lr-body"><input type="text" value="${escapeHtml(o.title)}" class="gs-oral-title" data-oral="${o.id}" style="width:100%;font-weight:600;padding:7px 9px;"></div>
             <div class="lr-actions">
                 <label style="font-size:12px;color:var(--text-muted);">Weight %</label>
@@ -728,7 +729,7 @@ function renderGradingSetup() {
         <div class="list-rows">${examRows}</div>
         ${examPicker}
         <div class="section-title" style="font-size:15px;margin-top:22px;">Oral presentations</div>
-        <div class="list-rows">${oralRows}</div>
+        <div class="list-rows" id="oral-rows">${oralRows}</div>
         <div style="display:flex;gap:8px;margin-top:14px;align-items:flex-end;flex-wrap:wrap;">
             <div class="form-field" style="flex:1;min-width:180px;margin:0;"><label>New oral title</label><input type="text" id="new-oral-title" placeholder="e.g. Final Oral Test"></div>
             <div class="form-field" style="margin:0;"><label>Weight %</label><input type="number" id="new-oral-weight" min="0" max="100" step="1" value="5" style="width:90px;"></div>
@@ -764,6 +765,67 @@ function recalcGradingTotal() {
     if (!el) return;
     const ok = Math.abs(t - 100) < 0.01;
     el.innerHTML = `Total weight: <strong style="color:${ok ? 'var(--green)' : 'var(--red)'};">${t}%</strong> ${ok ? '✓' : '— must be exactly 100% to save'}`;
+}
+
+// Drag-to-reorder oral presentations. Listens on the stable #grading-body
+// (the oral list itself is rebuilt on every render) and, unlike the other
+// converted lists, moves the DOM row directly rather than re-rendering —
+// titles/weights here are live-editable inputs with no per-keystroke save,
+// so a full re-render on drag would wipe any edit the admin hasn't saved yet.
+let _dragOralId = null;
+function setupOralDragReorder() {
+    const gradingBody = document.getElementById('grading-body');
+    if (!gradingBody) return;
+    gradingBody.addEventListener('dragstart', e => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        const row = handle.closest('.list-row[data-oral]');
+        if (!row) return;
+        _dragOralId = row.dataset.oral;
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    gradingBody.addEventListener('dragover', e => {
+        if (!_dragOralId) return;
+        const row = e.target.closest('.list-row[data-oral]');
+        if (!row || row.dataset.oral === _dragOralId) return;
+        e.preventDefault();
+        row.classList.add('drag-over');
+    });
+    gradingBody.addEventListener('dragleave', e => {
+        const row = e.target.closest('.list-row[data-oral]');
+        if (row) row.classList.remove('drag-over');
+    });
+    gradingBody.addEventListener('drop', async e => {
+        const draggedId = _dragOralId;
+        _dragOralId = null;
+        gradingBody.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        const row = e.target.closest('.list-row[data-oral]');
+        if (!row || !draggedId || row.dataset.oral === draggedId) return;
+        e.preventDefault();
+        await reorderOral(draggedId, row.dataset.oral);
+    });
+}
+document.addEventListener('DOMContentLoaded', setupOralDragReorder);
+
+async function reorderOral(draggedId, targetId) {
+    const container = document.getElementById('oral-rows');
+    const draggedEl = container && container.querySelector(`.list-row[data-oral="${draggedId}"]`);
+    const targetEl = container && container.querySelector(`.list-row[data-oral="${targetId}"]`);
+    if (!draggedEl || !targetEl) return;
+    // Move the actual DOM node (not a re-render) so unsaved edits in other rows survive.
+    const rows = Array.from(container.children);
+    if (rows.indexOf(draggedEl) < rows.indexOf(targetEl)) targetEl.after(draggedEl);
+    else targetEl.before(draggedEl);
+
+    const from = gbOrals.findIndex(o => o.id === draggedId);
+    const to = gbOrals.findIndex(o => o.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = gbOrals.splice(from, 1);
+    gbOrals.splice(to, 0, moved);
+    gbOrals.forEach((o, i) => { o.order_index = i; });
+    const results = await Promise.all(gbOrals.map(o => db.from('oral_presentations').update({ order_index: o.order_index }).eq('id', o.id)));
+    const failed = results.find(res => res.error);
+    if (failed) alert(`Failed to reorder: ${failed.error.message}`);
 }
 
 async function addExamToCourse() {

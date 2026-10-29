@@ -54,10 +54,10 @@ function renderUnis() {
         return;
     }
     box.innerHTML = `<div class="card-grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr));">${UNIS.map(u => `
-        <div class="panel" style="padding:0;overflow:hidden;">
+        <div class="panel" data-id="${u.id}" style="padding:0;overflow:hidden;">
             <div style="height:120px;background:${u.image_url ? `url('${escapeHtml(u.image_url)}') center/cover` : 'linear-gradient(135deg,#3a1020,#7a1f3d)'};"></div>
             <div style="padding:16px;">
-                <div class="section-title" style="margin:0 0 4px;">${escapeHtml(u.name)}</div>
+                <div class="section-title" style="margin:0 0 4px;display:flex;align-items:center;gap:6px;"><span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span> ${escapeHtml(u.name)}</div>
                 <div class="hint" style="margin:0 0 8px;">${escapeHtml([u.location, u.country].filter(Boolean).join(', ')) || '—'}</div>
                 <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">
                     ${(u.degrees || []).map(d => `<span class="badge badge-blue">${escapeHtml(d)}</span>`).join('') || '<span class="hint">No degrees set</span>'}
@@ -69,6 +69,56 @@ function renderUnis() {
                 </div>
             </div>
         </div>`).join('')}</div>`;
+}
+
+// Drag-to-reorder university cards. Listens on the stable outer container
+// (unis-list) since the card-grid inside it is rebuilt on every render.
+let _dragUniId = null;
+function setupUniDragReorder() {
+    const container = document.getElementById('unis-list');
+    if (!container) return;
+    container.addEventListener('dragstart', e => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        const card = handle.closest('.panel[data-id]');
+        if (!card) return;
+        _dragUniId = card.dataset.id;
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    container.addEventListener('dragover', e => {
+        if (!_dragUniId) return;
+        const card = e.target.closest('.panel[data-id]');
+        if (!card || card.dataset.id === _dragUniId) return;
+        e.preventDefault();
+        card.classList.add('drag-over');
+    });
+    container.addEventListener('dragleave', e => {
+        const card = e.target.closest('.panel[data-id]');
+        if (card) card.classList.remove('drag-over');
+    });
+    container.addEventListener('drop', async e => {
+        const draggedId = _dragUniId;
+        _dragUniId = null;
+        container.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        const card = e.target.closest('.panel[data-id]');
+        if (!card || !draggedId || card.dataset.id === draggedId) return;
+        e.preventDefault();
+        await reorderUni(draggedId, card.dataset.id);
+    });
+}
+document.addEventListener('DOMContentLoaded', setupUniDragReorder);
+
+async function reorderUni(draggedId, targetId) {
+    const from = UNIS.findIndex(u => u.id === draggedId);
+    const to = UNIS.findIndex(u => u.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = UNIS.splice(from, 1);
+    UNIS.splice(to, 0, moved);
+    UNIS.forEach((u, i) => { u.order_index = i; });
+    renderUnis();
+    const results = await Promise.all(UNIS.map(u => db.from('universities').update({ order_index: u.order_index }).eq('id', u.id)));
+    const failed = results.find(res => res.error);
+    if (failed) alert(`Failed to reorder: ${failed.error.message}`);
 }
 
 function openUniModal(id = null) {
@@ -192,6 +242,7 @@ async function saveUni(e) {
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
         const payload = { name, country: country || null, location: location || null, costs: costs || null, website: web.value, application_url: appLink.value, description: description || null, degrees: editDegrees, exam_dates: editExamDates };
+        if (!id) payload.order_index = UNIS.length ? Math.max(...UNIS.map(u => u.order_index || 0)) + 1 : 1;
         if (pickedUniImage) {
             const up = await uploadUniImage(pickedUniImage);
             if (up.error) throw new Error(up.error);
