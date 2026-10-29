@@ -793,7 +793,7 @@ function renderQuizzes() {
 
 async function createQuiz() {
     const { data, error } = await db.from('quizzes')
-        .insert({ room_id: ROOM_ID, title: 'New Quiz' })
+        .insert({ room_id: ROOM_ID, title: 'New Quiz', is_visible: false })
         .select('id, room_id, title, time_limit_minutes, cooldown_minutes, is_visible')
         .single();
     if (error) { alert(`Could not create quiz: ${error.message}`); return; }

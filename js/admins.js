@@ -27,7 +27,7 @@ async function loadAdmins() {
         .from('profiles')
         .select('id, full_name, email, role, job_title, status, created_at')
         .in('role', ['admin', 'superadmin'])
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false });
 
     if (error) {
         tbody.innerHTML = `<tr><td colspan="6" class="loader" style="color:var(--red)">Error loading admins: ${escapeHtml(error.message)}</td></tr>`;

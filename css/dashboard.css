@@ -965,3 +965,10 @@ body {
 .ap-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
 .ap-status { font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 12px 0 14px; }
 .ap-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── DRAG-TO-REORDER (shared across any orderable list: recordings, materials, questions, rooms, etc.) ── */
+.drag-handle { cursor: grab; color: var(--text-muted); font-size: 15px; margin-right: 4px; user-select: none; }
+.drag-handle:active { cursor: grabbing; }
+.drag-over { outline: 2px dashed var(--blue-400); outline-offset: -2px; background: #eff5ff; }
+.entity-card.drag-over { background: #eff5ff; }
+.entity-card.dragging { opacity: .5; }

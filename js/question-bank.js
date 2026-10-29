@@ -222,7 +222,7 @@ async function loadQbPage() {
     if (QB_CAT) q = q.eq('category', QB_CAT);
     const term = QB_SEARCH.replace(/[%,()]/g, ' ').trim();
     if (term) q = q.ilike('question_text', `%${term}%`);
-    q = q.order('created_at', { ascending: true }).range(from, to);
+    q = q.order('created_at', { ascending: false }).range(from, to);
     const { data, count, error } = await q;
     if (error) { box.innerHTML = `<div class="empty-state"><h3 style="color:var(--red)">Couldn't load</h3><p>${escapeHtml(error.message)}</p></div>`; return; }
     QB_TOTAL = count || 0;
@@ -308,7 +308,7 @@ async function selectAllQbMatching() {
             if (QB_CAT) q = q.eq('category', QB_CAT);
             const term = QB_SEARCH.replace(/[%,()]/g, ' ').trim();
             if (term) q = q.ilike('question_text', `%${term}%`);
-            q = q.order('created_at', { ascending: true }).range(from, Math.min(from + pageSize - 1, QB_TOTAL - 1));
+            q = q.order('created_at', { ascending: false }).range(from, Math.min(from + pageSize - 1, QB_TOTAL - 1));
             const { data, error } = await q;
             if (error) throw new Error(error.message);
             (data || []).forEach(r => QB_SELECTED.add(r.id));
