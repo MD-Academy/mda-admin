@@ -9,6 +9,8 @@ let enrolledIds = new Set();
 let enrollExpiry = {};       // student_id -> per-enrollment expires_at (date string), only for students who have one set
 let enrollExpiryTarget = null;
 let stuMap = {};             // id -> student object (enrolled + search results)
+let allOtherCourses = [];    // [{id, name}] every course except this one — options for "assign also to"
+let crossEnroll = {};        // student_id -> [{course_id, name}] OTHER courses they're already enrolled in
 let stuSearchTimer = null;
 let allExams = [];           // [{id, title, type}]
 let courseExamIds = new Set();
@@ -178,6 +180,23 @@ async function loadData() {
         enrollExpiry = {};
         (enrRes.data || []).forEach(r => { if (r.expires_at) enrollExpiry[r.student_id] = r.expires_at; });
         enrolledStudents = [];
+
+        // Every OTHER course (dropdown options) + where each of these students is
+        // already enrolled elsewhere, so cross-course assignment needs no tab-switching.
+        const [coursesRes, crossRes] = await Promise.all([
+            db.from('courses').select('id, name').neq('id', COURSE_ID).order('name', { ascending: true }),
+            ids.length
+                ? db.from('course_enrollments').select('student_id, course_id').in('student_id', ids).neq('course_id', COURSE_ID)
+                : Promise.resolve({ data: [] })
+        ]);
+        allOtherCourses = coursesRes.data || [];
+        const courseNameById = {};
+        allOtherCourses.forEach(c => { courseNameById[c.id] = c.name; });
+        crossEnroll = {};
+        (crossRes.data || []).forEach(r => {
+            (crossEnroll[r.student_id] ||= []).push({ course_id: r.course_id, name: courseNameById[r.course_id] || 'Course' });
+        });
+
         if (ids.length) {
             let res = await db.from('profiles').select('id, full_name, status, email').in('id', ids).order('full_name', { ascending: true });
             if (res.error && /email/i.test(res.error.message || '')) {
@@ -371,6 +390,8 @@ function _studentRows(list) {
         const enrolled = enrolledIds.has(s.id);
         const suspended = s.status === 'suspended';
         const exp = enrollExpiry[s.id];
+        const others = enrolled ? (crossEnroll[s.id] || []) : [];
+        const assignable = enrolled ? allOtherCourses.filter(c => !others.some(o => o.course_id === c.id)) : [];
         return `
             <div class="list-row">
                 <div class="lr-body">
@@ -378,13 +399,36 @@ function _studentRows(list) {
                     ${s.email ? `<div class="lr-sub">${escapeHtml(s.email)}</div>` : ''}
                     ${suspended ? '<div class="lr-sub" style="color:var(--red)">Suspended</div>' : ''}
                     ${enrolled ? `<div class="lr-sub">${exp ? `Access to this course expires ${escapeHtml(exp)}` : 'No personal expiry on this course'}</div>` : ''}
+                    ${others.length ? `<div class="lr-sub" style="margin-top:3px;">Also enrolled in: ${others.map(o => `<span class="badge badge-blue" style="margin:1px 3px 1px 0;">${escapeHtml(o.name)}</span>`).join('')}</div>` : ''}
                 </div>
                 <div class="lr-actions">
+                    ${enrolled && assignable.length ? `<select class="filter-select" style="height:34px;font-size:12.5px;" onchange="assignToAdditionalCourse('${s.id}', this)">
+                        <option value="">Assign also to…</option>
+                        ${assignable.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
+                    </select>` : ''}
                     ${enrolled ? `<button class="btn btn-ghost btn-sm" onclick="openEnrollExpiry('${s.id}')">${exp ? 'Change expiry' : 'Set expiry'}</button>` : ''}
                     <button class="btn btn-sm ${enrolled ? 'btn-danger' : 'btn-primary'}" onclick="toggleEnroll('${s.id}')">${enrolled ? 'Remove' : 'Enrol'}</button>
                 </div>
             </div>`;
     }).join('')}</div>`;
+}
+
+// Enrol an already-enrolled student into one more course, right from this roster —
+// no need to open that other course's page to do it.
+async function assignToAdditionalCourse(studentId, selectEl) {
+    const courseId = selectEl.value;
+    if (!courseId) return;
+    selectEl.disabled = true;
+    const { error } = await db.from('course_enrollments').insert({ course_id: courseId, student_id: studentId });
+    selectEl.disabled = false;
+    // A duplicate-key error just means they were already enrolled there (e.g. a
+    // stale view) — not a real failure, just resync instead of alerting on it.
+    if (error && !/duplicate key/i.test(error.message || '')) { alert(`Failed: ${error.message}`); selectEl.value = ''; return; }
+    const course = allOtherCourses.find(c => c.id === courseId);
+    if (course && !(crossEnroll[studentId] || []).some(o => o.course_id === courseId)) {
+        (crossEnroll[studentId] ||= []).push({ course_id: courseId, name: course.name });
+    }
+    renderStudents();
 }
 
 // Default view = the enrolled roster (no global list).
