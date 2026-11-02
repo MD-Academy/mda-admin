@@ -175,7 +175,12 @@ async function loadData() {
     // Enrolment is superadmin-only. Load ONLY the enrolled students (the roster);
     // adding others is search-driven so the panel scales to thousands across schools.
     if (IS_SUPER) {
-        const enrRes = await db.from('course_enrollments').select('student_id, expires_at, attendance_tracked').eq('course_id', COURSE_ID);
+        let enrRes = await db.from('course_enrollments').select('student_id, expires_at, attendance_tracked').eq('course_id', COURSE_ID);
+        if (enrRes.error) {
+            // attendance_tracked column doesn't exist yet (migration not applied) —
+            // fall back so the roster still loads; attendance_tracked just defaults true.
+            enrRes = await db.from('course_enrollments').select('student_id, expires_at').eq('course_id', COURSE_ID);
+        }
         const ids = [...new Set((enrRes.data || []).map(r => r.student_id))];
         enrolledIds = new Set(ids);
         enrollExpiry = {};

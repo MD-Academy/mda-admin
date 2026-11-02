@@ -86,11 +86,16 @@ async function onCourseChange() {
     atPage = 1; atSearch = '';
     const sb = document.getElementById('at-search'); if (sb) sb.value = '';
 
-    const [enrRes, sesRes] = await Promise.all([
+    let [enrRes, sesRes] = await Promise.all([
         db.from('course_enrollments').select('student_id').eq('course_id', atCourseId).eq('attendance_tracked', true),
         db.from('class_sessions').select('id, session_date, opened_by_name').eq('course_id', atCourseId)
             .order('session_date', { ascending: true }).order('created_at', { ascending: true })
     ]);
+    if (enrRes.error) {
+        // attendance_tracked column doesn't exist yet (migration not applied) —
+        // fall back so the attendance sheet still loads for every enrolled student.
+        enrRes = await db.from('course_enrollments').select('student_id').eq('course_id', atCourseId);
+    }
     atStudentIds = [...new Set((enrRes.data || []).map(r => r.student_id))];
     atSessions = sesRes.data || [];
     loadAtPage();
