@@ -8,6 +8,7 @@ let enrolledStudents = [];   // full objects of students enrolled in THIS course
 let enrolledIds = new Set();
 let enrollExpiry = {};       // student_id -> per-enrollment expires_at (date string), only for students who have one set
 let enrollExpiryTarget = null;
+let attendanceTracked = {};  // student_id -> does THIS enrollment count for attendance/reminders here (default true)
 let stuMap = {};             // id -> student object (enrolled + search results)
 let allOtherCourses = [];    // [{id, name}] every course except this one — options for "assign also to"
 let crossEnroll = {};        // student_id -> [{course_id, name}] OTHER courses they're already enrolled in
@@ -174,11 +175,15 @@ async function loadData() {
     // Enrolment is superadmin-only. Load ONLY the enrolled students (the roster);
     // adding others is search-driven so the panel scales to thousands across schools.
     if (IS_SUPER) {
-        const enrRes = await db.from('course_enrollments').select('student_id, expires_at').eq('course_id', COURSE_ID);
+        const enrRes = await db.from('course_enrollments').select('student_id, expires_at, attendance_tracked').eq('course_id', COURSE_ID);
         const ids = [...new Set((enrRes.data || []).map(r => r.student_id))];
         enrolledIds = new Set(ids);
         enrollExpiry = {};
-        (enrRes.data || []).forEach(r => { if (r.expires_at) enrollExpiry[r.student_id] = r.expires_at; });
+        attendanceTracked = {};
+        (enrRes.data || []).forEach(r => {
+            if (r.expires_at) enrollExpiry[r.student_id] = r.expires_at;
+            attendanceTracked[r.student_id] = r.attendance_tracked !== false;
+        });
         enrolledStudents = [];
 
         // Every OTHER course (dropdown options) + where each of these students is
@@ -392,6 +397,7 @@ function _studentRows(list) {
         const exp = enrollExpiry[s.id];
         const others = enrolled ? (crossEnroll[s.id] || []) : [];
         const assignable = enrolled ? allOtherCourses.filter(c => !others.some(o => o.course_id === c.id)) : [];
+        const tracked = attendanceTracked[s.id] !== false;
         return `
             <div class="list-row">
                 <div class="lr-body">
@@ -399,6 +405,7 @@ function _studentRows(list) {
                     ${s.email ? `<div class="lr-sub">${escapeHtml(s.email)}</div>` : ''}
                     ${suspended ? '<div class="lr-sub" style="color:var(--red)">Suspended</div>' : ''}
                     ${enrolled ? `<div class="lr-sub">${exp ? `Access to this course expires ${escapeHtml(exp)}` : 'No personal expiry on this course'}</div>` : ''}
+                    ${enrolled && !tracked ? `<div class="lr-sub" style="margin-top:3px;"><span class="badge badge-blue">Access only — excluded from attendance &amp; reminders here</span></div>` : ''}
                     ${others.length ? `<div class="lr-sub" style="margin-top:3px;">Also enrolled in: ${others.map(o => `<span class="badge badge-blue" style="margin:1px 3px 1px 0;">${escapeHtml(o.name)}</span>`).join('')}</div>` : ''}
                 </div>
                 <div class="lr-actions">
@@ -406,6 +413,7 @@ function _studentRows(list) {
                         <option value="">Assign also to…</option>
                         ${assignable.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
                     </select>` : ''}
+                    ${enrolled ? `<button class="btn btn-ghost btn-sm" onclick="toggleAttendanceTracked('${s.id}')" title="Toggle whether this enrollment counts toward THIS course's attendance sheet and attendance reminder emails">${tracked ? 'Exclude from attendance' : 'Include in attendance'}</button>` : ''}
                     ${enrolled ? `<button class="btn btn-ghost btn-sm" onclick="openEnrollExpiry('${s.id}')">${exp ? 'Change expiry' : 'Set expiry'}</button>` : ''}
                     <button class="btn btn-sm ${enrolled ? 'btn-danger' : 'btn-primary'}" onclick="toggleEnroll('${s.id}')">${enrolled ? 'Remove' : 'Enrol'}</button>
                 </div>
@@ -419,7 +427,10 @@ async function assignToAdditionalCourse(studentId, selectEl) {
     const courseId = selectEl.value;
     if (!courseId) return;
     selectEl.disabled = true;
-    const { error } = await db.from('course_enrollments').insert({ course_id: courseId, student_id: studentId });
+    // Cross-enrollment is for access only (e.g. watching another branch's recorded
+    // lectures) — it should never count toward THAT course's in-person attendance
+    // or attendance reminder emails, so it doesn't inflate/distort that roster.
+    const { error } = await db.from('course_enrollments').insert({ course_id: courseId, student_id: studentId, attendance_tracked: false });
     selectEl.disabled = false;
     // A duplicate-key error just means they were already enrolled there (e.g. a
     // stale view) — not a real failure, just resync instead of alerting on it.
@@ -429,6 +440,19 @@ async function assignToAdditionalCourse(studentId, selectEl) {
         (crossEnroll[studentId] ||= []).push({ course_id: courseId, name: course.name });
     }
     renderStudents();
+}
+
+// Flip whether an existing enrollment on THIS course counts toward its attendance
+// sheet / attendance reminder emails — for fixing enrollments that predate this
+// flag, or any access-only case that doesn't fit the automatic cross-enroll path.
+async function toggleAttendanceTracked(studentId) {
+    const next = !(attendanceTracked[studentId] !== false);
+    const { error } = await db.from('course_enrollments')
+        .update({ attendance_tracked: next }).eq('course_id', COURSE_ID).eq('student_id', studentId);
+    if (error) { alert(`Failed: ${error.message}`); return; }
+    attendanceTracked[studentId] = next;
+    if ((document.getElementById('student-search')?.value || '').trim()) runStudentSearch();
+    else renderStudents();
 }
 
 // Default view = the enrolled roster (no global list).

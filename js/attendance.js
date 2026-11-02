@@ -87,7 +87,7 @@ async function onCourseChange() {
     const sb = document.getElementById('at-search'); if (sb) sb.value = '';
 
     const [enrRes, sesRes] = await Promise.all([
-        db.from('course_enrollments').select('student_id').eq('course_id', atCourseId),
+        db.from('course_enrollments').select('student_id').eq('course_id', atCourseId).eq('attendance_tracked', true),
         db.from('class_sessions').select('id, session_date, opened_by_name').eq('course_id', atCourseId)
             .order('session_date', { ascending: true }).order('created_at', { ascending: true })
     ]);
