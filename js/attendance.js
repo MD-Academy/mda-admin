@@ -184,7 +184,7 @@ function renderAttendance(jumpToLatest) {
     const head = `<tr><th class="att-sticky">Student</th>${atSessions.map(s => `
         <th class="att-col">${fmtSession(s.session_date)}
             <span class="att-col-sub" title="Opened by ${escapeHtml(s.opened_by_name || '')}">${escapeHtml(s.opened_by_name || '')}</span>
-            <button class="att-del" title="Delete this class (removes everyone's marks for that day)" onclick="deleteSession('${s.id}')">✕</button>
+            ${IS_SUPER ? `<button class="att-del" title="Delete this class (removes everyone's marks for that day) — superadmin only" onclick="deleteSession('${s.id}')">✕</button>` : ''}
         </th>`).join('')}<th>Attendance</th></tr>`;
 
     const rows = atStudents.map(s => {
@@ -236,7 +236,14 @@ async function toggleMark(studentId, sessionId) {
 
 async function deleteSession(sessionId) {
     const s = atSessions.find(x => x.id === sessionId);
-    if (!confirm(`Delete the class on ${fmtSession(s && s.session_date)}?\n\nThis permanently removes the attendance marks for EVERY student for that day. This cannot be undone.`)) return;
+    const dateLabel = fmtSession(s && s.session_date);
+    // A plain OK/Cancel popup is too easy to click through by reflex for something
+    // this destructive and irreversible — require typing the date to confirm.
+    const typed = prompt(`This permanently deletes the class on ${dateLabel} and EVERY student's attendance mark for that day. This cannot be undone.\n\nType the date exactly as shown below to confirm:\n${dateLabel}`);
+    if (typed !== dateLabel) {
+        if (typed !== null) alert("That didn't match — nothing was deleted.");
+        return;
+    }
     const { error } = await db.from('class_sessions').delete().eq('id', sessionId);
     if (error) { alert(`Couldn't delete that class: ${error.message}`); return; }
     atSessions = atSessions.filter(x => x.id !== sessionId);
