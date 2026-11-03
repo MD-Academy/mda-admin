@@ -227,11 +227,18 @@ async function toggleMark(studentId, sessionId) {
     atMarks[key] = { present: next, updated_by: CURRENT_UID, updated_at: nowIso };
     if (!atStaffNames[CURRENT_UID]) atStaffNames[CURRENT_UID] = ADMIN_NAME || 'You';
     renderAttendance();
-    const { error } = await db.from('attendance').upsert(
+    // .select() matters here: without it, a write silently blocked by a permissions
+    // policy (0 rows written) comes back with error:null and data:[] — indistinguishable
+    // from success unless we check the returned rows. That silent-failure gap is why
+    // marks could vanish on reload despite no error ever appearing.
+    const { data, error } = await db.from('attendance').upsert(
         { session_id: sessionId, student_id: studentId, present: next, updated_by: CURRENT_UID, updated_at: nowIso },
         { onConflict: 'session_id,student_id' }
-    );
-    if (error) { alert(`Couldn't save that mark: ${error.message}`); atMarks[key] = prev; renderAttendance(); }
+    ).select('session_id');
+    if (error || !data || data.length === 0) {
+        alert(`This mark did NOT save${error ? ': ' + error.message : ' — the save was silently blocked.'}\n\nPlease screenshot this and tell Diego — do not keep marking until this is fixed.`);
+        atMarks[key] = prev; renderAttendance();
+    }
 }
 
 async function deleteSession(sessionId) {
@@ -293,8 +300,14 @@ async function submitNewClass(ev) {
 
         if (atStudentIds.length) {
             const rows = atStudentIds.map(sid => ({ session_id: ins.data.id, student_id: sid, present: false, updated_by: CURRENT_UID }));
-            const at = await db.from('attendance').insert(rows);
+            // .select() so a permissions-blocked insert (0 rows written, no thrown
+            // error) is caught here instead of silently opening a class with no
+            // attendance rows for anyone.
+            const at = await db.from('attendance').insert(rows).select('student_id');
             if (at.error) throw new Error(at.error.message);
+            if (!at.data || at.data.length !== rows.length) {
+                throw new Error(`Only ${at.data ? at.data.length : 0} of ${rows.length} students were saved to this class — something silently blocked the rest. Do not use this class until this is fixed.`);
+            }
         }
         atSessions.push(ins.data);
         atSessions.sort((a, b) => (a.session_date || '').localeCompare(b.session_date || ''));
