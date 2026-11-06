@@ -6,6 +6,7 @@ let SF_STUDENT = null;      // {id, full_name, email}
 let SF_NOTES = [];          // the CURRENT page only, newest first
 let SF_COURSES = [];        // courses this student is enrolled in (optional tagging)
 let SF_EDITING = null;      // note id being corrected
+let SF_EDITING_REPLY = null; // reply id being corrected inline
 let SF_UID = null, SF_NAME = '', SF_SUPER = false;
 let SF_PAGE = 1, SF_PAGE_SIZE = 25, SF_TOTAL = 0;   // only one page is ever fetched
 let SF_REPLIES = {};        // note_id -> [replies], both sides
@@ -289,6 +290,22 @@ function threadHtml(n) {
         const isNew = !staff && SF_NEW_REPLIES.has(r.id);
         const cls = staff ? 'reply-mine' : ('reply-in' + (isNew ? ' reply-new' : ''));
         const av = staff ? tAvatar(SF_STAFF_AVATARS[r.author_id], r.author_name) : tAvatar(SF_STUDENT.avatar_url, SF_STUDENT.full_name);
+        const canManage = staff && (r.author_id === SF_UID || SF_SUPER);
+        const editing = SF_EDITING_REPLY === r.id;
+        const body = editing
+            ? `<div style="display:flex;flex-direction:column;gap:6px;">
+                 <textarea id="sf-reply-edit-${r.id}" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13.5px;resize:vertical;">${escapeHtml(r.body)}</textarea>
+                 <div style="display:flex;gap:8px;">
+                     <button class="btn btn-primary btn-sm" onclick="saveReplyEdit('${r.id}','${n.id}')">Save</button>
+                     <button class="btn btn-ghost btn-sm" onclick="cancelReplyEdit()">Cancel</button>
+                 </div>
+               </div>`
+            : `<div class="reply-body">${escapeHtml(r.body)}${r.edited_at ? ` <em style="color:var(--text-muted);font-size:11.5px;">(edited)</em>` : ''}</div>`;
+        const actions = (!editing && canManage)
+            ? `<div class="no-print" style="display:flex;gap:6px;margin-top:4px;">
+                 <button class="btn btn-ghost btn-sm" onclick="startReplyEdit('${r.id}')">Edit</button>
+                 <button class="btn btn-danger btn-sm" onclick="deleteStaffReply('${r.id}','${n.id}')">Delete</button>
+               </div>` : '';
         return `<div class="reply-row ${cls}">
             <div class="reply-head">
                 ${av}
@@ -296,7 +313,8 @@ function threadHtml(n) {
                 <span>· ${escapeHtml(fmtStamp(r.created_at))}</span>
                 ${isNew ? '<span class="reply-new-pill">New</span>' : ''}
             </div>
-            <div class="reply-body">${escapeHtml(r.body)}</div>
+            ${body}
+            ${actions}
         </div>`;
     }).join('');
 
@@ -347,6 +365,53 @@ async function sendStaffReply(noteId, btn) {
         msg.style.color = 'var(--red)'; msg.textContent = err.message || 'Could not send.';
         btn.disabled = false; btn.textContent = label;
     }
+}
+
+function startReplyEdit(replyId) {
+    SF_EDITING_REPLY = replyId;
+    renderFeedbackNotes();
+    setTimeout(() => {
+        const ta = document.getElementById('sf-reply-edit-' + replyId);
+        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    }, 0);
+}
+
+function cancelReplyEdit() {
+    SF_EDITING_REPLY = null;
+    renderFeedbackNotes();
+}
+
+async function saveReplyEdit(replyId, noteId) {
+    const ta = document.getElementById('sf-reply-edit-' + replyId);
+    const text = (ta.value || '').trim();
+    if (!text) { alert('A reply cannot be empty.'); return; }
+    if (!ensureSafe(null, [['Reply', text]])) { alert('Scripts or code are not allowed in a reply.'); return; }
+    const nowIso = new Date().toISOString();
+    // .select() so a write silently blocked by a permissions policy (0 rows, no
+    // thrown error) is caught here instead of looking saved when it wasn't.
+    const { data, error } = await db.from('student_note_replies')
+        .update({ body: text, edited_at: nowIso }).eq('id', replyId).select('id').single();
+    if (error || !data) { alert(`Couldn't save that correction${error ? ': ' + error.message : ' — it was silently blocked.'}`); return; }
+    const r = (SF_REPLIES[noteId] || []).find(x => x.id === replyId);
+    if (r) { r.body = text; r.edited_at = nowIso; }
+    SF_EDITING_REPLY = null;
+    renderFeedbackNotes();
+}
+
+async function deleteStaffReply(replyId, noteId) {
+    const r = (SF_REPLIES[noteId] || []).find(x => x.id === replyId);
+    if (!r) return;
+    const ok = await confirmDialog({
+        title: 'Delete this reply?',
+        message: `This reply sent ${fmtStamp(r.created_at)} will be permanently removed from the conversation — if the student already saw it, this won't un-notify them, but it will disappear from the thread. This can't be undone. Delete only if it was sent to the wrong student or thread by mistake.`,
+        confirmText: 'Delete permanently',
+        danger: true
+    });
+    if (!ok) return;
+    const { data, error } = await db.from('student_note_replies').delete().eq('id', replyId).select('id');
+    if (error || !data || data.length === 0) { alert(`Couldn't delete that reply${error ? ': ' + error.message : ' — it was silently blocked.'}`); return; }
+    SF_REPLIES[noteId] = (SF_REPLIES[noteId] || []).filter(x => x.id !== replyId);
+    renderFeedbackNotes();
 }
 
 // Once staff have seen student replies on screen, stop them counting as new.
