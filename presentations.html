@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png?v=1">
+    <title>MDA Admin — Presentations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css?v=28">
+    <style>
+        .pr-grade-row { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+        .pr-grade-row .lr-body { flex: 1 1 180px; min-width: 160px; }
+        .pr-grade-row .pr-score { width: 84px; padding: 7px 9px; }
+        .pr-grade-row .pr-fb { flex: 1 1 260px; min-width: 220px; padding: 7px 9px; min-height: 38px; resize: vertical; font-family: 'Inter', sans-serif; font-size: 13px; }
+        .pr-status { font-size: 12px; margin-top: 4px; min-height: 16px; }
+        .pr-status.ok { color: var(--green); font-weight: 600; }
+        .pr-status.error { color: var(--red); font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="layout" id="app-layout"></div>
+
+    <!-- NEW / EDIT PRESENTATION MODAL -->
+    <div class="modal-overlay" id="pr-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3 id="pr-modal-title">New presentation</h3>
+                <button class="modal-close" onclick="closeModal('pr-modal')">&times;</button>
+            </div>
+            <form onsubmit="savePresentation(event)">
+                <div class="modal-body">
+                    <div class="alert" id="pr-modal-alert" style="display:none;"></div>
+                    <input type="hidden" id="pr-edit-id">
+                    <div class="form-field">
+                        <label>Title</label>
+                        <input type="text" id="pr-title" placeholder="e.g. Case Study Presentation" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Date <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <input type="date" id="pr-date">
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('pr-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="pr-save-btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/presentations.js"></script>
+    <script>
+        (async () => {
+            const auth = await requireAdmin();
+            if (!auth) return;
+            PR_CURRENT_UID = auth.session.user.id;
+            PR_CURRENT_NAME = (auth.profile && auth.profile.full_name) || 'Staff';
+            PR_IS_SUPER = !!(auth.profile && auth.profile.role === 'superadmin');
+            renderLayout('presentations', 'Presentations', 'Create oral presentations, grade each student, and leave optional feedback', auth.profile);
+
+            document.getElementById('page-content').innerHTML = `
+                <div class="toolbar">
+                    <select id="pr-course-select" class="filter-select" onchange="onPrCourseChange()">
+                        <option value="">Select a course…</option>
+                    </select>
+                </div>
+                <div id="pr-body"><div class="loader">Choose a course to see its presentations.</div></div>
+            `;
+            loadPrCourses();
+        })();
+    </script>
+</body>
+</html>
