@@ -10,6 +10,7 @@ let atStudents = [];        // current page of {id, full_name}
 let atSessions = [];        // [{id, session_date, opened_by_name}] for the course (date asc)
 let atMarks = {};           // `${studentId}_${sessionId}` -> {present, updated_by, updated_at}
 let atStudentIds = [];      // ALL enrolled student ids for the course
+let atSelectedSessions = new Set();   // session ids picked for bulk "mark all attended"
 let atPage = 1, atPageSize = 50, atTotal = 0, atSearch = '', atSearchTimer = null;
 let IS_SUPER = false;
 let atMin = 80;             // office minimum attendance % (global setting)
@@ -83,7 +84,7 @@ async function onCourseChange() {
     document.getElementById('open-class-btn').style.display = atCourseId ? 'inline-flex' : 'none';
     if (!atCourseId) { container.innerHTML = `<div class="loader">Choose a course to see its attendance sheet.</div>`; return; }
     container.innerHTML = `<div class="loader">Loading attendance…</div>`;
-    atPage = 1; atSearch = '';
+    atPage = 1; atSearch = ''; atSelectedSessions = new Set();
     const sb = document.getElementById('at-search'); if (sb) sb.value = '';
 
     let [enrRes, sesRes] = await Promise.all([
@@ -182,7 +183,9 @@ function renderAttendance(jumpToLatest) {
     }
 
     const head = `<tr><th class="att-sticky">Student</th>${atSessions.map(s => `
-        <th class="att-col">${fmtSession(s.session_date)}
+        <th class="att-col">
+            <input type="checkbox" class="att-col-check" title="Select this date to bulk-mark everyone attended" ${atSelectedSessions.has(s.id) ? 'checked' : ''} onchange="toggleDateSelect('${s.id}', this.checked)">
+            ${fmtSession(s.session_date)}
             <span class="att-col-sub" title="Opened by ${escapeHtml(s.opened_by_name || '')}">${escapeHtml(s.opened_by_name || '')}</span>
             ${IS_SUPER ? `<button class="att-del" title="Delete this class (removes everyone's marks for that day) — superadmin only" onclick="deleteSession('${s.id}')">✕</button>` : ''}
         </th>`).join('')}<th>Attendance</th></tr>`;
@@ -202,8 +205,19 @@ function renderAttendance(jumpToLatest) {
         return `<tr><td class="att-sticky"><strong>${escapeHtml(s.full_name || '—')}</strong></td>${cells}<td><span class="att-pct ${pctColor(pct)}">${pct}%</span></td></tr>`;
     }).join('');
 
+    const selectedCount = atSelectedSessions.size;
+    const bulkBar = selectedCount > 0 ? `
+        <div class="bulk-bar" style="margin-bottom:12px;">
+            <div class="bulk-count"><strong>${selectedCount}</strong> date${selectedCount === 1 ? '' : 's'} selected</div>
+            <div class="bulk-actions">
+                <button class="btn btn-ghost btn-sm" onclick="clearDateSelection()">Clear</button>
+                <button class="btn btn-primary btn-sm" onclick="markSelectedDatesAttended()">✓ Mark everyone attended for selected date${selectedCount === 1 ? '' : 's'}</button>
+            </div>
+        </div>` : '';
+
     container.innerHTML = `
-        <p class="hint" style="margin-bottom:12px;">Everyone starts <strong>absent (✗)</strong> when you open a class — click a student's mark as you call their name to flip it to present (✓). Hover a mark to see who set it and when. Percentage = classes attended ÷ classes held. The student name stays pinned as you scroll across dates.</p>
+        <p class="hint" style="margin-bottom:12px;">Everyone starts <strong>absent (✗)</strong> when you open a class — click a student's mark as you call their name to flip it to present (✓). Hover a mark to see who set it and when. Percentage = classes attended ÷ classes held. The student name stays pinned as you scroll across dates.<br>Tick the checkbox in one or more date headers to mark <strong>every</strong> enrolled student attended for those dates at once.</p>
+        ${bulkBar}
         <div class="panel att-scroll-box">
             <table class="data-table att-table"><thead>${head}</thead><tbody>${rows}</tbody></table>
         </div>`;
@@ -239,6 +253,62 @@ async function toggleMark(studentId, sessionId) {
         alert(`This mark did NOT save${error ? ': ' + error.message : ' — the save was silently blocked.'}\n\nPlease screenshot this and tell Diego — do not keep marking until this is fixed.`);
         atMarks[key] = prev; renderAttendance();
     }
+}
+
+function toggleDateSelect(sessionId, checked) {
+    if (checked) atSelectedSessions.add(sessionId); else atSelectedSessions.delete(sessionId);
+    renderAttendance();
+}
+
+function clearDateSelection() {
+    atSelectedSessions.clear();
+    renderAttendance();
+}
+
+// Marks EVERY enrolled student (not just the current page) present for every
+// selected date in one go — overwrites any existing marks for those dates.
+async function markSelectedDatesAttended() {
+    const selected = atSessions.filter(s => atSelectedSessions.has(s.id));
+    if (selected.length === 0) { alert('Select one or more dates first — tick the checkbox in a date column header.'); return; }
+    if (atStudentIds.length === 0) { alert('No students are enrolled in this course.'); return; }
+
+    const dateList = selected.map(s => fmtSession(s.session_date)).join(', ');
+    const ok = await confirmDialog({
+        title: 'Mark everyone as attended?',
+        message: `This marks all ${atStudentIds.length} enrolled student(s) as present (✓) for ${selected.length} selected date${selected.length === 1 ? '' : 's'}: ${dateList}. Any existing marks for those dates — present or absent — will be overwritten. You can still correct individual students afterward by clicking their mark.`,
+        confirmText: 'Mark all as attended',
+        danger: true
+    });
+    if (!ok) return;
+
+    const nowIso = new Date().toISOString();
+    const rows = [];
+    selected.forEach(se => {
+        atStudentIds.forEach(sid => {
+            rows.push({ session_id: se.id, student_id: sid, present: true, updated_by: CURRENT_UID, updated_at: nowIso });
+        });
+    });
+
+    // Chunked so one request never carries an unreasonable number of rows
+    // (large courses × several selected dates can add up quickly).
+    const chunks = [];
+    for (let i = 0; i < rows.length; i += 500) chunks.push(rows.slice(i, i + 500));
+
+    let savedCount = 0;
+    let failMsg = '';
+    for (const chunk of chunks) {
+        // .select() matters here too — an RLS-blocked write returns error:null
+        // with 0 rows affected, indistinguishable from success otherwise.
+        const res = await db.from('attendance').upsert(chunk, { onConflict: 'session_id,student_id' }).select('session_id');
+        if (res.error) { failMsg = res.error.message; break; }
+        savedCount += (res.data || []).length;
+    }
+
+    if (failMsg || savedCount !== rows.length) {
+        alert(`Only ${savedCount} of ${rows.length} marks were confirmed saved${failMsg ? ': ' + failMsg : ''}.\n\nPlease reload and double-check these dates before relying on them.`);
+    }
+    atSelectedSessions.clear();
+    loadAtPage();
 }
 
 async function deleteSession(sessionId) {

@@ -9,6 +9,7 @@ let enrolledIds = new Set();
 let enrollExpiry = {};       // student_id -> per-enrollment expires_at (date string), only for students who have one set
 let enrollExpiryTarget = null;
 let attendanceTracked = {};  // student_id -> does THIS enrollment count for attendance/reminders here (default true)
+let courseBulkSelected = new Set();   // student ids ticked for bulk attendance-tracked actions
 let stuMap = {};             // id -> student object (enrolled + search results)
 let allOtherCourses = [];    // [{id, name}] every course except this one — options for "assign also to"
 let crossEnroll = {};        // student_id -> [{course_id, name}] OTHER courses they're already enrolled in
@@ -43,11 +44,12 @@ async function initCourse(courseId, profile) {
     const studentsPanel = IS_SUPER ? `
             <div class="panel" style="padding:22px;">
                 <div class="section-title">Enrolled students <span class="count-pill" id="enrolled-count">0</span></div>
-                <p class="hint" style="margin:-8px 0 12px;">Showing only students enrolled in this course. Search by name or email to find and enrol anyone else.</p>
+                <p class="hint" style="margin:-8px 0 12px;">Showing only students enrolled in this course. Search by name or email to find and enrol anyone else. Tick the checkbox on one or more rows to fix attendance-tracking on several at once — handy for a batch of students cross-enrolled here for access only.</p>
                 <div class="search-box" style="margin:0 0 14px; min-width:0;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                     <input type="text" id="student-search" placeholder="Search to find or add a student…" oninput="onStudentSearch()">
                 </div>
+                <div id="bulk-bar-zone"></div>
                 <div id="students-list"><div class="loader">Loading…</div></div>
             </div>
             <div class="modal-overlay" id="enrollexp-modal">
@@ -405,6 +407,7 @@ function _studentRows(list) {
         const tracked = attendanceTracked[s.id] !== false;
         return `
             <div class="list-row">
+                ${enrolled ? `<input type="checkbox" class="bulk-check" style="margin-top:4px;width:16px;height:16px;cursor:pointer;" ${courseBulkSelected.has(s.id) ? 'checked' : ''} onchange="toggleBulkSelect('${s.id}', this.checked)" title="Select for bulk attendance actions">` : ''}
                 <div class="lr-body">
                     <div class="lr-title">${escapeHtml(s.full_name || '—')}</div>
                     ${s.email ? `<div class="lr-sub">${escapeHtml(s.email)}</div>` : ''}
@@ -460,10 +463,66 @@ async function toggleAttendanceTracked(studentId) {
     else renderStudents();
 }
 
+// ── BULK ATTENDANCE-TRACKED ACTIONS (fix several cross-enrolled students at once) ──
+function toggleBulkSelect(studentId, checked) {
+    if (checked) courseBulkSelected.add(studentId); else courseBulkSelected.delete(studentId);
+    renderBulkBar();
+}
+
+function clearBulkSelect() {
+    courseBulkSelected.clear();
+    if ((document.getElementById('student-search')?.value || '').trim()) runStudentSearch();
+    else renderStudents();
+}
+
+function renderBulkBar() {
+    const el = document.getElementById('bulk-bar-zone');
+    if (!el) return;
+    const n = courseBulkSelected.size;
+    if (n === 0) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+        <div class="bulk-bar" style="margin-bottom:14px;">
+            <div class="bulk-count"><strong>${n}</strong> student${n === 1 ? '' : 's'} selected</div>
+            <div class="bulk-actions">
+                <button class="btn btn-ghost btn-sm" onclick="clearBulkSelect()">Clear</button>
+                <button class="btn btn-ghost btn-sm" onclick="bulkSetAttendanceTracked(true)">Include in attendance</button>
+                <button class="btn btn-danger-solid btn-sm" onclick="bulkSetAttendanceTracked(false)">Exclude from attendance</button>
+            </div>
+        </div>`;
+}
+
+async function bulkSetAttendanceTracked(tracked) {
+    const ids = [...courseBulkSelected];
+    if (!ids.length) return;
+    const names = ids.map(id => (stuMap[id] && stuMap[id].full_name) || 'Unknown').join(', ');
+    const ok = await confirmDialog({
+        title: tracked ? 'Include selected students in attendance?' : 'Exclude selected students from attendance?',
+        message: tracked
+            ? `These ${ids.length} student(s) will count again toward this course's attendance sheet and weekly attendance reminder emails:\n${names}`
+            : `These ${ids.length} student(s) will stop counting toward this course's attendance sheet and weekly attendance reminder emails — their enrollment itself is unaffected, only attendance tracking:\n${names}`,
+        confirmText: tracked ? 'Include in attendance' : 'Exclude from attendance',
+        danger: !tracked
+    });
+    if (!ok) return;
+
+    const { data, error } = await db.from('course_enrollments')
+        .update({ attendance_tracked: tracked }).eq('course_id', COURSE_ID).in('student_id', ids)
+        .select('student_id');
+    if (error) { alert(`Failed: ${error.message}`); return; }
+    if (!data || data.length !== ids.length) {
+        alert(`Only ${data ? data.length : 0} of ${ids.length} were updated — please check and retry for the rest.`);
+    }
+    ids.forEach(id => { attendanceTracked[id] = tracked; });
+    courseBulkSelected.clear();
+    if ((document.getElementById('student-search')?.value || '').trim()) runStudentSearch();
+    else renderStudents();
+}
+
 // Default view = the enrolled roster (no global list).
 function renderStudents() {
     const el = document.getElementById('students-list');
     if (!el) return;
+    renderBulkBar();
     document.getElementById('enrolled-count').textContent = enrolledIds.size;
     if ((document.getElementById('student-search')?.value || '').trim()) return;  // a search is showing
     const sorted = [...enrolledStudents].sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
@@ -479,6 +538,7 @@ function onStudentSearch() {
 
 async function runStudentSearch() {
     const el = document.getElementById('students-list');
+    renderBulkBar();
     const term = (document.getElementById('student-search').value || '').replace(/[%,()]/g, ' ').trim();
     if (!term) { renderStudents(); return; }
     el.innerHTML = `<div class="loader">Searching…</div>`;
