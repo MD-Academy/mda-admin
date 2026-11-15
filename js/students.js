@@ -343,12 +343,17 @@ function selectedNames() {
 async function runBulk(actionFn, btnLabelEl) {
     const ids = [...selectedIds];
     let failed = 0;
+    const warnings = [];
     const results = await Promise.allSettled(ids.map(id => actionFn(id)));
-    results.forEach(r => { if (r.status === 'rejected') failed++; });
+    results.forEach(r => {
+        if (r.status === 'rejected') failed++;
+        else if (r.value && r.value.warning) warnings.push(r.value.warning);
+    });
     selectedIds.clear();
     const sa = document.getElementById('select-all'); if (sa) sa.checked = false;
     await loadStudents();
     if (failed) alert(`${failed} of ${ids.length} action(s) failed. Please review and try again.`);
+    if (warnings.length) alert(warnings.join('\n\n'));
 }
 
 async function bulkSuspend() {
@@ -685,6 +690,29 @@ async function runWarningsNow() {
         await confirmDialog({ title: "Couldn't run", message: err.message, confirmText: 'OK', cancelText: 'Close', danger: true });
     }
 }
+// One-off/occasional fix: apply the real login-level lock to every account
+// already marked blocked. Needed once after the ban-sync feature shipped
+// (older blocks predate it and were never locked at the login level, only
+// kept out of the app itself) — safe to run again any time afterward.
+async function resyncSuspensionBans() {
+    const ok = await confirmDialog({
+        title: 'Re-lock all blocked accounts?',
+        message: 'Goes through every account currently marked Blocked and makes sure sign-in itself is also locked, not just access inside the app. Safe to run any time — accounts that are already locked are left as they are.',
+        confirmText: 'Re-lock now'
+    });
+    if (!ok) return;
+    try {
+        const res = await apiRequest('POST', '/admin/resync-suspension-bans', {});
+        let msg = `Checked ${res.total} blocked account(s). Locked: ${res.synced}.`;
+        if (res.failed && res.failed.length) {
+            msg += `\n\nCould not lock ${res.failed.length}:\n` + res.failed.map(f => `${f.full_name || f.id}: ${f.error}`).join('\n');
+        }
+        await confirmDialog({ title: 'Re-lock complete', message: msg, confirmText: 'OK', cancelText: 'Close' });
+    } catch (err) {
+        await confirmDialog({ title: "Couldn't re-lock accounts", message: err.message, confirmText: 'OK', cancelText: 'Close', danger: true });
+    }
+}
+
 function openActivity(id) {
     window.location.href = `activity.html?id=${encodeURIComponent(id)}`;
 }
@@ -720,7 +748,8 @@ async function toggleStatus(id) {
     });
     if (!ok) return;
     try {
-        await apiRequest('PATCH', `/admin/update-student/${id}`, { status: suspend ? 'suspended' : 'active' });
+        const res = await apiRequest('PATCH', `/admin/update-student/${id}`, { status: suspend ? 'suspended' : 'active' });
+        if (res && res.warning) alert(res.warning);
         loadStudents();
     } catch (err) {
         alert(`Failed to update status: ${err.message}`);

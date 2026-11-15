@@ -252,7 +252,8 @@ async function toggleAdminStatus(id) {
     });
     if (!ok) return;
     try {
-        await apiRequest('PATCH', `/admin/update-student/${id}`, { status: suspend ? 'suspended' : 'active' });
+        const res = await apiRequest('PATCH', `/admin/update-student/${id}`, { status: suspend ? 'suspended' : 'active' });
+        if (res && res.warning) alert(res.warning);
         loadAdmins();
     } catch (err) {
         alert(`Failed to update status: ${err.message}`);
