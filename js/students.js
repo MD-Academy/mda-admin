@@ -380,12 +380,18 @@ async function bulkActivate() {
 
 async function bulkDelete() {
     if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
     const ok = await confirmDialog({
-        title: `Delete ${selectedIds.size} student(s)?`,
-        message: `This permanently deletes these accounts and all their data. This cannot be undone.\n\n${selectedNames().slice(0, 8).join(', ')}${selectedIds.size > 8 ? '…' : ''}`,
-        confirmText: 'Delete', danger: true
+        title: `Delete ${count} student(s)?`,
+        message: `This permanently deletes these accounts AND everything tied to them — grades, attendance, tuition/payment records, diplomas, tickets, feedback, login history. This cannot be undone. If you only want to stop their access, use Suspend instead.\n\n${selectedNames().slice(0, 8).join(', ')}${count > 8 ? '…' : ''}`,
+        confirmText: 'Continue', danger: true
     });
     if (!ok) return;
+    const typed = prompt(`Last check — type DELETE in capitals to permanently delete ${count} student account(s):`);
+    if (typed !== 'DELETE') {
+        if (typed !== null) alert("That didn't match — nothing was deleted.");
+        return;
+    }
     await runBulk(id => apiRequest('DELETE', `/admin/delete-student/${id}`));
 }
 
@@ -780,11 +786,16 @@ async function deleteStudent(id) {
     const name = s ? (s.full_name || 'this student') : 'this student';
     const ok = await confirmDialog({
         title: `Delete ${name}?`,
-        message: 'This permanently deletes the student account and all their data. This cannot be undone.',
-        confirmText: 'Delete Student',
+        message: 'This permanently deletes the student account AND everything tied to it — grades, attendance, tuition/payment records, diplomas, tickets, feedback, login history. This cannot be undone and cannot be recovered. If you only want to stop their access, use Block instead — that keeps every record intact.',
+        confirmText: 'Continue',
         danger: true
     });
     if (!ok) return;
+    const typed = prompt(`Last check — type the student's name exactly to confirm PERMANENT deletion:\n${name}`);
+    if (typed !== name) {
+        if (typed !== null) alert("That didn't match — nothing was deleted.");
+        return;
+    }
     try {
         await apiRequest('DELETE', `/admin/delete-student/${id}`);
         loadStudents();

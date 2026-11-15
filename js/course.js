@@ -250,6 +250,13 @@ function renderCourseExams() {
 
 async function toggleExam(examId) {
     if (courseExamIds.has(examId)) {
+        const ex = allExams.find(x => x.id === examId);
+        const ok = await confirmDialog({
+            title: 'Remove exam from this course?',
+            message: `"${ex ? ex.title : 'This exam'}" will stop counting toward this course's grade. The exam itself and any scores are kept — you can add it back any time.`,
+            confirmText: 'Remove'
+        });
+        if (!ok) return;
         const { error } = await db.from('exam_courses').delete().eq('course_id', COURSE_ID).eq('exam_id', examId);
         if (error) { alert(`Failed: ${error.message}`); return; }
         courseExamIds.delete(examId);
@@ -290,6 +297,13 @@ function renderCourseTeachers() {
 
 async function toggleTeacher(teacherId) {
     if (courseTeacherIds.has(teacherId)) {
+        const t = allTeachers.find(x => x.id === teacherId);
+        const ok = await confirmDialog({
+            title: 'Remove teacher from this course?',
+            message: `${t ? (t.full_name || 'This staff member') : 'This staff member'} will no longer be listed as teaching this course. Their account and any feedback already given are kept.`,
+            confirmText: 'Remove'
+        });
+        if (!ok) return;
         const { error } = await db.from('course_teachers').delete().eq('course_id', COURSE_ID).eq('teacher_id', teacherId);
         if (error) { alert(`Failed: ${error.message}`); return; }
         courseTeacherIds.delete(teacherId);
@@ -344,6 +358,13 @@ async function runRecPickSearch() {
 async function toggleCourseRecording(recId) {
     const isAssigned = courseRecordings.some(r => r.id === recId);
     if (isAssigned) {
+        const rec = courseRecordings.find(r => r.id === recId);
+        const ok = await confirmDialog({
+            title: 'Remove recording from this course?',
+            message: `"${rec ? rec.title : 'This recording'}" will no longer be visible to students in this course. The recording itself is kept and can be added back any time.`,
+            confirmText: 'Remove'
+        });
+        if (!ok) return;
         const { error } = await db.from('recording_courses').delete().eq('course_id', COURSE_ID).eq('recording_id', recId);
         if (error) { alert(`Failed: ${error.message}`); return; }
         courseRecordings = courseRecordings.filter(r => r.id !== recId);
@@ -385,6 +406,13 @@ function openSubject(id) {
 
 async function toggleSubject(roomId) {
     if (courseSubjectIds.has(roomId)) {
+        const room = allSubjects.find(x => x.id === roomId);
+        const ok = await confirmDialog({
+            title: 'Remove subject from this course?',
+            message: `"${room ? room.name : 'This subject'}" and its presentations/lectures/quizzes will no longer be visible to students enrolled in this course. The subject itself and its content are kept and can be added back any time.`,
+            confirmText: 'Remove'
+        });
+        if (!ok) return;
         const { error } = await db.from('course_subjects').delete().eq('course_id', COURSE_ID).eq('room_id', roomId);
         if (error) { alert(`Failed: ${error.message}`); return; }
         courseSubjectIds.delete(roomId);
