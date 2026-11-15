@@ -33,6 +33,7 @@ let _actAllQuizAttempts = [];   // [{quiz_id, score, completed_at, quizTitle, ro
 let _actAllExamAttempts = [];   // [{exam_id, score, passed, attempts, completed_at, examTitle}]
 let _actAllAttendance = [];     // [{session_id, session_date, courseName, present, updated_at}]
 let _actAllSectionTime = [];    // [{section_type, section_ref, started_at, last_seen_at, ended_at, label}]
+let _actAllEnrollmentAudit = []; // [{op, changed_at, changed_by, byName, courseName}]
 let _actFilterFrom = null;   // Date or null (null = no lower bound)
 let _actFilterTo = null;     // Date or null (null = no upper bound)
 let _actActivePreset = 'all';
@@ -89,8 +90,9 @@ function renderActivityFiltered() {
     const examAttempts = _actAllExamAttempts.filter(a => !a.completed_at || inRange(new Date(a.completed_at).getTime()));
     const attendance = _actAllAttendance.filter(a => !a.session_date || inRange(new Date(a.session_date + 'T00:00:00').getTime()));
     const sectionTime = _actAllSectionTime.filter(s => inRange(new Date(s.started_at).getTime()));
+    const enrollmentAudit = _actAllEnrollmentAudit.filter(a => inRange(new Date(a.changed_at).getTime()));
 
-    renderFullReport(sessions, quizAttempts, examAttempts, attendance, sectionTime);
+    renderFullReport(sessions, quizAttempts, examAttempts, attendance, sectionTime, enrollmentAudit);
 }
 
 async function initActivity(studentId, profile) {
@@ -135,12 +137,16 @@ async function refreshActivity(studentId) {
     const report = document.getElementById('report');
     if (!report) { if (window._actTimer) clearInterval(window._actTimer); return; }
 
-    const [sessRes, qaRes, eaRes, enrRes, secRes] = await Promise.all([
+    const [sessRes, qaRes, eaRes, enrRes, secRes, auditRes] = await Promise.all([
         db.from('login_sessions').select('started_at, last_seen_at, ended_at').eq('student_id', studentId).order('started_at', { ascending: false }),
         db.from('quiz_attempts').select('quiz_id, score, completed_at').eq('student_id', studentId).order('completed_at', { ascending: false }),
         db.from('exam_attempts').select('exam_id, score, passed, attempts, completed_at').eq('student_id', studentId).order('completed_at', { ascending: false }),
         db.from('course_enrollments').select('course_id').eq('student_id', studentId),
         db.from('section_sessions').select('section_type, section_ref, started_at, last_seen_at, ended_at').eq('student_id', studentId).order('started_at', { ascending: false }),
+        // Permanent record of every enrol/unenrol for this student — survives even
+        // if the enrollment itself is later deleted. Table may not exist yet if
+        // the audit migration hasn't been run; fail soft rather than breaking the report.
+        db.from('course_enrollments_audit').select('op, changed_at, changed_by, course_id, row_data').eq('student_id', studentId).order('changed_at', { ascending: false }),
     ]);
 
     const gt = document.getElementById('gen-time');
@@ -195,17 +201,36 @@ async function refreshActivity(studentId) {
         return { ...r, label };
     });
 
+    // Course names: current enrollments + every course ever touched in the
+    // audit log (covers courses the student was fully removed from too).
+    const auditRows = auditRes.error ? [] : (auditRes.data || []);
+    const courseIds = [...new Set([
+        ...(enrRes.data || []).map(e => e.course_id),
+        ...auditRows.map(a => a.course_id).filter(Boolean),
+    ])];
+    const courseNames = {};
+    const byNames = {};
+    if (courseIds.length) {
+        const { data: courseRows } = await db.from('courses').select('id, name').in('id', courseIds);
+        (courseRows || []).forEach(c => { courseNames[c.id] = c.name; });
+    }
+    const byIds = [...new Set(auditRows.map(a => a.changed_by).filter(Boolean))];
+    if (byIds.length) {
+        const { data: staffRows } = await db.from('profiles').select('id, full_name').in('id', byIds);
+        (staffRows || []).forEach(p => { byNames[p.id] = p.full_name || 'Staff'; });
+    }
+    _actAllEnrollmentAudit = auditRows.map(a => ({
+        op: a.op,
+        changed_at: a.changed_at,
+        byName: a.changed_by ? (byNames[a.changed_by] || 'Unknown staff') : '—',
+        courseName: courseNames[a.course_id] || 'Deleted course',
+    }));
+
     // Attendance across every course this student is/was enrolled in.
-    const courseIds = [...new Set((enrRes.data || []).map(e => e.course_id))];
     _actAllAttendance = [];
     if (courseIds.length) {
-        const [sesRes, courseRes] = await Promise.all([
-            db.from('class_sessions').select('id, session_date, course_id').in('course_id', courseIds),
-            db.from('courses').select('id, name').in('id', courseIds),
-        ]);
-        const sessions = sesRes.data || [];
-        const courseNames = {};
-        (courseRes.data || []).forEach(c => { courseNames[c.id] = c.name; });
+        const { data: sessionsData } = await db.from('class_sessions').select('id, session_date, course_id').in('course_id', courseIds);
+        const sessions = sessionsData || [];
         const sessionIds = sessions.map(s => s.id);
         const marks = {};
         if (sessionIds.length) {
@@ -224,7 +249,7 @@ async function refreshActivity(studentId) {
         });
     }
 
-    if (!_actAllSessions.length && !_actAllQuizAttempts.length && !_actAllExamAttempts.length && !_actAllAttendance.length && !_actAllSectionTime.length) {
+    if (!_actAllSessions.length && !_actAllQuizAttempts.length && !_actAllExamAttempts.length && !_actAllAttendance.length && !_actAllSectionTime.length && !_actAllEnrollmentAudit.length) {
         report.innerHTML = `<div class="empty-state"><h3>No activity yet</h3><p>This student hasn't used the portal yet, or data is still being recorded.</p></div>`;
         return;
     }
@@ -371,7 +396,24 @@ function buildSectionTimeReport(records) {
     }).join('');
 }
 
-function renderFullReport(sessions, quizAttempts, examAttempts, attendance, sectionTime) {
+// Permanent enrol/unenrol history — survives even after the enrollment
+// itself is deleted, since it's written by a DB trigger, not the app.
+function buildEnrollmentAuditSection(rows) {
+    if (!rows.length) return `<div class="panel" style="padding:16px 20px;"><p class="hint" style="margin:0;">No enrollment changes recorded in this range.</p></div>`;
+    const opLabel = { INSERT: '<span style="color:#15803d;font-weight:700;">Enrolled</span>', DELETE: '<span style="color:#b91c1c;font-weight:700;">Unenrolled</span>', UPDATE: '<span style="color:#b45309;font-weight:700;">Changed</span>' };
+    return `<div class="panel"><table class="data-table">
+        <thead><tr><th>When</th><th>Action</th><th>Course</th><th>By</th></tr></thead>
+        <tbody>${rows.map(a => `
+            <tr>
+                <td>${escapeHtml(fmtDateTime(a.changed_at))}</td>
+                <td>${opLabel[a.op] || escapeHtml(a.op)}</td>
+                <td><strong>${escapeHtml(a.courseName)}</strong></td>
+                <td>${escapeHtml(a.byName)}</td>
+            </tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+function renderFullReport(sessions, quizAttempts, examAttempts, attendance, sectionTime, enrollmentAudit) {
     const report = document.getElementById('report');
     const { grand, html: sessionsHtml } = buildSessionsReport(sessions);
 
@@ -415,5 +457,8 @@ function renderFullReport(sessions, quizAttempts, examAttempts, attendance, sect
 
         <h3 style="font-size:15px;margin:22px 0 10px;">Time per section</h3>
         ${buildSectionTimeReport(sectionTime)}
+
+        <h3 style="font-size:15px;margin:22px 0 10px;">Enrollment history</h3>
+        ${buildEnrollmentAuditSection(enrollmentAudit)}
     `;
 }
