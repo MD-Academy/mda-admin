@@ -556,6 +556,25 @@ async function runStudentSearch() {
 
 async function toggleEnroll(studentId) {
     if (enrolledIds.has(studentId)) {
+        // Unenrolling is a hard delete — it permanently erases this enrollment's
+        // history (including its original enrollment date) and cannot be undone
+        // by re-enrolling, which just starts a brand new record from today. One
+        // misclick here was already a real incident, so this now requires two
+        // separate, deliberate confirmations before anything is touched.
+        const s = stuMap[studentId];
+        const name = s ? (s.full_name || 'this student') : 'this student';
+        const ok = await confirmDialog({
+            title: `Unenroll ${name}?`,
+            message: `They lose access to this course immediately. This permanently deletes the enrollment record — including its original enrollment date — it is NOT recoverable, and re-enrolling later creates a brand new record starting from today, not the original date.`,
+            confirmText: 'Continue',
+            danger: true
+        });
+        if (!ok) return;
+        const typed = prompt(`Last check — type the student's name exactly to confirm permanent removal:\n${name}`);
+        if (typed !== name) {
+            if (typed !== null) alert("That didn't match — nothing was removed.");
+            return;
+        }
         const { error } = await db.from('course_enrollments').delete().eq('course_id', COURSE_ID).eq('student_id', studentId);
         if (error) { alert(`Failed: ${error.message}`); return; }
         enrolledIds.delete(studentId);
