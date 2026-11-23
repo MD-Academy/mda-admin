@@ -418,6 +418,90 @@ async function saveQuestion(ev) {
     }
 }
 
+// ════════════ FIX SQUISHED EXPONENTS/POWERS (e.g. "10-8" -> "10^-8", "km3" -> "km^3") ════════════
+// A past Moodle XML import stripped <sup> tags without preserving the exponent, so
+// "10<sup>-8</sup>" became the ambiguous "10-8" (reads like subtraction) and
+// "km<sup>3</sup>" became "km3". This scans the open exam's questions/options for that
+// pattern and lets an admin review + approve fixes before anything is saved.
+let _formatFixCandidates = [];
+
+function proposeFormatFix(text) {
+    if (!text) return null;
+    let fixed = text;
+    // "×10-8" / "x106" right after a multiplication sign -> "×10^-8" / "x10^6"
+    fixed = fixed.replace(/(?<![A-Za-z])([×xX*]\s?)10(-?\d{1,3})\b/g, (m, p1, exp) => `${p1}10^${exp}`);
+    // units with a squished power: "km3", "cm2", "ml3", etc -> "km^3", "cm^2", "ml^3"
+    fixed = fixed.replace(/(?<![A-Za-z])(km|cm|dm|mm|ml|kg|mg)([23])\b/g, '$1^$2');
+    fixed = fixed.replace(/(?<![A-Za-z])(m|l|g)([23])\b/g, '$1^$2');
+    return fixed !== text ? fixed : null;
+}
+
+function scanFormattingIssues() {
+    const candidates = [];
+    currentQuestions.forEach((q, qi) => {
+        const qFix = proposeFormatFix(q.question_text);
+        if (qFix) candidates.push({ qId: q.id, qi, field: 'question_text', original: q.question_text, fixed: qFix });
+        const opts = Array.isArray(q.options_json) ? q.options_json : [];
+        opts.forEach((o, oi) => {
+            const oFix = proposeFormatFix(o);
+            if (oFix) candidates.push({ qId: q.id, qi, field: 'option', optIdx: oi, original: o, fixed: oFix });
+        });
+    });
+    if (!candidates.length) { alert('No squished exponents/powers found in this exam\'s questions.'); return; }
+    _formatFixCandidates = candidates;
+    renderFormatFixList();
+    openModal('format-fix-modal');
+}
+
+function renderFormatFixList() {
+    const el = document.getElementById('format-fix-list');
+    document.getElementById('ff-count').textContent = _formatFixCandidates.length;
+    el.innerHTML = `<div class="list-rows">${_formatFixCandidates.map((c, i) => {
+        const label = c.field === 'question_text' ? `Q${c.qi + 1} — question text` : `Q${c.qi + 1} — option ${c.optIdx + 1}`;
+        return `
+            <div class="list-row" style="align-items:flex-start;">
+                <input type="checkbox" class="ff-check" data-i="${i}" checked style="margin-top:6px;">
+                <div class="lr-body">
+                    <div class="lr-sub" style="font-weight:600;">${escapeHtml(label)}</div>
+                    <div style="color:var(--red);text-decoration:line-through;">${escapeHtml(c.original)}</div>
+                    <div style="color:var(--green);">${escapeHtml(c.fixed)}</div>
+                </div>
+            </div>`;
+    }).join('')}</div>`;
+}
+
+async function applyFormatFixes() {
+    const selected = Array.from(document.querySelectorAll('.ff-check'))
+        .filter(c => c.checked)
+        .map(c => _formatFixCandidates[parseInt(c.dataset.i, 10)]);
+    if (!selected.length) { closeModal('format-fix-modal'); return; }
+
+    const btn = document.getElementById('ff-apply-btn');
+    btn.disabled = true; btn.textContent = 'Applying…';
+
+    const byQuestion = {};
+    selected.forEach(c => { (byQuestion[c.qId] = byQuestion[c.qId] || []).push(c); });
+
+    let failed = 0;
+    for (const qId of Object.keys(byQuestion)) {
+        const q = currentQuestions.find(x => x.id === qId);
+        if (!q) continue;
+        let newText = q.question_text;
+        const newOpts = Array.isArray(q.options_json) ? [...q.options_json] : [];
+        byQuestion[qId].forEach(c => {
+            if (c.field === 'question_text') newText = c.fixed;
+            else newOpts[c.optIdx] = c.fixed;
+        });
+        const res = await db.from('exam_questions').update({ question_text: newText, options_json: newOpts }).eq('id', qId).select('id');
+        if (res.error || !res.data || !res.data.length) failed++;
+    }
+
+    btn.disabled = false; btn.textContent = 'Apply selected';
+    closeModal('format-fix-modal');
+    await refreshQuestions();
+    alert(failed ? `${failed} question(s) failed to save — please check and retry.` : 'Formatting fixed and saved.');
+}
+
 async function deleteQuestion(id) {
     const ok = await confirmDialog({ title: 'Delete question?', message: 'This question will be removed from the exam.', confirmText: 'Delete', danger: true });
     if (!ok) return;
