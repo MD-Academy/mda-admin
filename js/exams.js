@@ -422,8 +422,7 @@ async function saveQuestion(ev) {
 // A past Moodle XML import stripped <sup> tags without preserving the exponent, so
 // "10<sup>-8</sup>" became the ambiguous "10-8" (reads like subtraction) and
 // "km<sup>3</sup>" became "km3". This scans the open exam's questions/options for that
-// pattern and lets an admin review + approve fixes before anything is saved.
-let _formatFixCandidates = [];
+// pattern and auto-applies every match after a single confirm (no per-question review).
 
 function proposeFormatFix(text) {
     if (!text) return null;
@@ -436,7 +435,7 @@ function proposeFormatFix(text) {
     return fixed !== text ? fixed : null;
 }
 
-function scanFormattingIssues() {
+async function scanFormattingIssues() {
     const candidates = [];
     currentQuestions.forEach((q, qi) => {
         const qFix = proposeFormatFix(q.question_text);
@@ -448,39 +447,16 @@ function scanFormattingIssues() {
         });
     });
     if (!candidates.length) { alert('No squished exponents/powers found in this exam\'s questions.'); return; }
-    _formatFixCandidates = candidates;
-    renderFormatFixList();
-    openModal('format-fix-modal');
-}
 
-function renderFormatFixList() {
-    const el = document.getElementById('format-fix-list');
-    document.getElementById('ff-count').textContent = _formatFixCandidates.length;
-    el.innerHTML = `<div class="list-rows">${_formatFixCandidates.map((c, i) => {
-        const label = c.field === 'question_text' ? `Q${c.qi + 1} — question text` : `Q${c.qi + 1} — option ${c.optIdx + 1}`;
-        return `
-            <div class="list-row" style="align-items:flex-start;">
-                <input type="checkbox" class="ff-check" data-i="${i}" checked style="margin-top:6px;">
-                <div class="lr-body">
-                    <div class="lr-sub" style="font-weight:600;">${escapeHtml(label)}</div>
-                    <div style="color:var(--red);text-decoration:line-through;">${escapeHtml(c.original)}</div>
-                    <div style="color:var(--green);">${escapeHtml(c.fixed)}</div>
-                </div>
-            </div>`;
-    }).join('')}</div>`;
-}
-
-async function applyFormatFixes() {
-    const selected = Array.from(document.querySelectorAll('.ff-check'))
-        .filter(c => c.checked)
-        .map(c => _formatFixCandidates[parseInt(c.dataset.i, 10)]);
-    if (!selected.length) { closeModal('format-fix-modal'); return; }
-
-    const btn = document.getElementById('ff-apply-btn');
-    btn.disabled = true; btn.textContent = 'Applying…';
+    const ok = await confirmDialog({
+        title: `Auto-fix ${candidates.length} formatting issue${candidates.length > 1 ? 's' : ''}?`,
+        message: `This rewrites every squished exponent/unit-power found in this exam automatically, with no per-question review. Example: "${candidates[0].original}" → "${candidates[0].fixed}". You can still correct any single question by hand afterward via Edit.`,
+        confirmText: 'Fix all now',
+    });
+    if (!ok) return;
 
     const byQuestion = {};
-    selected.forEach(c => { (byQuestion[c.qId] = byQuestion[c.qId] || []).push(c); });
+    candidates.forEach(c => { (byQuestion[c.qId] = byQuestion[c.qId] || []).push(c); });
 
     let failed = 0;
     for (const qId of Object.keys(byQuestion)) {
@@ -496,10 +472,8 @@ async function applyFormatFixes() {
         if (res.error || !res.data || !res.data.length) failed++;
     }
 
-    btn.disabled = false; btn.textContent = 'Apply selected';
-    closeModal('format-fix-modal');
     await refreshQuestions();
-    alert(failed ? `${failed} question(s) failed to save — please check and retry.` : 'Formatting fixed and saved.');
+    alert(failed ? `${failed} question(s) failed to save — please check and retry.` : `Fixed and saved ${candidates.length} item(s).`);
 }
 
 async function deleteQuestion(id) {

@@ -93,26 +93,6 @@
         </div>
     </div>
 
-    <!-- FORMATTING FIX REVIEW MODAL -->
-    <div class="modal-overlay" id="format-fix-modal">
-        <div class="modal wide">
-            <div class="modal-head">
-                <h3>Formatting fixes <span id="ff-count" class="count-pill">0</span></h3>
-                <button class="modal-close" onclick="closeModal('format-fix-modal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="alert" style="display:block;background:#eff5ff;color:#1d4ed8;border:1px solid #bfdbfe;margin-bottom:14px;">
-                    Found text where a Moodle import likely squished an exponent/power into a plain number (e.g. "10-8" → really "10 to the power of -8", "km3" → "km cubed"). Review each one below — untick any that aren't actually exponents — then apply.
-                </div>
-                <div id="format-fix-list"></div>
-            </div>
-            <div class="modal-foot">
-                <button type="button" class="btn btn-ghost" onclick="closeModal('format-fix-modal')">Cancel</button>
-                <button type="button" class="btn btn-primary" id="ff-apply-btn" onclick="applyFormatFixes()">Apply selected</button>
-            </div>
-        </div>
-    </div>
-
     <!-- QUESTIONS MODAL (manual exams) -->
     <div class="modal-overlay" id="questions-modal">
         <div class="modal wide">
@@ -124,7 +104,7 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
                     <div class="section-title" style="margin:0;">Questions <span id="eq-count" class="count-pill">0</span></div>
                     <div style="display:flex;gap:8px;">
-                        <button class="btn btn-ghost btn-sm" onclick="scanFormattingIssues()">🔧 Fix formatting</button>
+                        <button class="btn btn-ghost btn-sm" onclick="scanFormattingIssues()">🔧 Auto-fix formatting</button>
                         <button class="btn btn-ghost btn-sm" onclick="openImport()">📄 Import from PDF</button>
                         <button class="btn btn-primary btn-sm" onclick="openQuestionForm()">+ Add Question</button>
                     </div>
@@ -197,7 +177,7 @@
     <script src="js/auth.js?v=1"></script>
     <script src="js/layout.js?v=1"></script>
     <script src="js/ui.js?v=1"></script>
-    <script src="js/exams.js?v=2"></script>
+    <script src="js/exams.js?v=3"></script>
     <script>
         (async () => {
             const auth = await requireAdmin();
