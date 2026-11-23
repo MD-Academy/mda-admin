@@ -921,7 +921,7 @@ function renderQuizQuestions() {
                     <div class="lr-index">${i + 1}</div>
                     <div class="lr-body">
                         <div class="lr-title">${escapeHtml(q.question_text)}</div>
-                        <div class="lr-sub">Correct: ${escapeHtml(correct)}</div>
+                        <div class="lr-sub"><span style="color:var(--green);font-weight:600;">Correct: ${escapeHtml(correct)}</span></div>
                     </div>
                     <div class="lr-actions">
                         <button class="btn btn-ghost btn-sm" onclick="openQuestionForm('${q.id}')">Edit</button>
