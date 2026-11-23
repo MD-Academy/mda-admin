@@ -39,21 +39,24 @@
     <script>
         function esc(s){ return s ? String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
         let QUIZ = null, QUESTIONS = [], answers = {};
+        let EXIT_URL = 'subjects.html';
+        function exitPreview() { location.href = EXIT_URL; }
 
         (async () => {
             const auth = await requireAdmin();
             if (!auth) return;
             const quizId = new URLSearchParams(location.search).get('id');
-            if (!quizId) { window.close(); return; }
+            if (!quizId) { exitPreview(); return; }
             renderLayout('subjects', 'Quiz Preview', 'See and take this quiz exactly as a student would', auth.profile);
             const content = document.getElementById('page-content');
             content.innerHTML = `<div class="loader">Loading quiz…</div>`;
 
             const [{ data: quiz, error: qErr }, { data: questions, error: quErr }] = await Promise.all([
-                db.from('quizzes').select('id, title').eq('id', quizId).single(),
+                db.from('quizzes').select('id, title, room_id').eq('id', quizId).single(),
                 db.from('quiz_questions').select('id, question_text, options_json, correct_answer_index, order_index').eq('quiz_id', quizId).order('order_index', { ascending: true })
             ]);
             if (qErr || !quiz) { content.innerHTML = `<div class="empty-state"><h3>Quiz not found</h3></div>`; return; }
+            if (quiz.room_id) EXIT_URL = `subject.html?id=${quiz.room_id}`;
             if (quErr) { content.innerHTML = `<div class="empty-state"><h3>Couldn't load questions</h3><p>${esc(quErr.message)}</p></div>`; return; }
             QUIZ = quiz; QUESTIONS = questions || [];
             if (QUESTIONS.length === 0) { content.innerHTML = `<div class="empty-state"><h3>No questions yet</h3><p>Add questions to this quiz first.</p></div>`; return; }
@@ -64,7 +67,10 @@
             answers = {};
             const content = document.getElementById('page-content');
             content.innerHTML = `
-                <div class="preview-banner">👁 Preview mode — this is exactly what a student sees. Nothing you submit here is recorded or counted.</div>
+                <div class="preview-banner" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                    <span>👁 Preview mode — this is exactly what a student sees. Nothing you submit here is recorded or counted.</span>
+                    <button class="btn btn-ghost btn-sm" onclick="exitPreview()" style="white-space:nowrap;">✕ Exit preview</button>
+                </div>
                 <div class="exam-meta">
                     <h2>${esc(QUIZ.title || 'Quiz')}</h2>
                     <p>Answer <strong>all ${QUESTIONS.length}</strong> questions correctly to pass.</p>
@@ -79,7 +85,7 @@
                 }).join('')}</div>
                 <div style="display:flex;gap:12px;align-items:center;margin-top:8px;">
                     <button class="btn btn-primary" id="submit-btn" onclick="submitPreview()">Submit Quiz</button>
-                    <button class="btn btn-ghost" onclick="window.close()">Close preview</button>
+                    <button class="btn btn-ghost" onclick="exitPreview()">Exit preview</button>
                 </div>`;
         }
 
@@ -104,7 +110,10 @@
             const wrong = QUESTIONS.map((q, i) => ({ q, n: i + 1 })).filter(({ q }) => answers[q.id] !== q.correct_answer_index).map(({ n }) => n);
 
             document.getElementById('page-content').innerHTML = `
-                <div class="preview-banner">👁 Preview mode — nothing here is recorded or counted toward any student.</div>
+                <div class="preview-banner" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                    <span>👁 Preview mode — nothing here is recorded or counted toward any student.</span>
+                    <button class="btn btn-ghost btn-sm" onclick="exitPreview()" style="white-space:nowrap;">✕ Exit preview</button>
+                </div>
                 <div class="result-card">
                     <div class="r-score" style="color:${pass ? 'var(--green)' : 'var(--red)'};">${score}%</div>
                     <div class="r-badge ${pass ? 'pass' : 'fail'}">${pass ? '✓ Passed' : '✕ Not passed'}</div>
@@ -113,7 +122,7 @@
                 </div>
                 <div style="display:flex;gap:12px;align-items:center;justify-content:center;">
                     <button class="btn btn-primary" onclick="renderQuiz()">Take again</button>
-                    <button class="btn btn-ghost" onclick="window.close()">Close preview</button>
+                    <button class="btn btn-ghost" onclick="exitPreview()">Exit preview</button>
                 </div>`;
         }
     </script>
