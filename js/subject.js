@@ -907,6 +907,63 @@ async function refreshQuizQuestions() {
     updateCounts();
 }
 
+// ════════════ FIX SQUISHED EXPONENTS/POWERS/CHEMICAL SUBSCRIPTS ════════════
+// Same bug as the exam question bank: a past Moodle XML import stripped <sup>/<sub>
+// tags without preserving them, e.g. "10<sup>-8</sup>" -> "10-8" and
+// "Ca(ClO)<sub>2</sub>" -> "Ca(ClO)2" (regular-size 2 instead of a chemistry subscript).
+const QUIZ_SUBSCRIPT_DIGITS = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉' };
+
+function proposeQuizFormatFix(text) {
+    if (!text) return null;
+    let fixed = text;
+    fixed = fixed.replace(/(?<![A-Za-z])([×xX*]\s?)10(-?\d{1,3})\b/g, (m, p1, exp) => `${p1}10^${exp}`);
+    fixed = fixed.replace(/(?<![A-Za-z])(km|cm|dm|mm|ml|kg|mg)([23])\b/g, '$1^$2');
+    fixed = fixed.replace(/(?<![A-Za-z])(m|l|g)([23])\b/g, '$1^$2');
+    fixed = fixed.replace(/(?<=[A-Za-z)])(\d)(?!\d)/g, d => QUIZ_SUBSCRIPT_DIGITS[d]);
+    return fixed !== text ? fixed : null;
+}
+
+async function scanQuizFormattingIssues() {
+    const candidates = [];
+    currentQuizQuestions.forEach((q, qi) => {
+        const qFix = proposeQuizFormatFix(q.question_text);
+        if (qFix) candidates.push({ qId: q.id, qi, field: 'question_text', original: q.question_text, fixed: qFix });
+        const opts = Array.isArray(q.options_json) ? q.options_json : [];
+        opts.forEach((o, oi) => {
+            const oFix = proposeQuizFormatFix(o);
+            if (oFix) candidates.push({ qId: q.id, qi, field: 'option', optIdx: oi, original: o, fixed: oFix });
+        });
+    });
+    if (!candidates.length) { alert('No squished exponents/powers/chemical subscripts found in this quiz\'s questions.'); return; }
+
+    const ok = await confirmDialog({
+        title: `Auto-fix ${candidates.length} formatting issue${candidates.length > 1 ? 's' : ''}?`,
+        message: `This rewrites every squished exponent/unit-power/chemical subscript found in this quiz automatically, with no per-question review. Example: "${candidates[0].original}" → "${candidates[0].fixed}". You can still correct any single question by hand afterward via Edit.`,
+        confirmText: 'Fix all now',
+    });
+    if (!ok) return;
+
+    const byQuestion = {};
+    candidates.forEach(c => { (byQuestion[c.qId] = byQuestion[c.qId] || []).push(c); });
+
+    let failed = 0;
+    for (const qId of Object.keys(byQuestion)) {
+        const q = currentQuizQuestions.find(x => x.id === qId);
+        if (!q) continue;
+        let newText = q.question_text;
+        const newOpts = Array.isArray(q.options_json) ? [...q.options_json] : [];
+        byQuestion[qId].forEach(c => {
+            if (c.field === 'question_text') newText = c.fixed;
+            else newOpts[c.optIdx] = c.fixed;
+        });
+        const res = await db.from('quiz_questions').update({ question_text: newText, options_json: newOpts }).eq('id', qId).select('id');
+        if (res.error || !res.data || !res.data.length) failed++;
+    }
+
+    await refreshQuizQuestions();
+    alert(failed ? `${failed} question(s) failed to save — please check and retry.` : `Fixed and saved ${candidates.length} item(s).`);
+}
+
 function renderQuizQuestions() {
     const el = document.getElementById('quiz-questions-list');
     if (currentQuizQuestions.length === 0) {

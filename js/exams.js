@@ -418,11 +418,14 @@ async function saveQuestion(ev) {
     }
 }
 
-// ════════════ FIX SQUISHED EXPONENTS/POWERS (e.g. "10-8" -> "10^-8", "km3" -> "km^3") ════════════
-// A past Moodle XML import stripped <sup> tags without preserving the exponent, so
-// "10<sup>-8</sup>" became the ambiguous "10-8" (reads like subtraction) and
-// "km<sup>3</sup>" became "km3". This scans the open exam's questions/options for that
-// pattern and auto-applies every match after a single confirm (no per-question review).
+// ════════════ FIX SQUISHED EXPONENTS/POWERS/CHEMICAL SUBSCRIPTS ════════════
+// A past Moodle XML import stripped <sup>/<sub> tags without preserving the exponent
+// or atom count, so "10<sup>-8</sup>" became the ambiguous "10-8" (reads like
+// subtraction) and "Ca(ClO)<sub>2</sub>" became "Ca(ClO)2" (a regular-size 2 instead
+// of a chemistry subscript). This scans the open exam's questions/options for those
+// patterns and auto-applies every match after a single confirm (no per-question review).
+
+const SUBSCRIPT_DIGITS = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉' };
 
 function proposeFormatFix(text) {
     if (!text) return null;
@@ -432,6 +435,10 @@ function proposeFormatFix(text) {
     // units with a squished power: "km3", "cm2", "ml3", etc -> "km^3", "cm^2", "ml^3"
     fixed = fixed.replace(/(?<![A-Za-z])(km|cm|dm|mm|ml|kg|mg)([23])\b/g, '$1^$2');
     fixed = fixed.replace(/(?<![A-Za-z])(m|l|g)([23])\b/g, '$1^$2');
+    // chemical formula atom counts squished onto a symbol/closing paren, e.g.
+    // "Ca(ClO)2" -> "Ca(ClO)₂", "H2SO4" -> "H₂SO₄" — a single digit right after a
+    // letter or ")" and not itself part of a longer number (dates, ids, percentages).
+    fixed = fixed.replace(/(?<=[A-Za-z)])(\d)(?!\d)/g, d => SUBSCRIPT_DIGITS[d]);
     return fixed !== text ? fixed : null;
 }
 

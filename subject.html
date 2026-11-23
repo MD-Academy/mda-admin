@@ -187,7 +187,10 @@
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 14px;">
                     <div class="section-title" style="margin:0;">Questions <span id="quiz-qcount" class="count-pill">0 / 10</span></div>
-                    <button class="btn btn-primary btn-sm" id="add-question-btn" onclick="openQuestionForm()">+ Add Question</button>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-ghost btn-sm" onclick="scanQuizFormattingIssues()">🔧 Auto-fix formatting</button>
+                        <button class="btn btn-primary btn-sm" id="add-question-btn" onclick="openQuestionForm()">+ Add Question</button>
+                    </div>
                 </div>
                 <div id="quiz-questions-list"><div class="loader">Loading…</div></div>
                 <div class="alert" id="quiz-note" style="display:block;background:#eff5ff;color:#1d4ed8;border:1px solid #bfdbfe;margin-top:16px;">A quiz needs exactly <strong>10</strong> questions. Students must answer all 10 correctly to pass.</div>
@@ -232,7 +235,7 @@
     <script src="js/auth.js?v=1"></script>
     <script src="js/layout.js?v=1"></script>
     <script src="js/ui.js?v=1"></script>
-    <script src="js/subject.js?v=2"></script>
+    <script src="js/subject.js?v=3"></script>
     <script>
         (async () => {
             const auth = await requireAdmin();
