@@ -1,5 +1,26 @@
 // Shared UI helpers — branded confirm dialog + input safety guard.
 
+// A plain select() with no .range() is silently capped at PostgREST's
+// default max-rows (1000 on Supabase), so any table that grows past that
+// loses rows depending on ordering. Page through explicitly so callers
+// always see every matching row regardless of table size. `build`, if given,
+// is applied to the query before `.range()` is added, e.g.
+// `q => q.eq('exam_id', id).order('order_index')`.
+async function fetchAllRows(table, columns, build) {
+    const rows = [];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+        let q = db.from(table).select(columns);
+        if (build) q = build(q);
+        q = q.range(from, from + pageSize - 1);
+        const { data, error } = await q;
+        if (error) throw new Error(error.message);
+        rows.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+    }
+    return rows;
+}
+
 // ── INPUT SAFETY GUARD ──
 // NOTE: the real XSS protection is output escaping (escapeHtml on every render).
 // This is a friendly extra layer that rejects obviously malicious input with a

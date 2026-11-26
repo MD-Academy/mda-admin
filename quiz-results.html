@@ -29,6 +29,7 @@
     <script src="js/config.js?v=1"></script>
     <script src="js/auth.js?v=1"></script>
     <script src="js/layout.js?v=1"></script>
+    <script src="js/ui.js?v=2"></script>
     <script>
         function escapeHtml(str) {
             if (!str) return '';
@@ -44,15 +45,19 @@
             const quizId = new URLSearchParams(location.search).get('id');
             if (!quizId) { window.close(); return; }
 
-            const [{ data: quiz }, { data: questions, error: qErr }, { data: attempts, error: aErr }] = await Promise.all([
-                db.from('quizzes').select('id, title').eq('id', quizId).single(),
-                db.from('quiz_questions').select('id, question_text, options_json, correct_answer_index, order_index').eq('quiz_id', quizId).order('order_index', { ascending: true }),
-                db.from('quiz_attempts').select('student_id, score, answers_json, completed_at').eq('quiz_id', quizId).order('completed_at', { ascending: false })
-            ]);
+            const { data: quiz } = await db.from('quizzes').select('id, title').eq('id', quizId).single();
             renderLayout('subjects', 'Quiz Results', `Who has attempted "${escapeHtml((quiz || {}).title || 'this quiz')}", and what they got right/wrong`, auth.profile);
             const content = document.getElementById('page-content');
 
-            if (qErr || aErr) { content.innerHTML = `<div class="empty-state"><h3>Couldn't load results</h3><p>${escapeHtml((qErr || aErr).message)}</p></div>`; return; }
+            let questions, attempts;
+            try {
+                [questions, attempts] = await Promise.all([
+                    fetchAllRows('quiz_questions', 'id, question_text, options_json, correct_answer_index, order_index', q => q.eq('quiz_id', quizId).order('order_index', { ascending: true })),
+                    fetchAllRows('quiz_attempts', 'student_id, score, passed, answers_json, completed_at', q => q.eq('quiz_id', quizId).order('completed_at', { ascending: false }))
+                ]);
+            } catch (err) {
+                content.innerHTML = `<div class="empty-state"><h3>Couldn't load results</h3><p>${escapeHtml(err.message)}</p></div>`; return;
+            }
             QUESTIONS = questions || [];
 
             // Keep only each student's most recent attempt (rows are already newest-first).
@@ -77,7 +82,7 @@
                     <tbody>${rows.map(r => `
                         <tr>
                             <td><strong>${escapeHtml(r.name)}</strong></td>
-                            <td><span class="gb-cell ${r.score >= 100 ? 'pass' : 'fail'}">${Math.round(r.score)}%</span></td>
+                            <td><span class="gb-cell ${r.passed ? 'pass' : 'fail'}">${Math.round(r.score)}%</span></td>
                             <td style="color:var(--text-muted);font-size:13px;">${escapeHtml(fmtStamp(r.completed_at))}</td>
                             <td><button class="btn btn-ghost btn-sm" onclick="toggleRow('${r.sid}')">View answers</button></td>
                         </tr>

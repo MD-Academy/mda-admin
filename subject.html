@@ -159,6 +159,40 @@
         </div>
     </div>
 
+    <!-- CREATE QUIZ MODAL -->
+    <div class="modal-overlay" id="create-quiz-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>Create Quiz</h3>
+                <button class="modal-close" onclick="closeModal('create-quiz-modal')">&times;</button>
+            </div>
+            <form onsubmit="saveNewQuiz(event)">
+                <div class="modal-body">
+                    <div class="alert" id="create-quiz-alert" style="display:none;"></div>
+                    <div class="form-field">
+                        <label>Quiz title</label>
+                        <input type="text" id="new-quiz-title" placeholder="e.g. Genetics Quiz" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label>Required questions</label>
+                            <input type="number" id="new-quiz-required-count" min="1" step="1" value="10">
+                        </div>
+                        <div class="form-field">
+                            <label>Pass threshold (%)</label>
+                            <input type="number" id="new-quiz-pass-threshold" min="1" max="100" step="1" value="100">
+                        </div>
+                    </div>
+                    <div class="hint">Defaults match the original rule — 10 questions, all correct to pass. Raise the question count to use a whole subject's question set for practice, and lower the pass threshold if it shouldn't require a perfect score.</div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('create-quiz-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="create-quiz-save-btn">Create Quiz</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- QUIZ BUILDER MODAL -->
     <div class="modal-overlay" id="quiz-modal">
         <div class="modal wide">
@@ -180,6 +214,16 @@
                     <div class="form-field">
                         <label>Cooldown (minutes)</label>
                         <input type="number" id="quiz-cooldown" min="0" step="1" value="5">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>Required questions</label>
+                        <input type="number" id="quiz-required-count" min="1" step="1" value="10">
+                    </div>
+                    <div class="form-field">
+                        <label>Pass threshold (%)</label>
+                        <input type="number" id="quiz-pass-threshold" min="1" max="100" step="1" value="100">
                     </div>
                     <div class="form-field" style="display:flex;align-items:flex-end;max-width:150px;">
                         <button type="button" class="btn btn-ghost" style="width:100%;justify-content:center;" onclick="saveQuizSettings()">Save Settings</button>
@@ -234,8 +278,8 @@
     <script src="js/config.js?v=1"></script>
     <script src="js/auth.js?v=1"></script>
     <script src="js/layout.js?v=1"></script>
-    <script src="js/ui.js?v=1"></script>
-    <script src="js/subject.js?v=3"></script>
+    <script src="js/ui.js?v=2"></script>
+    <script src="js/subject.js?v=4"></script>
     <script>
         (async () => {
             const auth = await requireAdmin();

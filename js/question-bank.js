@@ -181,8 +181,13 @@ function onQbFile(e) {
         try {
             const r = await apiRequest('POST', '/admin/import-question-bank', { xml_base64: b64 });
             alert.className = 'alert success';
+            const dupList = (r.duplicate_samples || []).length
+                ? `<details style="margin-top:8px;"><summary style="cursor:pointer;">Show the ${r.duplicate_samples.length === 50 ? '50+' : r.duplicate_samples.length} skipped duplicate${r.duplicate_samples.length === 1 ? '' : 's'}</summary>`
+                    + `<ul style="margin:8px 0 0 18px;font-size:13px;">${r.duplicate_samples.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul></details>`
+                : '';
             alert.innerHTML = `<strong>Imported ${r.imported} question${r.imported === 1 ? '' : 's'}.</strong> `
-                + `Skipped: ${r.skipped_shortanswer} short-answer, ${r.skipped_image} with images, ${r.skipped_unsupported} unsupported, ${r.duplicates} already in the bank.`;
+                + `Skipped: ${r.skipped_shortanswer} short-answer, ${r.skipped_image} with images, ${r.skipped_unsupported} unsupported, ${r.duplicates} already in the bank.`
+                + dupList;
             QB_PAGE = 1;
             await loadQbCategories();
             await loadQbPage();
@@ -204,7 +209,11 @@ function changeQbPage(d) { const tp = Math.max(1, Math.ceil(QB_TOTAL / QB_SIZE))
 
 async function loadQbCategories() {
     const sel = document.getElementById('qb-cat');
-    const { data } = await db.from('question_bank').select('category').limit(5000);
+    // Was a single .limit(5000) call with no explicit order — once the bank
+    // grows past that, whatever fell outside that capped, unordered page
+    // never reached the dropdown even though the rows (and their category
+    // text) were genuinely there. fetchAllRows pages through the whole table.
+    const data = await fetchAllRows('question_bank', 'category');
     const cats = [...new Set((data || []).map(r => r.category).filter(Boolean))].sort();
     const cur = QB_CAT;
     sel.innerHTML = `<option value="">All categories</option>` + cats.map(c => `<option value="${escapeHtml(c)}" ${c === cur ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
@@ -351,33 +360,64 @@ async function addSelectedToTarget() {
     const ids = [...QB_SELECTED];
     if (!ids.length) return;
 
+    const ok = await confirmDialog({
+        title: 'Add questions?',
+        message: `Add ${ids.length} selected question${ids.length === 1 ? '' : 's'} to "${target.label}"?`,
+        confirmText: 'Add'
+    });
+    if (!ok) return;
+
     btn.disabled = true; const label = btn.textContent; btn.textContent = 'Adding…';
+    msg.style.color = 'var(--text-muted)'; msg.textContent = `Fetching ${ids.length} question${ids.length === 1 ? '' : 's'}…`;
     try {
-        const { data: qs, error } = await db.from('question_bank')
-            .select('question_text, options_json, correct_answer_index').in('id', ids);
-        if (error) throw new Error(error.message);
+        // Fetch in chunks of 200 ids — a single unbounded .in('id', ids) call
+        // is still capped at PostgREST's default max-rows regardless of how
+        // many ids are passed in, which previously silently truncated large
+        // selections (e.g. 1836 -> 1000) before they ever reached the insert.
+        const qs = [];
+        for (let i = 0; i < ids.length; i += 200) {
+            const chunk = ids.slice(i, i + 200);
+            const { data, error } = await db.from('question_bank')
+                .select('question_text, options_json, correct_answer_index, explanation, images')
+                .in('id', chunk);
+            if (error) throw new Error(error.message);
+            qs.push(...(data || []));
+        }
 
         const table = target.kind === 'quiz' ? 'quiz_questions' : 'exam_questions';
         const fk = target.kind === 'quiz' ? 'quiz_id' : 'exam_id';
-        // Append after existing questions.
-        const { data: ex } = await db.from(table).select('order_index').eq(fk, target.id);
-        let next = (ex || []).reduce((m, r) => Math.max(m, r.order_index || 0), 0) + 1;
-        const rows = (qs || []).map(q => ({
+
+        msg.textContent = 'Checking for questions already in this target…';
+        const existingRows = await fetchAllRows(table, 'question_text, order_index', q => q.eq(fk, target.id));
+        const existingTexts = new Set(existingRows.map(r => r.question_text));
+        let next = existingRows.reduce((m, r) => Math.max(m, r.order_index || 0), 0) + 1;
+
+        const fresh = qs.filter(q => !existingTexts.has(q.question_text));
+        const skipped = qs.length - fresh.length;
+        const rows = fresh.map(q => ({
             [fk]: target.id, question_text: q.question_text,
             options_json: q.options_json, correct_answer_index: q.correct_answer_index,
+            explanation: q.explanation || null, images: q.images || [],
             order_index: next++,
         }));
-        // Insert in chunks.
+
+        // Insert in chunks, tracking the real inserted count as we go.
+        let inserted = 0;
         for (let i = 0; i < rows.length; i += 200) {
-            const r = await db.from(table).insert(rows.slice(i, i + 200));
+            msg.textContent = `Saving ${Math.min(i + 200, rows.length)}/${rows.length}…`;
+            const chunk = rows.slice(i, i + 200);
+            const r = await db.from(table).insert(chunk).select('id');
             if (r.error) throw new Error(r.error.message);
+            inserted += (r.data || chunk).length;
         }
+
         msg.style.color = 'var(--green)';
-        msg.textContent = `Added ${rows.length} question${rows.length === 1 ? '' : 's'} to ${target.label}.`;
+        msg.textContent = `Added ${inserted} question${inserted === 1 ? '' : 's'} to ${target.label}.`
+            + (skipped ? ` ${skipped} already there — skipped.` : '');
         QB_SELECTED.clear();
         document.querySelectorAll('#qb-list input[type=checkbox]').forEach(c => c.checked = false);
         updateQbActionBar();
-        setTimeout(() => { msg.textContent = ''; }, 6000);
+        setTimeout(() => { msg.textContent = ''; }, 8000);
     } catch (err) {
         msg.style.color = 'var(--red)'; msg.textContent = err.message || 'Could not add.';
     } finally {

@@ -25,9 +25,13 @@ let recordings = [];   // both kinds
 let materials = [];
 let pickedFile = null;
 
-// Quizzes — attach directly to the subject (room); each has its own title.
-const REQUIRED_QUESTIONS = 10;
-let quizzes = [];               // [{id, room_id, title, time_limit_minutes, cooldown_minutes, is_visible}]
+// Quizzes — attach directly to the subject (room); each has its own title,
+// required question count and pass threshold (configurable per quiz; these
+// are the defaults for a quiz that hasn't set its own).
+const DEFAULT_REQUIRED_QUESTIONS = 10;
+const DEFAULT_PASS_THRESHOLD = 100;
+function quizRequired(q) { return (q && q.required_question_count) || DEFAULT_REQUIRED_QUESTIONS; }
+let quizzes = [];               // [{id, room_id, title, time_limit_minutes, cooldown_minutes, is_visible, required_question_count, pass_threshold}]
 let quizQuestionCounts = {};    // quiz_id -> count
 let currentQuiz = null;         // quiz open in the builder
 let currentQuizQuestions = [];  // its questions
@@ -153,7 +157,7 @@ async function initRoom(roomId, profile) {
                 <div class="st-title">Quizzes</div>
                 <button class="btn btn-primary btn-sm" onclick="createQuiz()">+ Create Quiz</button>
             </div>
-            <p class="hint" style="margin:-6px 0 16px;">A subject can have several quizzes, each with exactly 10 questions. A student must answer all 10 correctly to pass.</p>
+            <p class="hint" style="margin:-6px 0 16px;">A subject can have several quizzes. By default each needs exactly 10 questions, all correct to pass — both are configurable per quiz in its settings.</p>
             <div id="quizzes-list"><div class="loader">Loading…</div></div>
         </div>
     `;
@@ -203,12 +207,12 @@ async function loadAll() {
     // Quizzes belong to the subject; load them + their question counts.
     quizzes = [];
     quizQuestionCounts = {};
-    const qRes = await db.from('quizzes').select('id, room_id, title, time_limit_minutes, cooldown_minutes, is_visible').eq('room_id', ROOM_ID).order('created_at', { ascending: false });
+    const qRes = await db.from('quizzes').select('id, room_id, title, time_limit_minutes, cooldown_minutes, is_visible, required_question_count, pass_threshold').eq('room_id', ROOM_ID).order('created_at', { ascending: false });
     quizzes = qRes.data || [];
     const quizIds = quizzes.map(q => q.id);
     if (quizIds.length) {
-        const qqRes = await db.from('quiz_questions').select('id, quiz_id').in('quiz_id', quizIds);
-        (qqRes.data || []).forEach(q => { quizQuestionCounts[q.quiz_id] = (quizQuestionCounts[q.quiz_id] || 0) + 1; });
+        const qqRows = await fetchAllRows('quiz_questions', 'id, quiz_id', q => q.in('quiz_id', quizIds));
+        qqRows.forEach(q => { quizQuestionCounts[q.quiz_id] = (quizQuestionCounts[q.quiz_id] || 0) + 1; });
     }
 
     renderRecordings('lecture');
@@ -842,10 +846,11 @@ function renderQuizzes() {
     }
     list.innerHTML = `<div class="list-rows">${quizzes.map(q => {
         const count = quizQuestionCounts[q.id] || 0;
-        const ready = count === REQUIRED_QUESTIONS;
+        const required = quizRequired(q);
+        const ready = count === required;
         const statusHtml = ready
-            ? `<span class="quiz-status ready">✓ ${count}/${REQUIRED_QUESTIONS} questions — ready</span>`
-            : `<span class="quiz-status partial">${count}/${REQUIRED_QUESTIONS} questions — incomplete</span>`;
+            ? `<span class="quiz-status ready">✓ ${count}/${required} questions — ready</span>`
+            : `<span class="quiz-status partial">${count}/${required} questions — incomplete</span>`;
         return `
             <div class="list-row">
                 <div class="lr-body">
@@ -863,17 +868,47 @@ function renderQuizzes() {
     }).join('')}</div>`;
 }
 
-async function createQuiz() {
-    const { data, error } = await db.from('quizzes')
-        .insert({ room_id: ROOM_ID, title: 'New Quiz', is_visible: false })
-        .select('id, room_id, title, time_limit_minutes, cooldown_minutes, is_visible')
-        .single();
-    if (error) { alert(`Could not create quiz: ${error.message}`); return; }
-    quizzes.push(data);
-    quizQuestionCounts[data.id] = 0;
-    renderQuizzes();
-    updateCounts();
-    openQuizBuilder(data.id);
+function createQuiz() {
+    document.getElementById('create-quiz-alert').style.display = 'none';
+    document.getElementById('new-quiz-title').value = '';
+    document.getElementById('new-quiz-required-count').value = DEFAULT_REQUIRED_QUESTIONS;
+    document.getElementById('new-quiz-pass-threshold').value = DEFAULT_PASS_THRESHOLD;
+    openModal('create-quiz-modal');
+    setTimeout(() => document.getElementById('new-quiz-title').focus(), 50);
+}
+
+async function saveNewQuiz(ev) {
+    ev.preventDefault();
+    const alertEl = document.getElementById('create-quiz-alert');
+    const btn = document.getElementById('create-quiz-save-btn');
+    alertEl.style.display = 'none';
+
+    const title = document.getElementById('new-quiz-title').value.trim();
+    const required = parseInt(document.getElementById('new-quiz-required-count').value, 10);
+    const threshold = parseInt(document.getElementById('new-quiz-pass-threshold').value, 10);
+    if (!title) { showModalAlert(alertEl, 'Please enter a quiz title.', 'error'); return; }
+    if (!ensureSafe(alertEl, [['Quiz title', title]])) return;
+    if (!required || required < 1) { showModalAlert(alertEl, 'Required questions must be at least 1.', 'error'); return; }
+    if (!threshold || threshold < 1 || threshold > 100) { showModalAlert(alertEl, 'Pass threshold must be between 1 and 100.', 'error'); return; }
+
+    btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+        const { data, error } = await db.from('quizzes')
+            .insert({ room_id: ROOM_ID, title, is_visible: false, required_question_count: required, pass_threshold: threshold })
+            .select('id, room_id, title, time_limit_minutes, cooldown_minutes, is_visible, required_question_count, pass_threshold')
+            .single();
+        if (error) throw new Error(error.message);
+        quizzes.push(data);
+        quizQuestionCounts[data.id] = 0;
+        closeModal('create-quiz-modal');
+        renderQuizzes();
+        updateCounts();
+        openQuizBuilder(data.id);
+    } catch (err) {
+        showModalAlert(alertEl, err.message || 'Could not create quiz.', 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Create Quiz';
+    }
 }
 
 async function openQuizBuilder(quizId) {
@@ -883,6 +918,8 @@ async function openQuizBuilder(quizId) {
     document.getElementById('quiz-title').value = currentQuiz.title || '';
     document.getElementById('quiz-time').value = currentQuiz.time_limit_minutes ?? 60;
     document.getElementById('quiz-cooldown').value = currentQuiz.cooldown_minutes ?? 5;
+    document.getElementById('quiz-required-count').value = quizRequired(currentQuiz);
+    document.getElementById('quiz-pass-threshold').value = currentQuiz.pass_threshold || DEFAULT_PASS_THRESHOLD;
     document.getElementById('quiz-alert').style.display = 'none';
     document.getElementById('quiz-questions-list').innerHTML = `<div class="loader">Loading…</div>`;
     openModal('quiz-modal');
@@ -890,12 +927,12 @@ async function openQuizBuilder(quizId) {
 }
 
 async function refreshQuizQuestions() {
-    const { data, error } = await db.from('quiz_questions')
-        .select('id, question_text, options_json, correct_answer_index, order_index')
-        .eq('quiz_id', currentQuiz.id)
-        .order('order_index', { ascending: true });
     const el = document.getElementById('quiz-questions-list');
-    if (error) {
+    let data;
+    try {
+        data = await fetchAllRows('quiz_questions', 'id, question_text, options_json, correct_answer_index, order_index, explanation, images',
+            q => q.eq('quiz_id', currentQuiz.id).order('order_index', { ascending: true }));
+    } catch (error) {
         el.innerHTML = `<div class="loader" style="color:var(--red)">Error: ${escapeHtml(error.message)}</div>`;
         return;
     }
@@ -987,10 +1024,11 @@ function renderQuizQuestions() {
                 </div>`;
         }).join('')}</div>`;
     }
+    const required = quizRequired(currentQuiz);
     const addBtn = document.getElementById('add-question-btn');
-    if (currentQuizQuestions.length >= REQUIRED_QUESTIONS) {
+    if (currentQuizQuestions.length >= required) {
         addBtn.disabled = true; addBtn.style.opacity = '0.5'; addBtn.style.cursor = 'default';
-        addBtn.textContent = '10 questions reached';
+        addBtn.textContent = `${required} question${required === 1 ? '' : 's'} reached`;
     } else {
         addBtn.disabled = false; addBtn.style.opacity = ''; addBtn.style.cursor = '';
         addBtn.textContent = '+ Add Question';
@@ -999,9 +1037,17 @@ function renderQuizQuestions() {
 
 function updateQuizCountLabel() {
     const c = currentQuizQuestions.length;
+    const required = quizRequired(currentQuiz);
+    const threshold = (currentQuiz && currentQuiz.pass_threshold) || DEFAULT_PASS_THRESHOLD;
     const el = document.getElementById('quiz-qcount');
-    el.textContent = `${c} / ${REQUIRED_QUESTIONS}`;
-    el.style.color = c === REQUIRED_QUESTIONS ? 'var(--green)' : (c > REQUIRED_QUESTIONS ? 'var(--red)' : 'var(--text-muted)');
+    el.textContent = `${c} / ${required}`;
+    el.style.color = c === required ? 'var(--green)' : (c > required ? 'var(--red)' : 'var(--text-muted)');
+    const note = document.getElementById('quiz-note');
+    if (note) {
+        note.innerHTML = threshold >= 100
+            ? `A quiz needs exactly <strong>${required}</strong> question${required === 1 ? '' : 's'}. Students must answer all ${required} correctly to pass.`
+            : `A quiz needs exactly <strong>${required}</strong> question${required === 1 ? '' : 's'}. Students must score at least <strong>${threshold}%</strong> to pass.`;
+    }
 }
 
 async function saveQuizSettings() {
@@ -1010,10 +1056,17 @@ async function saveQuizSettings() {
     const title = document.getElementById('quiz-title').value.trim();
     const time = parseInt(document.getElementById('quiz-time').value, 10);
     const cd = parseInt(document.getElementById('quiz-cooldown').value, 10);
+    const required = parseInt(document.getElementById('quiz-required-count').value, 10);
+    const threshold = parseInt(document.getElementById('quiz-pass-threshold').value, 10);
     if (!title) { showModalAlert(alert, 'Please enter a quiz title.', 'error'); return; }
     if (!ensureSafe(alert, [['Quiz title', title]])) return;
     if (!time || time < 1) { showModalAlert(alert, 'Time limit must be at least 1 minute.', 'error'); return; }
-    const payload = { title, time_limit_minutes: time, cooldown_minutes: isNaN(cd) ? 0 : cd };
+    if (!required || required < 1) { showModalAlert(alert, 'Required questions must be at least 1.', 'error'); return; }
+    if (!threshold || threshold < 1 || threshold > 100) { showModalAlert(alert, 'Pass threshold must be between 1 and 100.', 'error'); return; }
+    const payload = {
+        title, time_limit_minutes: time, cooldown_minutes: isNaN(cd) ? 0 : cd,
+        required_question_count: required, pass_threshold: threshold
+    };
     const res = await db.from('quizzes').update(payload).eq('id', currentQuiz.id);
     if (res.error) { showModalAlert(alert, res.error.message, 'error'); return; }
     Object.assign(currentQuiz, payload);
@@ -1021,6 +1074,8 @@ async function saveQuizSettings() {
     if (q) Object.assign(q, payload);
     document.getElementById('quiz-modal-title').textContent = 'Manage Quiz';
     renderQuizzes();
+    renderQuizQuestions();
+    updateQuizCountLabel();
     showModalAlert(alert, 'Settings saved.', 'success');
 }
 
@@ -1075,7 +1130,7 @@ function openQuestionForm(id = null) {
         if (opts.length) opts.forEach((opt, i) => addOptionRow(opt, i === q.correct_answer_index));
         else { addOptionRow(); addOptionRow(); }
     } else {
-        if (currentQuizQuestions.length >= REQUIRED_QUESTIONS) return;
+        if (currentQuizQuestions.length >= quizRequired(currentQuiz)) return;
         document.getElementById('question-modal-title').textContent = 'Add Question';
         document.getElementById('question-id').value = '';
         document.getElementById('question-text').value = '';

@@ -35,7 +35,7 @@
     <script src="js/config.js?v=1"></script>
     <script src="js/auth.js?v=1"></script>
     <script src="js/layout.js?v=1"></script>
-    <script src="js/ui.js?v=1"></script>
+    <script src="js/ui.js?v=2"></script>
     <script>
         function esc(s){ return s ? String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
         let QUIZ = null, QUESTIONS = [], answers = {};
@@ -51,13 +51,16 @@
             const content = document.getElementById('page-content');
             content.innerHTML = `<div class="loader">Loading quiz…</div>`;
 
-            const [{ data: quiz, error: qErr }, { data: questions, error: quErr }] = await Promise.all([
-                db.from('quizzes').select('id, title, room_id').eq('id', quizId).single(),
-                db.from('quiz_questions').select('id, question_text, options_json, correct_answer_index, order_index').eq('quiz_id', quizId).order('order_index', { ascending: true })
-            ]);
+            const { data: quiz, error: qErr } = await db.from('quizzes').select('id, title, room_id, required_question_count, pass_threshold').eq('id', quizId).single();
             if (qErr || !quiz) { content.innerHTML = `<div class="empty-state"><h3>Quiz not found</h3></div>`; return; }
             if (quiz.room_id) EXIT_URL = `subject.html?id=${quiz.room_id}`;
-            if (quErr) { content.innerHTML = `<div class="empty-state"><h3>Couldn't load questions</h3><p>${esc(quErr.message)}</p></div>`; return; }
+            let questions;
+            try {
+                questions = await fetchAllRows('quiz_questions', 'id, question_text, options_json, correct_answer_index, order_index, images',
+                    q => q.eq('quiz_id', quizId).order('order_index', { ascending: true }));
+            } catch (quErr) {
+                content.innerHTML = `<div class="empty-state"><h3>Couldn't load questions</h3><p>${esc(quErr.message)}</p></div>`; return;
+            }
             QUIZ = quiz; QUESTIONS = questions || [];
             if (QUESTIONS.length === 0) { content.innerHTML = `<div class="empty-state"><h3>No questions yet</h3><p>Add questions to this quiz first.</p></div>`; return; }
             renderQuiz();
@@ -73,13 +76,17 @@
                 </div>
                 <div class="exam-meta">
                     <h2>${esc(QUIZ.title || 'Quiz')}</h2>
-                    <p>Answer <strong>all ${QUESTIONS.length}</strong> questions correctly to pass.</p>
+                    <p>${(QUIZ.pass_threshold || 100) >= 100
+                        ? `Answer <strong>all ${QUESTIONS.length}</strong> questions correctly to pass.`
+                        : `Score at least <strong>${QUIZ.pass_threshold}%</strong> to pass.`}</p>
                 </div>
                 <div id="questions">${QUESTIONS.map((q, i) => {
                     const opts = Array.isArray(q.options_json) ? q.options_json : [];
+                    const imgs = Array.isArray(q.images) ? q.images : [];
                     return `<div class="q-card" id="q-${q.id}">
                         <div class="q-num">Question ${i + 1} of ${QUESTIONS.length}</div>
                         <div class="q-text">${esc(q.question_text)}</div>
+                        ${imgs.map(u => `<img src="${esc(u)}" alt="" style="max-width:100%;border-radius:8px;margin:10px 0;display:block;">`).join('')}
                         ${opts.map((o, oi) => `<label class="opt" onclick="pick('${q.id}', ${oi}, this)"><input type="radio" name="q-${q.id}" value="${oi}"> <span>${esc(o)}</span></label>`).join('')}
                     </div>`;
                 }).join('')}</div>
@@ -106,7 +113,8 @@
             const correctCount = QUESTIONS.filter(q => answers[q.id] === q.correct_answer_index).length;
             const total = QUESTIONS.length;
             const score = Math.round(correctCount / total * 100);
-            const pass = correctCount === total;
+            const threshold = QUIZ.pass_threshold || 100;
+            const pass = score >= threshold;
             const wrong = QUESTIONS.map((q, i) => ({ q, n: i + 1 })).filter(({ q }) => answers[q.id] !== q.correct_answer_index).map(({ n }) => n);
 
             document.getElementById('page-content').innerHTML = `
@@ -117,7 +125,7 @@
                 <div class="result-card">
                     <div class="r-score" style="color:${pass ? 'var(--green)' : 'var(--red)'};">${score}%</div>
                     <div class="r-badge ${pass ? 'pass' : 'fail'}">${pass ? '✓ Passed' : '✕ Not passed'}</div>
-                    <p style="color:var(--text-muted);">You got ${correctCount} of ${total} correct. ${pass ? 'Perfect — all correct!' : 'Every question must be correct to pass.'}</p>
+                    <p style="color:var(--text-muted);">You got ${correctCount} of ${total} correct. ${pass ? 'Great work!' : (threshold >= 100 ? 'Every question must be correct to pass.' : `At least ${threshold}% is needed to pass.`)}</p>
                     ${(!pass && wrong.length) ? `<div class="r-review"><strong>Questions to review:</strong> ${wrong.map(n => '#' + n).join(', ')}.</div>` : ''}
                 </div>
                 <div style="display:flex;gap:12px;align-items:center;justify-content:center;">

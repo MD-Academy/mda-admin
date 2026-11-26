@@ -43,11 +43,15 @@ async function loadExams() {
     const tbody = document.getElementById('exams-tbody');
     tbody.innerHTML = `<tr><td colspan="6" class="loader">Loading exams…</td></tr>`;
 
-    const [exRes, courseRes, linkRes, qRes] = await Promise.all([
+    // exam_questions is fetched via fetchAllRows, not a plain select() — it's
+    // unfiltered across every exam, and a plain select() silently caps at
+    // PostgREST's default max-rows, which was undercounting every exam's
+    // badge (not just a large one) once the table passed that cap.
+    const [exRes, courseRes, linkRes, qRows] = await Promise.all([
         db.from('exams').select('id, title, description, type, pass_threshold, storage_path, time_limit_minutes, max_attempts, is_visible, counts_toward_graduation, created_at').order('created_at', { ascending: false }),
         db.from('courses').select('id, name').order('created_at', { ascending: false }),
         db.from('exam_courses').select('exam_id, course_id'),
-        db.from('exam_questions').select('id, exam_id')
+        fetchAllRows('exam_questions', 'id, exam_id')
     ]);
 
     if (exRes.error) {
@@ -59,7 +63,7 @@ async function loadExams() {
     examCourseLinks = {};
     (linkRes.data || []).forEach(l => { (examCourseLinks[l.exam_id] = examCourseLinks[l.exam_id] || []).push(l.course_id); });
     questionCounts = {};
-    (qRes.data || []).forEach(q => { questionCounts[q.exam_id] = (questionCounts[q.exam_id] || 0) + 1; });
+    qRows.forEach(q => { questionCounts[q.exam_id] = (questionCounts[q.exam_id] || 0) + 1; });
 
     applyFilters();
 }
@@ -305,11 +309,15 @@ async function openQuestions(examId) {
 }
 
 async function refreshQuestions() {
-    const { data, error } = await db.from('exam_questions')
-        .select('id, question_text, options_json, correct_answer_index, order_index')
-        .eq('exam_id', currentExam.id).order('order_index', { ascending: true });
     const el = document.getElementById('eq-list');
-    if (error) { el.innerHTML = `<div class="loader" style="color:var(--red)">Error: ${escapeHtml(error.message)}</div>`; return; }
+    let data;
+    try {
+        data = await fetchAllRows('exam_questions', 'id, question_text, options_json, correct_answer_index, order_index, explanation, images',
+            q => q.eq('exam_id', currentExam.id).order('order_index', { ascending: true }));
+    } catch (error) {
+        el.innerHTML = `<div class="loader" style="color:var(--red)">Error: ${escapeHtml(error.message)}</div>`;
+        return;
+    }
     currentQuestions = data || [];
     questionCounts[currentExam.id] = currentQuestions.length;
     document.getElementById('eq-count').textContent = currentQuestions.length;

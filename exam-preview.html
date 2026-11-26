@@ -35,7 +35,7 @@
     <script src="js/config.js?v=1"></script>
     <script src="js/auth.js?v=1"></script>
     <script src="js/layout.js?v=1"></script>
-    <script src="js/ui.js?v=1"></script>
+    <script src="js/ui.js?v=2"></script>
     <script>
         function esc(s){ return s ? String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
         let EXAM = null, QUESTIONS = [], answers = {};
@@ -50,12 +50,15 @@
             const content = document.getElementById('page-content');
             content.innerHTML = `<div class="loader">Loading exam…</div>`;
 
-            const [{ data: exam, error: exErr }, { data: questions, error: qErr }] = await Promise.all([
-                db.from('exams').select('id, title, description, pass_threshold').eq('id', examId).single(),
-                db.from('exam_questions').select('id, question_text, options_json, correct_answer_index, order_index').eq('exam_id', examId).order('order_index', { ascending: true })
-            ]);
+            const { data: exam, error: exErr } = await db.from('exams').select('id, title, description, pass_threshold').eq('id', examId).single();
             if (exErr || !exam) { content.innerHTML = `<div class="empty-state"><h3>Exam not found</h3></div>`; return; }
-            if (qErr) { content.innerHTML = `<div class="empty-state"><h3>Couldn't load questions</h3><p>${esc(qErr.message)}</p></div>`; return; }
+            let questions;
+            try {
+                questions = await fetchAllRows('exam_questions', 'id, question_text, options_json, correct_answer_index, order_index, images',
+                    q => q.eq('exam_id', examId).order('order_index', { ascending: true }));
+            } catch (qErr) {
+                content.innerHTML = `<div class="empty-state"><h3>Couldn't load questions</h3><p>${esc(qErr.message)}</p></div>`; return;
+            }
             EXAM = exam; QUESTIONS = questions || [];
             if (QUESTIONS.length === 0) { content.innerHTML = `<div class="empty-state"><h3>No questions yet</h3><p>Add questions to this exam first.</p></div>`; return; }
             renderExam();
@@ -75,9 +78,11 @@
                 </div>
                 <div id="questions">${QUESTIONS.map((q, i) => {
                     const opts = Array.isArray(q.options_json) ? q.options_json : [];
+                    const imgs = Array.isArray(q.images) ? q.images : [];
                     return `<div class="q-card" id="q-${q.id}">
                         <div class="q-num">Question ${i + 1} of ${QUESTIONS.length}</div>
                         <div class="q-text">${esc(q.question_text)}</div>
+                        ${imgs.map(u => `<img src="${esc(u)}" alt="" style="max-width:100%;border-radius:8px;margin:10px 0;display:block;">`).join('')}
                         ${opts.map((o, oi) => `<label class="opt" onclick="pick('${q.id}', ${oi}, this)"><input type="radio" name="q-${q.id}" value="${oi}"> <span>${esc(o)}</span></label>`).join('')}
                     </div>`;
                 }).join('')}</div>
